@@ -6,23 +6,13 @@ import traceback
 
 import tcod
 
-from lonelands import color, config
+from lonelands import color, config, fonts
 from lonelands import input_handlers
 from lonelands.exceptions import QuitWithoutSaving
 
 
-def load_tileset() -> tcod.tileset.Tileset:
-    path = config.find_font()
-    if path is None:
-        # Fall back to tcod's built-in tileset via a blank Tileset.
-        return tcod.tileset.Tileset(config.TILE_WIDTH, config.TILE_HEIGHT)
-    return tcod.tileset.load_truetype_font(
-        path, config.TILE_WIDTH, config.TILE_HEIGHT
-    )
-
-
 def main() -> None:
-    tileset = load_tileset()
+    tileset = fonts.load_tileset()
     handler: input_handlers.BaseEventHandler = input_handlers.MainMenuHandler()
 
     with tcod.context.new(
@@ -39,11 +29,20 @@ def main() -> None:
             while True:
                 console.clear()
                 handler.on_render(console)
-                context.present(console)
+                # integer_scaling keeps whole-pixel glyphs (no blur); on resize
+                # we regenerate the tileset at the window's pixel density so the
+                # font stays crisp and legible at any size.
+                context.present(console, integer_scaling=True)
 
                 try:
                     for event in tcod.event.wait():
                         context.convert_event(event)
+                        if isinstance(event, tcod.event.WindowResized):
+                            cell_w = max(1, event.width // config.SCREEN_WIDTH)
+                            cell_h = max(1, event.height // config.SCREEN_HEIGHT)
+                            context.change_tileset(
+                                fonts.load_tileset(cell_w, cell_h)
+                            )
                         handler = handler.handle_events(event)
                 except Exception:  # keep the game alive on a stray error
                     traceback.print_exc()

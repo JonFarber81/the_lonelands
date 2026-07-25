@@ -1,2 +1,3 @@
 tcod>=16.0
 numpy>=1.24
+freetype-py>=2.4  # crisp, cell-filling TTF rendering (lonelands/fonts.py)

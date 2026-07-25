@@ -19,17 +19,36 @@ LOG_Y = MAP_HEIGHT
 LOG_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT   # 8
 
 # --- Font -----------------------------------------------------------------
-# We render with a crisp TrueType monospace for that clean Brogue/Cogmind look.
-# Fallbacks are tried in order; the first that exists wins.
+# We render with a heavy monospace that fills its cell for legibility at small
+# sizes. Because every glyph — map symbols and prose alike — shares one cell,
+# the font must fill the cell: narrow faces (Monaco, SF Mono, DejaVu Sans Mono)
+# leave a gap after each letter that scatters prose and reads worse. We bundle
+# Atkinson Hyperlegible Mono (SIL OFL, see assets/fonts/OFL.txt), which fills
+# the cell as tightly as Andale but with letterforms engineered for reading, so
+# the Chronicle and menus stay legible without hurting the map. The system fonts
+# are fallbacks if the bundled file is missing. NOTE: libtcod can only load
+# plain .ttf files, not .ttc collections (e.g. Menlo.ttc). Fallbacks are tried
+# in order; the first that both exists and loads wins.
+_ASSETS = os.path.join(os.path.dirname(__file__), "assets", "fonts")
+
 FONT_CANDIDATES = [
-    "/System/Library/Fonts/SFNSMono.ttf",
-    "/System/Library/Fonts/Menlo.ttc",
+    os.path.join(_ASSETS, "AtkinsonHyperlegibleMono-Regular.ttf"),
     "/System/Library/Fonts/Supplemental/Andale Mono.ttf",
     "/Library/Fonts/Andale Mono.ttf",
+    "/System/Library/Fonts/Monaco.ttf",
+    "/System/Library/Fonts/SFNSMono.ttf",
 ]
 
-TILE_WIDTH = 12
-TILE_HEIGHT = 20  # taller cells read better for text-heavy roguelikes
+# Cell size in pixels. Glyphs are rendered by lonelands.fonts, which auto-fits
+# the largest pixel size that fills this cell (advance <= width, ink extent <=
+# height) and lays every glyph on one shared baseline — so the text fills the
+# cell instead of floating tiny inside it. This font's advance is ~0.63x its
+# height, so the width must be roughly two-thirds of the height or wide glyphs
+# would be starved; 16x28 fits caps + accents (Dúnedain) and descenders (g, y)
+# comfortably. The window re-renders the tileset crisply on resize, so this is
+# just the starting size, not a ceiling.
+TILE_WIDTH = 16
+TILE_HEIGHT = 28
 
 WINDOW_TITLE = "The Lonelands — Eriador, TA 2965"
 
