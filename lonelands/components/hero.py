@@ -25,6 +25,7 @@ class Hero(BaseComponent):
         wisdom: int = 1,
         culture: str = "Ranger of the North",
         calling: str = "Wanderer",
+        true_name: str = "",
     ) -> None:
         self.attributes = dict(attributes)
         self.skills = {s: 0 for s in tor.ALL_SKILLS}
@@ -38,6 +39,9 @@ class Hero(BaseComponent):
         self.wisdom = wisdom
         self.culture = culture
         self.calling = calling
+        # The Ranger's true Dúnedain name; the Bree-folk know him by his
+        # nickname (the Actor's `name`), but his own kind use this.
+        self.true_name = true_name
 
         # Purse
         self.coins = 15

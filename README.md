@@ -3,9 +3,10 @@
 A text-and-glyph roguelike in the style of *Brogue* and *Cogmind*, set in
 **Eriador in TA 2965** and powered by mechanics adapted from **The One Ring** TTRPG.
 
-You play a lone **Ranger of the North** (a solo "Strider" in TOR's parlance),
-walking out from the Dúnedain hamlet of **Talbrún** on the Weather Hills into the
-Wild, and down into the barrow-ruin of **Amon Gûl**.
+You play **Tarandir**, a lone **Ranger of the North** whom the Bree-folk call
+**Greycloak** (a single player-hero, TOR's solo **"Strider mode"**), walking out
+from **Bree** into the Wild and down into the barrow-ruin east of it in the
+Weather Hills.
 
 ## Running
 

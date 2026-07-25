@@ -36,6 +36,11 @@ def new_game() -> Engine:
     _grant(player, content.lembas)
 
     engine.message_log.add_message(
+        "You are Tarandir, a Ranger of the North — though in Bree they know you "
+        "only as Greycloak.",
+        color.welcome_text,
+    )
+    engine.message_log.add_message(
         "The year is 2965 of the Third Age. You come to Bree, at the meeting of "
         "the Great East Road and the Greenway.",
         color.welcome_text,

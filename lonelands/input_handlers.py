@@ -267,7 +267,9 @@ class CharacterScreenHandler(AskUserHandler):
         x, y = 4, 3
         _panel(console, x, y, w, h, f"{self.engine.player.name} — Character")
         cy = y + 2
-        console.print(x + 2, cy, f"{hero.culture} · {hero.calling}", fg=color.ranger_green)
+        lineage = f"{hero.true_name} · " if hero.true_name else ""
+        console.print(x + 2, cy, f"{lineage}{hero.culture} · {hero.calling}",
+                      fg=color.ranger_green)
         cy += 1
         console.print(x + 2, cy, f"Valour {hero.valour}   Wisdom {hero.wisdom}   "
                                  f"Hope {hero.hope}/{hero.max_hope}   Coins {hero.coins}",
