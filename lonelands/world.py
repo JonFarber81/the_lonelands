@@ -41,6 +41,14 @@ class Region:
         self._build_deep = build_deep  # (depth: 1..N) -> GameMap
         self.levels: Dict[int, GameMap] = {}
 
+    def __getstate__(self) -> dict:
+        """Drop the (unpicklable) level-builder lambdas; savegame._rehydrate
+        re-attaches them from a freshly-built Region on load."""
+        state = self.__dict__.copy()
+        state["_build_surface"] = None
+        state["_build_deep"] = None
+        return state
+
     @property
     def has_deeps(self) -> bool:
         return self._build_deep is not None
@@ -63,6 +71,13 @@ class GameWorld:
         self.coord: Coord = (0, 0)     # which Region the player is in
         self.level_index: int = 0      # which Level within it (0 = Surface)
         self._defs = self._region_defs()
+
+    def __getstate__(self) -> dict:
+        """Drop the (unpicklable) Region factory table; savegame._rehydrate
+        rebuilds it from self.engine on load."""
+        state = self.__dict__.copy()
+        state["_defs"] = None
+        return state
 
     # --- the world grid ---------------------------------------------------
     def _region_defs(self) -> Dict[Coord, Callable[[], Region]]:

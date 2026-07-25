@@ -21,3 +21,6 @@ references/
 .DS_Store
 .idea/
 .vscode/
+
+# Save games
+savegame.sav
