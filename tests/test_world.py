@@ -130,6 +130,37 @@ def test_regions_and_levels_are_cached(game):
     assert region.level(0) is region.level(0)
 
 
+def test_bree_all_edges_and_npcs_are_reachable_on_foot(game):
+    """Bree's layout is hand-tuned; guard against an edit sealing a gate or
+    stranding an NPC behind a wall."""
+    from collections import deque
+    engine, gw, player = game
+    gm = place_on_surface(engine, gw, (0, 0), *engine.game_world.region((0, 0)).level(0).start_xy)
+    W, H = gm.width, gm.height
+    walk = gm.tiles["walkable"]
+
+    seen = {gm.start_xy}
+    q = deque([gm.start_xy])
+    while q:
+        x, y = q.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < W and 0 <= ny < H and (nx, ny) not in seen and walk[nx, ny]:
+                seen.add((nx, ny))
+                q.append((nx, ny))
+
+    assert any((0, y) in seen for y in range(H)), "west edge unreachable"
+    assert any((W - 1, y) in seen for y in range(H)), "east edge unreachable"
+    assert any((x, 0) in seen for x in range(W)), "north edge unreachable"
+    assert any((x, H - 1) in seen for x in range(W)), "south edge unreachable"
+
+    npcs = [a for a in gm.actors if a is not player]
+    assert len(npcs) == 4
+    for npc in npcs:
+        assert walk[npc.x, npc.y], f"{npc.name} stands on an unwalkable tile"
+        assert (npc.x, npc.y) in seen, f"{npc.name} is unreachable"
+
+
 def test_nearest_walkable_finds_an_open_tile():
     from lonelands.engine import Engine
     from lonelands import content
