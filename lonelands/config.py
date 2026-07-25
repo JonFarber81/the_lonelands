@@ -50,16 +50,27 @@ FONT_CANDIDATES = [
     "/System/Library/Fonts/SFNSMono.ttf",
 ]
 
-# Cell size in pixels. Glyphs are rendered by lonelands.fonts, which auto-fits
-# the largest pixel size that fills this cell (advance <= width, ink extent <=
-# height) and lays every glyph on one shared baseline — so the text fills the
-# cell instead of floating tiny inside it. This font's advance is ~0.63x its
-# height, so the width must be roughly two-thirds of the height or wide glyphs
-# would be starved; 16x28 fits caps + accents (Dúnedain) and descenders (g, y)
-# comfortably. The window re-renders the tileset crisply on resize, so this is
-# just the starting size, not a ceiling.
+# --- Map tileset ----------------------------------------------------------
+# Map terrain and entity glyphs are drawn from a Dwarf-Fortress-style 16x16
+# CP437 tilesheet (see lonelands/fonts.py, lonelands/tile_glyphs.py); prose stays
+# on the TrueType font above. The bundled sheet is the "Wanderlust" tileset,
+# kept local and gitignored — see lonelands/assets/tiles/README.md. If no sheet
+# is present the map falls back to TTF-rendered glyphs (the pre-tileset look).
+_TILES = os.path.join(os.path.dirname(__file__), "assets", "tiles")
+
+TILESET_CANDIDATES = [
+    os.path.join(_TILES, "wanderlust_16x16.png"),
+]
+
+# Cell size in pixels. A tcod console has one cell size for the whole screen, so
+# map and prose share it. The tileset art is square 16x16; lonelands.fonts
+# letterboxes it (centres the square tile, never stretches) so the cell can be a
+# little taller than wide — giving the TTF prose the vertical room it needs to
+# stay legible while the map tiles stay crisp, with only a thin grid gap between
+# rows. 16x20 balances a readable Chronicle against a solid map. The window
+# re-renders the tileset crisply on resize, so this is a starting size.
 TILE_WIDTH = 16
-TILE_HEIGHT = 28
+TILE_HEIGHT = 20
 
 WINDOW_TITLE = "The Lonelands — Eriador, TA 2965"
 

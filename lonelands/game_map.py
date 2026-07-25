@@ -7,6 +7,7 @@ from tcod.console import Console
 
 from lonelands import tile_types
 from lonelands.entity import Actor, Item
+from lonelands.tile_glyphs import graphic_char
 
 if TYPE_CHECKING:
     from lonelands.engine import Engine
@@ -76,6 +77,9 @@ class GameMap:
         )
         for entity in entities_sorted:
             if self.visible[entity.x, entity.y]:
+                # Draw the entity's glyph from the map tileset (shaded art),
+                # not the plain ASCII char — see lonelands.tile_glyphs.
                 console.print(
-                    x=entity.x, y=entity.y, string=entity.char, fg=entity.color
+                    x=entity.x, y=entity.y,
+                    string=graphic_char(entity.char), fg=entity.color,
                 )

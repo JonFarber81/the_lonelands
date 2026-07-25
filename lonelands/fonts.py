@@ -24,7 +24,7 @@ import os
 import numpy as np
 import tcod.tileset
 
-from lonelands import config, dice_glyphs
+from lonelands import config, dice_glyphs, tile_glyphs
 
 try:
     import freetype  # type: ignore
@@ -314,19 +314,92 @@ def _bake_dice(tileset, face, width, height) -> None:
         )
 
 
-def load_tileset(width: int | None = None, height: int | None = None) -> tcod.tileset.Tileset:
-    """Load the game font as a tileset sized ``width`` x ``height`` pixels.
+# --- Map tileset glyphs ----------------------------------------------------
+# Map terrain and entity glyphs come from a Dwarf-Fortress-style 16x16 CP437
+# tilesheet (Wanderlust by default; see config.TILESET_CANDIDATES). We bake each
+# printable-ASCII cell into its Private-Use "graphic" codepoint (see
+# tile_glyphs) so the map draws shaded tiles while prose keeps the TTF glyph on
+# the plain ASCII codepoint. The sheet's glyphs are white with the shape carried
+# in the alpha channel, so we bake alpha as a coverage mask — the map renderer
+# then tints each tile with its terrain/entity colour, exactly as before.
 
-    Defaults come from :mod:`lonelands.config`. Uses FreeType auto-fit rendering
-    when available, otherwise libtcod's loader, otherwise a blank tileset.
+_TILESHEET_UNSET = object()
+_tilesheet_cache: "tcod.tileset.Tileset | None | object" = _TILESHEET_UNSET
+
+
+def _load_tilesheet() -> "tcod.tileset.Tileset | None":
+    """The map tilesheet (16x16 CP437), or ``None`` if none is installed.
+
+    Cached module-wide: the sheet is resolution-independent, so a window resize
+    reuses it and only re-resamples. Returns ``None`` when no candidate file
+    exists or loading fails, so the caller can fall back to TTF glyphs.
     """
-    if width is None:
-        width = config.TILE_WIDTH
-    if height is None:
-        height = config.TILE_HEIGHT
-    width = max(1, width)
-    height = max(1, height)
+    global _tilesheet_cache
+    if _tilesheet_cache is not _TILESHEET_UNSET:
+        return _tilesheet_cache  # type: ignore[return-value]
+    _tilesheet_cache = None
+    for path in config.TILESET_CANDIDATES:
+        if not os.path.exists(path):
+            continue
+        try:
+            _tilesheet_cache = tcod.tileset.load_tilesheet(
+                path, 16, 16, tcod.tileset.CHARMAP_CP437
+            )
+            break
+        except Exception:  # noqa: BLE001 - any load failure -> fall back to TTF
+            continue
+    return _tilesheet_cache  # type: ignore[return-value]
 
+
+def _resample_nearest(mask: "np.ndarray", width: int, height: int) -> "np.ndarray":
+    """Nearest-neighbour resample a 2-D coverage mask to ``height`` x ``width``.
+
+    Nearest-neighbour (not bilinear) keeps the pixel-art crisp when the cell is
+    an integer multiple of the source, and merely blocky otherwise — never
+    blurred.
+    """
+    sh, sw = mask.shape
+    if (sh, sw) == (height, width):
+        return np.ascontiguousarray(mask)
+    ys = (np.arange(height) * sh) // height
+    xs = (np.arange(width) * sw) // width
+    return np.ascontiguousarray(mask[ys][:, xs])
+
+
+def _fit_square_centered(mask: "np.ndarray", width: int, height: int) -> "np.ndarray":
+    """Resample a square tile to fill the smaller cell dimension, then centre it.
+
+    The tilesheet art is square, so on a non-square cell we letterbox rather than
+    stretch: the tile keeps its aspect (never distorted) and sits centred with a
+    thin margin on the longer axis. On a square cell this fills it exactly.
+    """
+    side = min(width, height)
+    art = _resample_nearest(mask, side, side)
+    cell = np.zeros((height, width), dtype=np.uint8)
+    oy, ox = (height - side) // 2, (width - side) // 2
+    cell[oy : oy + side, ox : ox + side] = art
+    return cell
+
+
+def _bake_graphics(tileset: tcod.tileset.Tileset, width: int, height: int) -> None:
+    """Bake map/entity tiles into their graphic codepoints.
+
+    Uses the installed tilesheet when present; otherwise copies the TTF glyph
+    already baked for the same character, so the map still renders (just in the
+    plain font) when no sheet is available.
+    """
+    sheet = _load_tilesheet()
+    for o in tile_glyphs.GRAPHIC_RANGE:
+        cp = tile_glyphs.GRAPHIC_BASE + o
+        if sheet is not None:
+            cell = _fit_square_centered(sheet.get_tile(o)[..., 3], width, height)
+        else:
+            cell = tileset.get_tile(o)[..., 3]  # reuse the TTF glyph's coverage
+        tileset.set_tile(cp, cell)
+
+
+def _build_base_tileset(width: int, height: int) -> tcod.tileset.Tileset:
+    """The text tileset: FreeType auto-fit, else libtcod's loader, else blank."""
     for path in config.FONT_CANDIDATES:
         if not os.path.exists(path):
             continue
@@ -341,3 +414,23 @@ def load_tileset(width: int | None = None, height: int | None = None) -> tcod.ti
             continue
 
     return tcod.tileset.Tileset(width, height)
+
+
+def load_tileset(width: int | None = None, height: int | None = None) -> tcod.tileset.Tileset:
+    """Load the game tileset sized ``width`` x ``height`` pixels.
+
+    Prose glyphs come from the bundled TrueType font (FreeType auto-fit when
+    available); map terrain and entity glyphs are then baked in from the CP437
+    tilesheet (see :func:`_bake_graphics`). Defaults come from
+    :mod:`lonelands.config`.
+    """
+    if width is None:
+        width = config.TILE_WIDTH
+    if height is None:
+        height = config.TILE_HEIGHT
+    width = max(1, width)
+    height = max(1, height)
+
+    tileset = _build_base_tileset(width, height)
+    _bake_graphics(tileset, width, height)
+    return tileset
