@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import tcod
 
 from lonelands import actions, color, tor
+from lonelands.render_functions import render_pips
 from lonelands.actions import (
     Action,
     BumpAction,
@@ -282,10 +283,10 @@ class CharacterScreenHandler(AskUserHandler):
             cy += 1
             for skill in tor.SKILL_GROUPS[attr]:
                 rk = hero.skills[skill]
-                dots = "●" * rk + "·" * (6 - rk)
                 cost = hero.cost_to_raise_skill(skill)
-                console.print(x + 4, cy, f"{skill:<11}{dots}   raise: {cost}xp",
-                              fg=color.menu_text)
+                console.print(x + 4, cy, f"{skill:<11}", fg=color.menu_text)
+                render_pips(console, x + 15, cy, rk, skill=skill)
+                console.print(x + 22, cy, f"  raise: {cost}xp", fg=color.menu_text)
                 cy += 1
             cy += 1
 
@@ -294,8 +295,9 @@ class CharacterScreenHandler(AskUserHandler):
         cy += 1
         for prof in tor.PROFICIENCIES:
             rk = hero.proficiencies[prof]
-            dots = "●" * rk + "·" * (6 - rk)
-            console.print(x + 4, cy, f"{prof:<11}{dots}   raise: {hero.cost_to_raise_prof(prof)}xp",
+            console.print(x + 4, cy, f"{prof:<11}", fg=color.menu_text)
+            render_pips(console, x + 15, cy, rk, fill=color.pip_prof)
+            console.print(x + 22, cy, f"  raise: {hero.cost_to_raise_prof(prof)}xp",
                           fg=color.menu_text)
             cy += 1
         console.print(x + 2, y + h - 1,
@@ -331,13 +333,16 @@ class AdvancementHandler(AskUserHandler):
             else:
                 rk = hero.proficiencies[name]
                 cost = hero.cost_to_raise_prof(name)
-            dots = "●" * rk + "·" * (6 - rk)
             sel = i == self.cursor
             fg = color.selected if sel else color.menu_text
             prefix = "> " if sel else "  "
             label = name if kind == "skill" else name + "*"
             affordable = "" if rk >= 6 else f"  ({cost}xp)"
-            console.print(x + 2, y + 3 + i, f"{prefix}{label:<12}{dots}{affordable}", fg=fg)
+            row = y + 3 + i
+            console.print(x + 2, row, f"{prefix}{label:<12}", fg=fg)
+            pip_fill = color.pip_prof if kind == "prof" else None
+            render_pips(console, x + 16, row, rk, skill=name, fill=pip_fill)
+            console.print(x + 23, row, affordable, fg=fg)
         console.print(x + 2, y + h - 1, " ↑/↓ move · Enter raise · Esc close ", fg=color.gray)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:

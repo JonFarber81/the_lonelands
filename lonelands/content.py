@@ -150,17 +150,21 @@ def _beast(char, name, col, endurance, defence, prowess, damage, xp,
     )
 
 
-cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 1, 3, 6, desc="claws")
-orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 2, 4, 12,
+# Routine foes grant no experience: advancement is meant to come from quests
+# (and the rare, formidable foe below), not from clearing rank-and-file mobs.
+cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 1, 3, 0, desc="claws")
+orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 2, 4, 0,
                      injury=14, protection=1, desc="hacks at")
-orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 2, 3, 10, desc="looses at")
-great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 2, 3, 14,
+orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 2, 3, 0, desc="looses at")
+great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 2, 3, 0,
                       desc="bites", edge=2)
-wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 3, 5, 34,
+# The barrow-wight is the one foe worth experience: a tough, named undead that
+# only stirs in the deep barrow. Kept modest so quests remain the main path.
+wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 3, 5, 10,
                injury=16, protection=2, desc="chills")
 
-wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 2, 3, 8, ai=SkittishBeast, desc="snaps at")
-warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 20, desc="savages")
+wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 2, 3, 0, ai=SkittishBeast, desc="snaps at")
+warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 0, desc="savages")
 
 
 # Depth-weighted spawn tables: (template, weight)

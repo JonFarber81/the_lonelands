@@ -78,6 +78,7 @@ class MeleeAction(ActionWithDirection):
         weary = attacker.hero.is_weary if attacker.hero else False
         tn = target.fighter.defence
         result = skill_check(tn, af.prowess, weary=weary)
+        engine.note_roll(result, attacker)  # feeds the dice tray (player rolls only)
 
         who = "You" if is_player else f"The {attacker.name}"
         target_name = "you" if target is engine.player else f"the {target.name}"
@@ -85,13 +86,13 @@ class MeleeAction(ActionWithDirection):
 
         if result.is_eye:
             engine.message_log.add_message(
-                f"{who} strike wildly — the Shadow stirs. {result.describe()}",
+                f"{who} strike wildly — the Shadow stirs.",
                 color.sauron_eye,
             )
 
         if not result.is_success:
             engine.message_log.add_message(
-                f"{who} {af.attack_desc} at {target_name} but miss. {result.describe()}",
+                f"{who} {af.attack_desc} at {target_name} but miss.",
                 color.gray,
             )
             return
@@ -102,8 +103,7 @@ class MeleeAction(ActionWithDirection):
         if result.tengwar:
             flavour = f" A tengwar flares — {result.tengwar} extra!"
         engine.message_log.add_message(
-            f"{who} {af.attack_desc} {target_name} for {dmg} endurance."
-            f"{flavour} {result.describe()}",
+            f"{who} {af.attack_desc} {target_name} for {dmg} endurance.{flavour}",
             atk_color,
         )
 

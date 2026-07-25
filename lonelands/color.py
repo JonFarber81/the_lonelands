@@ -76,3 +76,13 @@ xp_filled = (0x4A, 0x6E, 0x9A)
 menu_title = (0xD8, 0xC8, 0x8A)
 menu_text = (0xB8, 0xB2, 0xA6)
 selected = (0xF0, 0xE4, 0xB0)
+
+# --- Skill rank pips -------------------------------------------------------
+# Filled pips glow in their governing attribute's colour so a skill's rank
+# reads at a glance and each attribute block is visually distinct. Empty pips
+# recede into an unlit slot.
+pip_empty = (0x3A, 0x36, 0x30)
+pip_strength = (0xE0, 0xA8, 0x4A)   # warm amber
+pip_heart = (0xD8, 0x6A, 0x6A)      # rose
+pip_wits = (0x6A, 0xA8, 0xD8)       # sky blue
+pip_prof = (0xC0, 0xC6, 0xCE)       # weapon steel

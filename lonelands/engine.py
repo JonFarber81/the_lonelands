@@ -6,12 +6,13 @@ import tcod
 from tcod import libtcodpy
 
 from lonelands import color, render_functions
-from lonelands.config import LOG_HEIGHT, LOG_Y, MAP_WIDTH
+from lonelands.config import LOG_TEXT_HEIGHT, LOG_TEXT_Y, MAP_WIDTH
 from lonelands.exceptions import Impossible
 from lonelands.message_log import MessageLog
 from lonelands.quests import QuestLog
 
 if TYPE_CHECKING:
+    from lonelands.dice import RollResult
     from lonelands.entity import Actor
     from lonelands.game_map import GameMap
     from lonelands.world import GameWorld
@@ -25,11 +26,18 @@ class Engine:
         self.player = player
         self.message_log = MessageLog()
         self.quest_log = QuestLog()
+        # The dice tray shows the player's most recent Test; None until they roll.
+        self.last_roll: "RollResult | None" = None
         self.mouse_location = (0, 0)
         self.flags: Dict[str, Any] = {}
         self.turn_count = 0
         from lonelands import input_handlers
         self.event_handler = input_handlers.MainGameEventHandler(self)
+
+    def note_roll(self, result: "RollResult", roller: "Actor") -> None:
+        """Record a Test for the dice tray, but only when the player rolled it."""
+        if roller is self.player:
+            self.last_roll = result
 
     # --- turns ------------------------------------------------------------
     def handle_enemy_turns(self) -> None:
@@ -72,14 +80,15 @@ class Engine:
     def render(self, console: tcod.console.Console) -> None:
         self.game_map.render(console)
 
-        # Message log beneath the map (left of the sidebar).
+        # Message log beneath the dice tray (left of the sidebar).
         self.message_log.render(
             console,
             x=1,
-            y=LOG_Y + 1,
+            y=LOG_TEXT_Y,
             width=MAP_WIDTH - 2,
-            height=LOG_HEIGHT - 1,
+            height=LOG_TEXT_HEIGHT,
         )
         render_functions.render_sidebar(console, self)
+        render_functions.render_dice_tray(console, self)
         render_functions.render_location_banner(console, self)
         render_functions.render_names_at_mouse(console, self)

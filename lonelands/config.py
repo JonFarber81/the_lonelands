@@ -8,15 +8,26 @@ SCREEN_WIDTH = 92
 SCREEN_HEIGHT = 54
 
 # The map viewport is upper-left. A stats sidebar runs the full height on the
-# right; a message log runs beneath the map on the left.
+# right; the bottom-left pane holds the dice tray above the message log.
 MAP_WIDTH = 62
-MAP_HEIGHT = 46
+MAP_HEIGHT = 44
 
 SIDEBAR_X = MAP_WIDTH
 SIDEBAR_WIDTH = SCREEN_WIDTH - MAP_WIDTH  # 30
 
+# The bottom-left "Chronicle" pane is a framed box. Reading top-to-bottom:
+#   LOG_Y            frame top border (carries the " Chronicle " title)
+#   TRAY_Y           the dice tray — the player's latest roll, rendered as dice
+#   TRAY_DIVIDER_Y   a thin rule separating the tray from the prose
+#   LOG_TEXT_Y..     the scrolling message log (LOG_TEXT_HEIGHT rows)
+#   (frame bottom border)
 LOG_Y = MAP_HEIGHT
-LOG_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT   # 8
+LOG_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT   # 10
+
+TRAY_Y = LOG_Y + 1
+TRAY_DIVIDER_Y = LOG_Y + 2
+LOG_TEXT_Y = LOG_Y + 3
+LOG_TEXT_HEIGHT = LOG_HEIGHT - 4          # 6 rows of prose (borders + tray + rule)
 
 # --- Font -----------------------------------------------------------------
 # We render with a heavy monospace that fills its cell for legibility at small

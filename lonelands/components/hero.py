@@ -108,14 +108,18 @@ class Hero(BaseComponent):
         target = tn if tn is not None else self.skill_tn(skill)
         if weary is None:
             weary = self.is_weary
-        return skill_check(target, rank, favoured=favoured, weary=weary, modifier=modifier)
+        result = skill_check(target, rank, favoured=favoured, weary=weary, modifier=modifier)
+        self.engine.note_roll(result, self.parent)  # feeds the dice tray
+        return result
 
     def test_attribute(
         self, attribute: str, tn: Optional[int] = None, favoured: int = 0, modifier: int = 0
     ) -> RollResult:
         target = tn if tn is not None else self.attr_tn(attribute)
         # Bare attribute test: feat die + no success dice.
-        return skill_check(target, 0, favoured=favoured, weary=self.is_weary, modifier=modifier)
+        result = skill_check(target, 0, favoured=favoured, weary=self.is_weary, modifier=modifier)
+        self.engine.note_roll(result, self.parent)  # feeds the dice tray
+        return result
 
     # --- Advancement ------------------------------------------------------
     def add_xp(self, amount: int) -> None:

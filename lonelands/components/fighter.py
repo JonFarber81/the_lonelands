@@ -127,6 +127,7 @@ class Fighter(BaseComponent):
     # --- Resolution -------------------------------------------------------
     def protection_test(self, injury_tn: int) -> bool:
         result = skill_check(injury_tn, self.protection)
+        self.engine.note_roll(result, self.parent)  # tray shows the player's saves
         return result.is_success
 
     def inflict_wound(self) -> bool:
