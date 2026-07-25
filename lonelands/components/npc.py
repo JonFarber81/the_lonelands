@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import TYPE_CHECKING, Any, Dict
 
 from lonelands.components.base_component import BaseComponent
@@ -26,3 +27,17 @@ class NPC(BaseComponent):
         state = self.__dict__.copy()
         state["tree"] = None
         return state
+
+    def __deepcopy__(self, memo: Dict[int, Any]) -> "NPC":
+        """Preserve the dialog tree when an NPC is cloned (Entity.spawn).
+
+        deepcopy would otherwise route through __getstate__ and drop the tree —
+        that dropping is only wanted for *pickling* (saves), where _rehydrate
+        restores it by name. A spawned NPC has no such rehydrate, so we keep the
+        tree, shared by reference: it is static content and its lambdas must not
+        be copied."""
+        new = self.__class__.__new__(self.__class__)
+        memo[id(self)] = new
+        for key, value in self.__dict__.items():
+            setattr(new, key, self.tree if key == "tree" else copy.deepcopy(value, memo))
+        return new
