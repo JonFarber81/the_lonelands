@@ -36,13 +36,14 @@ def new_game() -> Engine:
     _grant(player, content.lembas)
 
     engine.message_log.add_message(
-        "The year is 2965 of the Third Age. You come to Talbrún, a hamlet of "
-        "the Dúnedain upon the Weather Hills.",
+        "The year is 2965 of the Third Age. You come to Bree, at the meeting of "
+        "the Great East Road and the Greenway.",
         color.welcome_text,
     )
     engine.message_log.add_message(
-        "Speak with the folk here (walk into them), then seek the barrow in the "
-        "wild to the east. Press ? for the lore of the wayfarer.",
+        "Speak with the folk here (walk into them). Walk off an edge to travel "
+        "to the next land; the barrow lies east, in the Weather Hills. Press ? "
+        "for the lore of the wayfarer.",
         color.welcome_text,
     )
     return engine

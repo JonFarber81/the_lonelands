@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover - optional dependency
     _HAVE_FREETYPE = False
 
 # Glyphs we care about fitting: printable ASCII (map symbols, prose, menus) plus
-# the accented vowels in Middle-earth names (Dúnedain, Talbrún) and the em-dash
+# the accented vowels in Middle-earth names (Dúnedain, Amon Sûl) and the em-dash
 # used throughout the prose. Auto-fit measures ink extents over this set so the
 # tallest accent and deepest descender never clip.
 _SAMPLE = [chr(c) for c in range(0x20, 0x7F)] + list("áéíóúÁÉÍÓÚâêîôûàèìòùñÑ—…“”‘’")

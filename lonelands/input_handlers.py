@@ -381,7 +381,7 @@ class QuestScreenHandler(AskUserHandler):
         cy = y + 2
         shown = [q for q in quests if q.state.name != "UNSTARTED"]
         if not shown:
-            console.print(x + 2, cy, "You carry no errands yet. Seek out the folk of Talbrún.",
+            console.print(x + 2, cy, "You carry no errands yet. Seek out the folk of Bree.",
                           fg=color.gray)
         for q in shown:
             head_col = {

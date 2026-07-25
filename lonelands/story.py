@@ -1,5 +1,10 @@
-"""Quests, speaking characters, and dialog trees for the starting region:
-the village of Talbrún on the Weather Hills, and the barrow-ruin of Amon Gûl.
+"""Quests, speaking characters, and dialog trees for the starting Region:
+the town of Bree, and the barrow-ruin east of it in the Weather Hills.
+
+Setting: TA 2965. Bree is peopled accurately for that year — the Prancing Pony
+is kept by a Butterbur (an ancestor of the Barliman of later days), and Rangers
+of the North lodge there. Canon detail is left thin on purpose, to be enriched
+later from the TOR Bree supplement; do not invent hard lore here.
 
 A dialog *node* is {"text": str|callable, "options": [option, ...]}.
 An *option* is a dict with:
@@ -102,9 +107,9 @@ def make_elder() -> Actor:
 
     tree = {
         "root": {
-            "text": "Dírhael, eldest of Talbrún, regards you from beneath white brows.\n"
-                    "\"A Ranger of the North, and travelling alone. These are darkening days, "
-                    "kinsman. Sit, and tell me — or ask what you will.\"",
+            "text": "Dírhael, an old Ranger who winters in Bree, regards you from beneath "
+                    "white brows.\n\"A Ranger of the North, and travelling alone. These are "
+                    "darkening days, kinsman. Sit, and tell me — or ask what you will.\"",
             "options": [
                 opt("What shadow lies on this place?", goto="trouble"),
                 opt("Tell me of the ruin on the hill.", goto="ruins_lore"),
@@ -120,10 +125,10 @@ def make_elder() -> Actor:
             ],
         },
         "trouble": {
-            "text": "\"A cold has come out of the old barrow beneath Amon Gûl — the "
-                    "Weathertop's lesser sister. The dead do not lie quiet, and orcs "
-                    "have crept down from the Ettenmoors to nest in the ruin. My people "
-                    "bar their doors after dark.\"",
+            "text": "\"A cold has come out of an old barrow east of here, under the "
+                    "Weather Hills. The dead do not lie quiet, and orcs have crept down "
+                    "from the Ettenmoors to nest in the ruin. The Bree-folk bar their "
+                    "doors after dark.\"",
             "options": [
                 opt("And you would have me go down there.", goto="quest_given",
                     do=lambda e: q(e).start("main_barrow"),
@@ -146,9 +151,10 @@ def make_elder() -> Actor:
             ],
         },
         "quest_given": {
-            "text": "\"The entrance lies east, beyond the ford — a broken arch in the "
-                    "hillside. Go carefully, and go with hope. The star-brooch will be "
-                    "deepest of all, where the cold is thickest.\"",
+            "text": "\"Walk east out of Bree into the Weather Hills, beyond the ford — "
+                    "you'll find a broken arch in the hillside. Go carefully, and go with "
+                    "hope. The star-brooch will be deepest of all, where the cold is "
+                    "thickest.\"",
             "options": [opt("I will not fail.", goto=None)],
         },
         "quest_done": {
@@ -157,11 +163,11 @@ def make_elder() -> Actor:
             "options": [opt("It was rightly done.", goto=None)],
         },
     }
-    return _npc("@", color.npc_c, "Dírhael the Elder", "Eldest of Talbrún", tree)
+    return _npc("@", color.npc_c, "Dírhael the Elder", "Elder of the Dúnedain", tree)
 
 
 # ---------------------------------------------------------------------------
-# Ioreth the herbwife — healing & Hope
+# The herb-wife of Bree — healing & Hope
 # ---------------------------------------------------------------------------
 def make_healer() -> Actor:
     def heal(engine):
@@ -171,11 +177,11 @@ def make_healer() -> Actor:
             p.fighter.wounded = False
         restored = p.hero.restore_hope(4)
         engine.message_log.add_message(
-            f"Ioreth's care mends you (+{healed} endurance, +{restored} Hope).",
+            f"The herb-wife's care mends you (+{healed} endurance, +{restored} Hope).",
             color.health_recovered,
         )
 
-    def give_herbs(engine, tag="ioreth_gift"):
+    def give_herbs(engine, tag="herbwife_gift"):
         if engine.flags.get(tag):
             engine.message_log.add_message("\"I have given what I can spare, friend.\"", color.gray)
             return
@@ -188,15 +194,15 @@ def make_healer() -> Actor:
         herb2.parent = engine.player.inventory
         engine.player.inventory.items.append(herb2)
         engine.message_log.add_message(
-            "Ioreth presses healing herbs and a sprig of athelas into your hand.",
+            "The herb-wife presses healing herbs and a sprig of athelas into your hand.",
             color.item_c,
         )
 
     tree = {
         "root": {
-            "text": "Ioreth the herbwife looks up from her drying-racks, the air sharp "
-                    "with the scent of kingsfoil.\n\"You've the look of the long road on "
-                    "you. What do you need, wanderer?\"",
+            "text": "Mistress Rushlight, the herb-wife of Bree, looks up from her "
+                    "drying-racks, the air sharp with the scent of kingsfoil.\n\"You've "
+                    "the look of the long road on you. What do you need, wanderer?\"",
             "options": [
                 opt("Tend my hurts, if you would.", goto="root", do=heal),
                 opt("Might you spare some herbs?", goto="root", do=give_herbs),
@@ -211,7 +217,7 @@ def make_healer() -> Actor:
             "options": [opt("(step back)", goto="root")],
         },
     }
-    return _npc("@", (0xC8, 0x9A, 0xB0), "Ioreth", "Herbwife of Talbrún", tree)
+    return _npc("@", (0xC8, 0x9A, 0xB0), "Mistress Rushlight", "Herb-wife of Bree", tree)
 
 
 # ---------------------------------------------------------------------------
@@ -233,9 +239,9 @@ def make_halbarad() -> Actor:
 
     tree = {
         "root": {
-            "text": "Halbarad leans on a spear by the palisade, grey-cloaked as you are.\n"
-                    "\"Well met, cousin. Few of our folk pass this way. I keep what gear I "
-                    "can for those who walk the Wild. What's your need?\"",
+            "text": "Halbarad leans on a spear by the hedge, grey-cloaked as you are.\n"
+                    "\"Well met, cousin. Few of our folk pass through Bree these days. I "
+                    "keep what gear I can for those who walk the Wild. What's your need?\"",
             "options": [
                 opt("Show me your wares.", handler=open_shop),
                 opt("You spoke of wolves?", goto="wolves_intro",
@@ -267,7 +273,7 @@ def make_halbarad() -> Actor:
         },
         "orcs_intro": {
             "text": "\"Since you're bound for the barrow anyway — every orc-soldier you "
-                    "put down is one fewer to trouble Talbrún. Bring me word of four, and "
+                    "put down is one fewer to trouble Bree. Bring me word of four, and "
                     "I'll not forget it.\"",
             "options": [
                 opt("Consider it done.", goto=None, do=lambda e: q(e).start("orcs")),
@@ -282,27 +288,45 @@ def make_halbarad() -> Actor:
     return _npc("@", color.ranger_green, "Halbarad", "Ranger of the North", tree)
 
 
-def make_watchman() -> Actor:
+# ---------------------------------------------------------------------------
+# Butterbur — keeper of the Prancing Pony (rumour & wayfinding)
+# ---------------------------------------------------------------------------
+def make_innkeeper() -> Actor:
     tree = {
         "root": {
-            "text": "A tired watchman nods at you from the gate.\n\"The gate south opens on "
-                    "the Wild. Follow the old road east and you'll come to the ford, and "
-                    "past it the broken arch — the way down into the barrow. Mind the "
-                    "wolves on the open ground.\"",
+            "text": "The stout keeper of the Prancing Pony bustles over, wiping his hands "
+                    "on his apron.\n\"Welcome, welcome! Butterbur's the name, and this is "
+                    "the Pony — best beds and beer in Bree-land. What'll it be?\"",
             "options": [
+                opt("Which way lies the Wild?", goto="roads"),
+                opt("Any news on the roads?", goto="rumour"),
                 opt("Where might I resupply?", goto="hint"),
                 opt("My thanks.", goto=None),
             ],
         },
+        "roads": {
+            "text": "\"Bree sits where the roads cross, see. Walk east on the Great East "
+                    "Road and you're into the Weather Hills — that's where your barrow "
+                    "is, if you're set on it. West is the old Barrow-downs, north the "
+                    "Chetwood, south the downs along the Greenway. Just walk out and keep "
+                    "going; you'll pass into whichever land you're headed.\"",
+            "options": [opt("(step back)", goto="root")],
+        },
+        "rumour": {
+            "text": "\"Wolves bolder than they ought to be, and a chill out of that old "
+                    "barrow east of here. Rangers come and go — grey folk, quiet folk. "
+                    "Old Dírhael's one, and he's got that far-off look tonight.\"",
+            "options": [opt("(step back)", goto="root")],
+        },
         "hint": {
-            "text": "\"Ioreth has herbs, and Halbarad keeps gear for Rangers. Old Dírhael "
-                    "by the hall knows the deeper history — speak with him before you go "
-                    "down.\"",
+            "text": "\"Mistress Rushlight has herbs by her cot, and that Ranger Halbarad "
+                    "keeps gear for Wild-walkers. Speak with old Dírhael before you go "
+                    "east — he knows the deep history of that barrow.\"",
             "options": [opt("(step back)", goto="root")],
         },
     }
-    return _npc("@", color.gray, "the watchman", "Gate-warden", tree)
+    return _npc("@", (0xC8, 0xA0, 0x62), "Butterbur", "Keeper of the Prancing Pony", tree)
 
 
 def make_town_npcs() -> List[Actor]:
-    return [make_elder(), make_healer(), make_halbarad(), make_watchman()]
+    return [make_elder(), make_healer(), make_halbarad(), make_innkeeper()]

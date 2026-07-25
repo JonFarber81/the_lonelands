@@ -27,6 +27,7 @@ class Fighter(BaseComponent):
         prowess: int,          # natural attack success dice (unarmed / monster)
         damage: int,           # natural weapon damage
         *,
+        attack: int = 12,      # TN the player's Parry test must meet when this foe strikes
         edge: int = 1,
         injury: int = 14,
         protection: int = 0,   # natural armour success dice
@@ -37,6 +38,7 @@ class Fighter(BaseComponent):
         self.max_endurance = endurance
         self._endurance = endurance
         self.base_defence = defence
+        self.base_attack = attack
         self.base_prowess = prowess
         self.base_damage = damage
         self.base_edge = edge
@@ -84,6 +86,13 @@ class Fighter(BaseComponent):
         bonus = eq.defence_bonus if eq else 0
         penalty = 2 if self.wounded else 0
         return self.base_defence + bonus - penalty
+
+    @property
+    def attack(self) -> int:
+        """The TN the player's Parry test must meet to turn this foe's blow
+        aside. A wounded foe strikes less surely."""
+        penalty = 2 if self.wounded else 0
+        return self.base_attack - penalty
 
     @property
     def protection(self) -> int:
