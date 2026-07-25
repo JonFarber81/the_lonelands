@@ -159,7 +159,7 @@ def make_elder() -> Actor:
         },
         "quest_done": {
             "text": "\"So. The star of the last warden comes home.\" The old man's voice "
-                    "shakes. \"You have done a deed the songs will not forget, Strider.\"",
+                    "shakes. \"You have done a deed the songs will not forget, Tarandir.\"",
             "options": [opt("It was rightly done.", goto=None)],
         },
     }

@@ -18,7 +18,8 @@ from lonelands.entity import Actor, Item
 from lonelands.equipment_types import EquipmentType
 
 # ---------------------------------------------------------------------------
-# The player: a Ranger of the North, alone in the Wild (TOR "Strider" mode).
+# The player: Tarandir, a Ranger of the North whom the Bree-folk call
+# "Greycloak", alone in the Wild (TOR's solo "Strider mode").
 # ---------------------------------------------------------------------------
 def make_player() -> Actor:
     hero = Hero(
@@ -33,12 +34,13 @@ def make_player() -> Actor:
         valour=2,
         wisdom=2,
         culture="Ranger of the North",
-        calling="Strider",
+        calling="Warden",
+        true_name="Tarandir",
     )
     player = Actor(
         char="@",
         color=color.player_c,
-        name="Strider",
+        name="Greycloak",
         ai_cls=None,
         fighter=Fighter(
             endurance=26, defence=14, prowess=0, damage=1,
