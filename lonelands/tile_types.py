@@ -36,7 +36,8 @@ KIND_UP = 2
 KIND_DOOR = 3
 KIND_WATER = 4
 KIND_RUIN_ENTRANCE = 5
-KIND_TOWN_EXIT = 6
+# (6 was KIND_TOWN_EXIT — retired: Regions are left by walking off an edge,
+#  not by standing on a gate tile. Enter is now reserved for vertical Levels.)
 
 
 def new_tile(
@@ -158,11 +159,4 @@ ruin_entrance = new_tile(
     dark=(ord(">"), (0x5A, 0x54, 0x48), color.black),
     light=(ord(">"), (0xE0, 0xC0, 0x70), (0x22, 0x1E, 0x18)),
     kind=KIND_RUIN_ENTRANCE,
-)
-town_exit = new_tile(
-    walkable=True,
-    transparent=True,
-    dark=(ord("<"), (0x5A, 0x54, 0x48), color.black),
-    light=(ord("<"), (0xC0, 0xD0, 0xE0), (0x1A, 0x1E, 0x22)),
-    kind=KIND_TOWN_EXIT,
 )

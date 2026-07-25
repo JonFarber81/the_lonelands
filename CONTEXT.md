@@ -4,6 +4,31 @@ The shared vocabulary of The Lonelands. Terms here are the canonical names —
 use them in code, comments, UI copy, and conversation. This file is a glossary,
 not a spec: it defines *what words mean*, never *how things are built*.
 
+## World & navigation
+
+- **Region** — one cell of the world grid. A Region is a stack of one or more
+  **Levels**; most Regions have just the surface Level, but many may run deeper.
+  The player crosses from one Region to an adjacent one by walking off an edge.
+  Never interchangeably called a "zone" or "square".
+- **Level** — one horizontal layer of a Region, stacked vertically. **Enter** on
+  a stair or entrance moves the player up or down between a Region's Levels. The
+  barrow's "deeps" are the lower Levels of the barrow-downs Region.
+- **Surface** — a Region's topmost Level: the one the player arrives on when
+  walking in from a neighbour. *Only the Surface edge-connects to neighbouring
+  Regions*; deeper Levels are reached only by Enter, from within their Region.
+- **Square** — the town's central plaza only. *Not* a synonym for Region.
+
+The starting grid (a plus around the hub, mirroring the Eriador Journey map;
+see `references/`):
+
+- **Bree** — the hub Region, the town at the meeting of the roads. Where a
+  Ranger of the North is met. *(Replaces the former invented "Talbrún".)*
+- **the Weather Hills** — the **east** Region, along the Great East Road toward
+  Weathertop; holds the barrow entrance down to the deeps (the old ruin).
+- **the Barrow-downs** — the **west** Region (Tyrn Gorthad); near-empty for now.
+- **the Chetwood** — the **north** Region; near-empty for now.
+- **the South Downs** — the **south** Region; near-empty for now.
+
 ## The One Ring dice
 
 - **Test** — a single roll resolving an action: one Feat die plus zero or more
@@ -29,6 +54,24 @@ not a spec: it defines *what words mean*, never *how things are built*.
 
 - **Favoured / ill-favoured** — roll two Feat dice, keep the higher / lower.
 - **Weary** — Success dice showing 1–3 count as 0.
+
+## Combat
+
+The hero rolls *every* die in a fight — on offence and on defence — so the dice
+tray never falls silent. A foe never rolls.
+
+- **Attack roll** — when the hero strikes, a proficiency Test against the foe's
+  Defence. On a hit, the weapon deals damage.
+- **Attack TN** — a foe's rating for how hard its blow is to turn aside; it is
+  the Target Number of the hero's Parry, not a roll the foe makes.
+- **Parry** — when a foe strikes the hero, the hero rolls a **Battle** Test
+  against the foe's Attack TN (shield and helm add to the total). Success turns
+  the blow aside for no harm; failure lets it land for the foe's damage.
+- **Piercing Blow** — a wound threat. On the hero's *great* attack it is forced
+  on the foe; on a **fumbled Parry** (the Eye) it is forced on the hero. The
+  defender rolls a **Protection** Test against the weapon's **Injury** rating to
+  avoid it.
+- **Wound** — the result of a failed Protection Test. A second Wound is mortal.
 
 ## Presentation
 

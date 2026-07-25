@@ -56,6 +56,15 @@ class MovementAction(ActionWithDirection):
         dest_x, dest_y = self.dest_xy
         gm = self.engine.game_map
         if not gm.in_bounds(dest_x, dest_y):
+            # The player walking off an edge crosses into the neighbouring
+            # Region; anyone else is stopped by the bounds of the map.
+            world = getattr(self.engine, "game_world", None)
+            if (
+                self.entity is self.engine.player
+                and world is not None
+                and world.cross_edge(self.dx, self.dy)
+            ):
+                return
             raise Impossible("That way lies the edge of the known world.")
         if not gm.tiles["walkable"][dest_x, dest_y]:
             raise Impossible("The way is blocked.")
@@ -70,6 +79,14 @@ class MeleeAction(ActionWithDirection):
         if target is None or target.fighter is None:
             raise Impossible("There is nothing there to strike.")
 
+        # Incoming blows on the player are resolved by the *player's* own roll:
+        # a Parry test. Every die on screen stays the hero's. (The attacker
+        # never rolls in this case.)
+        if target is self.engine.player and target.hero is not None:
+            return self._resolve_incoming(target)
+        return self._resolve_strike(target)
+
+    def _resolve_strike(self, target: "Actor") -> None:
         attacker = self.entity
         af = attacker.fighter
         engine = self.engine
@@ -121,6 +138,55 @@ class MeleeAction(ActionWithDirection):
                     engine.message_log.add_message(
                         f"A piercing blow wounds {target_name}!",
                         color.enemy_atk if is_player else color.player_die,
+                    )
+
+    def _resolve_incoming(self, player: "Actor") -> None:
+        """A foe strikes the player: the player rolls a Parry test (Battle,
+        plus any shield/helm bonus) against the attacker's Attack TN. Turn it
+        aside on a success; take the blow on a failure. A fumbled parry (the
+        Eye) leaves the hero open to a wounding Piercing Blow."""
+        attacker = self.entity
+        af = attacker.fighter
+        engine = self.engine
+        hero = player.hero
+
+        defence_bonus = player.equipment.defence_bonus if player.equipment else 0
+        result = hero.test_skill("Battle", tn=af.attack, modifier=defence_bonus)
+        # test_skill already feeds the dice tray (a player roll).
+
+        foe = f"The {attacker.name}"
+        if result.is_success:
+            engine.message_log.add_message(
+                f"{foe} {af.attack_desc} you, but you turn the blow aside.",
+                color.gray,
+            )
+            return
+
+        dmg = af.damage
+        player.fighter.take_damage(dmg)
+        engine.message_log.add_message(
+            f"{foe} {af.attack_desc} you for {dmg} endurance.",
+            color.enemy_atk,
+        )
+        if player.fighter.endurance <= 0:
+            return  # die() already fired from the endurance setter
+
+        # A fumbled parry (Eye of Sauron) leaves you exposed to a Piercing Blow.
+        if result.is_eye:
+            engine.message_log.add_message(
+                "You are thrown off-guard — the Shadow presses the attack!",
+                color.sauron_eye,
+            )
+            if not player.fighter.protection_test(af.injury):
+                mortal = player.fighter.inflict_wound()
+                if mortal:
+                    engine.message_log.add_message(
+                        "A mortal wound! You are struck down.", color.player_die
+                    )
+                    player.fighter.endurance = 0
+                else:
+                    engine.message_log.add_message(
+                        "A piercing blow wounds you!", color.player_die
                     )
 
 

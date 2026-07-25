@@ -1,5 +1,11 @@
-"""Map generation: the village of Talbrún, the wilderness of the Weather Hills,
-and the descending barrow-ruin of Amon Gûl."""
+"""Map generation for the Regions of the starting grid — Bree at the centre,
+the Weather Hills (with the descending barrow) to the east, and the near-empty
+Barrow-downs, Chetwood, and South Downs around it.
+
+Each `generate_*` returns the **Surface** of one Region. A Surface is edge-open:
+the player leaves it by walking off any edge (see `world.GameWorld.cross_edge`),
+so no map carries a "gate" tile any more — Enter is reserved for stairs and the
+barrow entrance (the vertical axis)."""
 from __future__ import annotations
 
 from typing import List, Tuple
@@ -69,11 +75,15 @@ def _line(x1, y1, x2, y2):
 
 
 # ---------------------------------------------------------------------------
-# Town
+# Bree — the hub Region (TA 2965)
 # ---------------------------------------------------------------------------
-def generate_town(engine) -> GameMap:
+def generate_bree(engine) -> GameMap:
+    """Bree at the meeting of the roads: a hedge-ringed town where the Great
+    East Road (E–W) crosses the Greenway (N–S). Each of the four roads leaves
+    through a gate-gap in the hedge, so the player can walk off any edge into
+    the neighbouring Region."""
     w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name="Talbrún, a village of the Dúnedain", outdoors=True)
+    gm = GameMap(engine, w, h, name="Bree, at the meeting of the roads", outdoors=True)
     gm.tiles[:] = tile_types.grass
 
     for x in range(w):
@@ -81,13 +91,31 @@ def generate_town(engine) -> GameMap:
             if rng.random() < 0.10:
                 gm.tiles[x, y] = tile_types.grass_low
 
-    # Palisade
-    tx0, ty0, tx1, ty1 = 5, 3, w - 6, h - 4
-    gm.tiles[tx0:tx1 + 1, ty0] = tile_types.building_wall
-    gm.tiles[tx0:tx1 + 1, ty1] = tile_types.building_wall
-    gm.tiles[tx0, ty0:ty1 + 1] = tile_types.building_wall
-    gm.tiles[tx1, ty0:ty1 + 1] = tile_types.building_wall
-    gm.tiles[tx0 + 1:tx1, ty0 + 1:ty1] = tile_types.cobble
+    # Bree-hill: a modest rise on the north-east skirts of the town (walkable
+    # flavour, well clear of the roads and gates).
+    for x in range(w - 5, w - 1):
+        for y in range(1, 9):
+            if rng.random() < 0.5:
+                gm.tiles[x, y] = tile_types.hill
+
+    gate_x, gate_y = w // 2, h // 2
+
+    # The two great roads, laid first so the hedge can be punched through them.
+    gm.tiles[:, gate_y] = tile_types.road          # the Great East Road (E–W)
+    gm.tiles[gate_x, :] = tile_types.road          # the Greenway (N–S)
+
+    # The hedge (dike-and-hedge), with a gate-gap where each road passes.
+    hx0, hy0, hx1, hy1 = 5, 3, w - 6, h - 4
+    gm.tiles[hx0:hx1 + 1, hy0] = tile_types.building_wall
+    gm.tiles[hx0:hx1 + 1, hy1] = tile_types.building_wall
+    gm.tiles[hx0, hy0:hy1 + 1] = tile_types.building_wall
+    gm.tiles[hx1, hy0:hy1 + 1] = tile_types.building_wall
+    gm.tiles[hx0 + 1:hx1, hy0 + 1:hy1] = tile_types.cobble
+    # Re-lay the roads across the interior as cobble, and re-open the four gates.
+    gm.tiles[hx0 + 1:hx1, gate_y] = tile_types.cobble
+    gm.tiles[gate_x, hy0 + 1:hy1] = tile_types.cobble
+    for gx, gy in ((gate_x, hy0), (gate_x, hy1), (hx0, gate_y), (hx1, gate_y)):
+        gm.tiles[gx, gy] = tile_types.road
 
     def building(bx, by, bw, bh):
         gm.tiles[bx:bx + bw, by] = tile_types.building_wall
@@ -97,33 +125,28 @@ def generate_town(engine) -> GameMap:
         gm.tiles[bx + 1:bx + bw - 1, by + 1:by + bh - 1] = tile_types.floor
         gm.tiles[bx + bw // 2, by + bh - 1] = tile_types.door
 
-    building(9, 7, 9, 6)          # the hall
-    building(w - 18, 7, 9, 6)     # herbwife
-    building(9, h - 13, 9, 6)     # stores
-    building(w - 18, h - 13, 9, 6)  # a home
+    building(14, 6, 12, 8)          # The Prancing Pony (the great inn)
+    building(40, 7, 9, 6)           # the moot-hall
+    building(9, 30, 9, 6)           # the herb-wife's cot
+    building(42, 30, 9, 6)          # a Bree-folk home
 
-    gate_x = w // 2
-    gm.tiles[gate_x, ty1] = tile_types.town_exit
-    gm.tiles[gate_x, ty1 - 1] = tile_types.cobble
-    gm.town_exit_xy = (gate_x, ty1)
+    elder, healer, halbarad, innkeeper = story.make_town_npcs()
+    elder.spawn(gm, 44, 14)         # Dírhael, by the moot-hall
+    healer.spawn(gm, 13, 28)        # the herb-wife, by her cot
+    halbarad.spawn(gm, 7, 20)       # Halbarad, near the West-gate
+    innkeeper.spawn(gm, 19, 15)     # the Butterbur, before the Pony's door
 
-    elder, healer, halbarad, watchman = story.make_town_npcs()
-    elder.spawn(gm, 13, 14)              # by the hall
-    healer.spawn(gm, w - 14, 14)         # by the herbwife's
-    halbarad.spawn(gm, 13, h - 8)        # by the stores
-    watchman.spawn(gm, gate_x, ty1 - 2)
-
-    gm.entry_xy = (gate_x, ty1 - 2)      # arriving from the Wild
-    gm.start_xy = (gate_x, h // 2)       # a new game begins in the square
+    gm.entry_xy = (gate_x, gate_y)              # fallback landing = the crossroads
+    gm.start_xy = (gate_x, gate_y)              # a new game begins in the square
     return gm
 
 
 # ---------------------------------------------------------------------------
-# Overworld — the Weather Hills
+# The Weather Hills — the east Region, holding the barrow entrance
 # ---------------------------------------------------------------------------
-def generate_overworld(engine) -> GameMap:
+def generate_weather_hills(engine) -> GameMap:
     w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name="The Weather Hills, east of Talbrún", outdoors=True)
+    gm = GameMap(engine, w, h, name="The Weather Hills, east of Bree", outdoors=True)
     gm.tiles[:] = tile_types.grass
 
     for x in range(w):
@@ -156,20 +179,19 @@ def generate_overworld(engine) -> GameMap:
             if rng.random() < 0.25:
                 gm.tiles[x, y] = tile_types.hill
 
-    town_gate = (3, ford_y)
     ruin_xy = (w - 6, ford_y)
 
-    # The old road, west gate -> ford -> ruin (drawn first)
-    for x in range(town_gate[0], river_x - 1):
+    # The old road runs west-edge -> ford -> the barrow, so the player arriving
+    # from Bree on the west can follow it east to the ruin.
+    for x in range(0, river_x - 1):
         gm.tiles[x, ford_y] = tile_types.road
     for x in range(river_x + 3, ruin_xy[0] + 1):
         gm.tiles[x, ford_y] = tile_types.road
 
-    # Landmarks placed last so the road does not overwrite them.
-    gm.tiles[town_gate] = tile_types.town_exit
-    gm.town_gate_xy = town_gate
+    # The barrow entrance (Enter here to descend into the deeps).
     gm.tiles[ruin_xy] = tile_types.ruin_entrance
     gm.ruin_entrance_xy = ruin_xy
+    gm.barrow_entrance_xy = ruin_xy   # where the player surfaces from the deeps
 
     # Wild beasts roam the open ground
     for _ in range(rng.randint(3, 5)):
@@ -177,9 +199,50 @@ def generate_overworld(engine) -> GameMap:
         if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
             _weighted(content.WILD_BEASTS).spawn(gm, bx, by)
 
-    gm.entry_xy = (town_gate[0] + 1, town_gate[1])   # arriving from town
-    gm.from_ruin_xy = (ruin_xy[0] - 1, ruin_xy[1])   # arriving from the ruin
+    gm.entry_xy = (1, ford_y)   # fallback landing = just inside the west edge
     return gm
+
+
+# ---------------------------------------------------------------------------
+# The near-empty neighbour Regions (proving out the grid; enrich later)
+# ---------------------------------------------------------------------------
+def _open_surface(engine, name, *, tree_chance, low_chance, beast_range=(2, 4)):
+    """A sparse outdoor Surface: grass with scattered terrain and a wandering
+    beast or two. Shared skeleton for the three empty neighbour Regions."""
+    w, h = MAP_WIDTH, MAP_HEIGHT
+    gm = GameMap(engine, w, h, name=name, outdoors=True)
+    gm.tiles[:] = tile_types.grass
+    for x in range(w):
+        for y in range(h):
+            r = rng.random()
+            if r < tree_chance:
+                gm.tiles[x, y] = tile_types.tree
+            elif r < tree_chance + low_chance:
+                gm.tiles[x, y] = tile_types.grass_low
+
+    for _ in range(rng.randint(*beast_range)):
+        bx, by = rng.randint(2, w - 3), rng.randint(2, h - 3)
+        if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
+            _weighted(content.WILD_BEASTS).spawn(gm, bx, by)
+
+    gm.entry_xy = (w // 2, h // 2)
+    gm.start_xy = (w // 2, h // 2)
+    return gm
+
+
+def generate_barrow_downs(engine) -> GameMap:
+    # Open, treeless downs south of the Old Forest — barrow-country (empty now).
+    return _open_surface(engine, "The Barrow-downs", tree_chance=0.02, low_chance=0.22)
+
+
+def generate_chetwood(engine) -> GameMap:
+    # The wooded country north of Bree.
+    return _open_surface(engine, "The Chetwood, north of Bree", tree_chance=0.16, low_chance=0.16)
+
+
+def generate_south_downs(engine) -> GameMap:
+    # Rolling downs along the Greenway, south of Bree.
+    return _open_surface(engine, "The South Downs", tree_chance=0.04, low_chance=0.20)
 
 
 # ---------------------------------------------------------------------------

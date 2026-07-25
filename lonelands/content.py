@@ -138,12 +138,14 @@ star_brooch = Item(
 # Creatures of Eriador
 # ---------------------------------------------------------------------------
 def _beast(char, name, col, endurance, defence, prowess, damage, xp,
-           injury=13, protection=0, ai=HostileEnemy, desc="mauls", edge=1) -> Actor:
+           injury=13, protection=0, ai=HostileEnemy, desc="mauls", edge=1,
+           attack=12) -> Actor:
     return Actor(
         char=char, color=col, name=name, ai_cls=ai,
         fighter=Fighter(
             endurance=endurance, defence=defence, prowess=prowess, damage=damage,
-            injury=injury, protection=protection, attack_desc=desc, xp_reward=xp, edge=edge,
+            injury=injury, protection=protection, attack_desc=desc, xp_reward=xp,
+            edge=edge, attack=attack,
         ),
         inventory=Inventory(0),
         equipment=Equipment(),
@@ -152,19 +154,25 @@ def _beast(char, name, col, endurance, defence, prowess, damage, xp,
 
 # Routine foes grant no experience: advancement is meant to come from quests
 # (and the rare, formidable foe below), not from clearing rank-and-file mobs.
-cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 1, 3, 0, desc="claws")
+# `attack` is the TN the player's Parry (Battle) test must meet when the foe
+# strikes: higher = harder to turn aside. Tuned for a "moderate" feel against a
+# starting Battle of 2 — a lone foe is manageable, a pack is deadly.
+cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 1, 3, 0,
+                     desc="claws", attack=12)
 orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 2, 4, 0,
-                     injury=14, protection=1, desc="hacks at")
-orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 2, 3, 0, desc="looses at")
+                     injury=14, protection=1, desc="hacks at", attack=13)
+orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 2, 3, 0,
+                    desc="looses at", attack=12)
 great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 2, 3, 0,
-                      desc="bites", edge=2)
+                      desc="bites", edge=2, attack=13)
 # The barrow-wight is the one foe worth experience: a tough, named undead that
 # only stirs in the deep barrow. Kept modest so quests remain the main path.
 wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 3, 5, 10,
-               injury=16, protection=2, desc="chills")
+               injury=16, protection=2, desc="chills", attack=15)
 
-wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 2, 3, 0, ai=SkittishBeast, desc="snaps at")
-warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 0, desc="savages")
+wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 2, 3, 0, ai=SkittishBeast,
+              desc="snaps at", attack=12)
+warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 0, desc="savages", attack=14)
 
 
 # Depth-weighted spawn tables: (template, weight)
