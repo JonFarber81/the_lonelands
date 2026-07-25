@@ -17,6 +17,10 @@ env/
 # Reference material (art, maps, PDFs — not distributed)
 references/
 
+# Third-party tileset art (Wanderlust, no explicit license — kept local, not
+# redistributed). See lonelands/assets/tiles/README.md for how to obtain it.
+lonelands/assets/tiles/*.png
+
 # OS / editor
 .DS_Store
 .idea/
