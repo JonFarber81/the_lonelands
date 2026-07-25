@@ -19,3 +19,10 @@ class NPC(BaseComponent):
         self.title = title
         self.tree = tree
         self.start = start
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Drop the dialog tree — it is full of lambdas and is static content.
+        savegame._rehydrate restores it by the speaker's name on load."""
+        state = self.__dict__.copy()
+        state["tree"] = None
+        return state

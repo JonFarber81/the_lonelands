@@ -34,6 +34,13 @@ class Engine:
         from lonelands import input_handlers
         self.event_handler = input_handlers.MainGameEventHandler(self)
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Drop transient UI state; savegame._rehydrate rebuilds it on load."""
+        state = self.__dict__.copy()
+        state["event_handler"] = None
+        state["last_roll"] = None
+        return state
+
     def note_roll(self, result: "RollResult", roller: "Actor") -> None:
         """Record a Test for the dice tray, but only when the player rolled it."""
         if roller is self.player:

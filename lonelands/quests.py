@@ -37,6 +37,13 @@ class Quest:
         self.on_complete = on_complete
         self.xp_reward = xp_reward
 
+    def __getstate__(self) -> dict:
+        """Drop the (unpicklable) on_complete callback; savegame._rehydrate
+        restores it by quest id on load."""
+        state = self.__dict__.copy()
+        state["on_complete"] = None
+        return state
+
     @property
     def is_active(self) -> bool:
         return self.state in (QuestState.ACTIVE, QuestState.READY)

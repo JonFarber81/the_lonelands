@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import textwrap
+import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import tcod
@@ -165,9 +166,12 @@ class GameOverEventHandler(EventHandler):
                       fg=color.gray, alignment=tcod.constants.CENTER)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        from lonelands import savegame
         if event.sym == KeySym.ESCAPE:
+            savegame.delete_save()  # the fallen do not walk again
             raise QuitWithoutSaving()
         if event.sym in CONFIRM_KEYS:
+            savegame.delete_save()
             return MainMenuHandler()
         return None
 
@@ -446,18 +450,27 @@ class HelpHandler(AskUserHandler):
 class EscapeMenuHandler(AskUserHandler):
     def on_render(self, console) -> None:
         super().on_render(console)
-        w, h = 34, 9
+        w, h = 36, 12
         x, y = MAP_WIDTH // 2 - w // 2, MAP_HEIGHT // 2 - h // 2
         _panel(console, x, y, w, h, "The wayfarer pauses")
         console.print(x + 2, y + 2, "[Enter]  return to the road", fg=color.menu_text)
-        console.print(x + 2, y + 4, "[T]      to the title screen", fg=color.menu_text)
-        console.print(x + 2, y + 6, "[Q]      quit to the outer dark", fg=color.menu_text)
+        console.print(x + 2, y + 4, "[S]      save and continue", fg=color.menu_text)
+        console.print(x + 2, y + 6, "[T]      save & quit to title", fg=color.menu_text)
+        console.print(x + 2, y + 8, "[Q]      quit to the outer dark", fg=color.menu_text)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        if event.sym in (KeySym.q,):
-            raise QuitWithoutSaving()
+        from lonelands import savegame
+        if event.sym in (KeySym.s,):
+            savegame.save_game(self.engine)
+            self.engine.message_log.add_message("The road is remembered. (Game saved.)",
+                                                color.welcome_text)
+            return self.on_exit()
         if event.sym in (KeySym.t,):
+            savegame.save_game(self.engine)
             return MainMenuHandler()
+        if event.sym in (KeySym.q,):
+            savegame.save_game(self.engine)
+            raise QuitWithoutSaving()
         if event.sym in CONFIRM_KEYS or event.sym == KeySym.ESCAPE:
             return self.on_exit()
         return None
@@ -620,7 +633,12 @@ class MainMenuHandler(BaseEventHandler):
         for i, line in enumerate(TITLE_ART):
             fg = color.menu_title if i == 0 else color.menu_text
             console.print(cx, 8 + i * 2, line, fg=fg, alignment=tcod.constants.CENTER)
-        options = ["[N]  Take up the grey cloak — new game", "[Q]  Depart"]
+        from lonelands import savegame
+        options = []
+        if savegame.has_save():
+            options.append("[C]  Continue your journey")
+        options.append("[N]  Take up the grey cloak — new game")
+        options.append("[Q]  Depart")
         for i, o in enumerate(options):
             console.print(cx, 22 + i * 2, o, fg=color.selected,
                           alignment=tcod.constants.CENTER)
@@ -629,9 +647,16 @@ class MainMenuHandler(BaseEventHandler):
                       fg=color.gray, alignment=tcod.constants.CENTER)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        from lonelands import setup_game
+        from lonelands import savegame, setup_game
         if event.sym in (KeySym.q, KeySym.ESCAPE):
             raise SystemExit()
+        if event.sym in (KeySym.c,) and savegame.has_save():
+            try:
+                engine = savegame.load_game()
+            except Exception as exc:  # a corrupt or incompatible save
+                traceback.print_exc()
+                return PopupMessage(self, f"Failed to load save:\n{exc}")
+            return MainGameEventHandler(engine)
         if event.sym in (KeySym.n, KeySym.RETURN, KeySym.KP_ENTER):
             engine = setup_game.new_game()
             return MainGameEventHandler(engine)
