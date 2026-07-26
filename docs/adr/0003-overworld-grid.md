@@ -54,5 +54,11 @@ records the *decisions* that shaped it.
 
 ## Status
 
-Accepted as a **plan**. No code changed yet; supersedes nothing (extends
-ADR 0002's model to the full map).
+Accepted, and **implemented** (issue #13, "Infra A"). `world.py::_region_defs`
+is now data-driven from `lonelands/overworld.py` (the plan-as-data grid); all 116
+walkable cells build enterable placeholder Surfaces via `procgen`'s terrain
+toolkit, beasts are seeded per band, and the barrow deeps re-homed from the
+Weather Hills to the Barrow-downs `(-1,0)` with Weathertop `(2,0)` gaining the
+Amon Sûl watch-vaults (the accompanying quest/dialog narrative moved with them).
+Deeps for the plan's other `▼N` cells remain flagged-not-built, a later per-cell
+pass. Supersedes nothing (extends ADR 0002's model to the full map).

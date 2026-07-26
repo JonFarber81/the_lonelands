@@ -1,6 +1,8 @@
-"""Map generation for the Regions of the starting grid — Bree at the centre,
-the Weather Hills (with the descending barrow) to the east, and the near-empty
-Barrow-downs, Chetwood, and South Downs around it.
+"""Map generation for the Regions of the overworld grid (`overworld.py`,
+ADR 0003). Authored Surfaces have their own `generate_*`; every other walkable
+cell is built by `generate_placeholder_surface` from its plan `Cell`. Bree is
+the hub; the barrow-wight deeps lie west under the **Barrow-downs** (Tyrn
+Gorthad) and the watch-vaults east under **Weathertop** (Amon Sûl).
 
 Each `generate_*` returns the **Surface** of one Region. A Surface is edge-open:
 the player leaves it by walking off any edge (see `world.GameWorld.cross_edge`),
@@ -10,11 +12,11 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from lonelands import content, story, tile_types
+from lonelands import content, overworld, story, tile_types
 from lonelands.config import MAP_HEIGHT, MAP_WIDTH
 from lonelands.dice import rng
 from lonelands.entity import Item
-from lonelands.game_map import GameMap
+from lonelands.game_map import GameMap, nearest_walkable
 
 MAX_RUIN_DEPTH = 3
 
@@ -217,9 +219,11 @@ def generate_bree(engine) -> GameMap:
 # ---------------------------------------------------------------------------
 # The Weather Hills — the east Region, holding the barrow entrance
 # ---------------------------------------------------------------------------
-def generate_weather_hills(engine) -> GameMap:
+def generate_weathertop(engine) -> GameMap:
+    """Weathertop (Amon Sûl): the ruined watchtower on its hill, with the old
+    road climbing to a broken arch — Enter it to descend into the watch-vaults."""
     w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name="The Weather Hills, east of Bree", outdoors=True)
+    gm = GameMap(engine, w, h, name="Weathertop (Amon Sûl)", outdoors=True)
     gm.tiles[:] = tile_types.grass
 
     for x in range(w):
@@ -261,69 +265,163 @@ def generate_weather_hills(engine) -> GameMap:
     for x in range(river_x + 3, ruin_xy[0] + 1):
         gm.tiles[x, ford_y] = tile_types.road
 
-    # The barrow entrance (Enter here to descend into the deeps).
+    # The watchtower entrance (Enter here to descend into the watch-vaults).
     gm.tiles[ruin_xy] = tile_types.ruin_entrance
     gm.ruin_entrance_xy = ruin_xy
     gm.barrow_entrance_xy = ruin_xy   # where the player surfaces from the deeps
 
-    # Wild beasts roam the open ground
-    for _ in range(rng.randint(3, 5)):
-        bx, by = rng.randint(6, w - 6), rng.randint(4, h - 4)
-        if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
-            _weighted(content.WILD_BEASTS).spawn(gm, bx, by)
+    apply_band_beasts(gm, "Wild")     # Weathertop lies in the Wild-Lands band
 
     gm.entry_xy = (1, ford_y)   # fallback landing = just inside the west edge
     return gm
 
 
 # ---------------------------------------------------------------------------
-# The near-empty neighbour Regions (proving out the grid; enrich later)
+# Terrain-primitive toolkit
 # ---------------------------------------------------------------------------
-def _open_surface(engine, name, *, tree_chance, low_chance, beast_range=(2, 4)):
-    """A sparse outdoor Surface: grass with scattered terrain and a wandering
-    beast or two. Shared skeleton for the three empty neighbour Regions."""
-    w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name=name, outdoors=True)
-    gm.tiles[:] = tile_types.grass
-    for x in range(w):
-        for y in range(h):
-            r = rng.random()
-            if r < tree_chance:
-                gm.tiles[x, y] = tile_types.tree
-            elif r < tree_chance + low_chance:
-                gm.tiles[x, y] = tile_types.grass_low
+# Small, reusable painters the Region generators compose. Each mutates `gm` in
+# place. Together with `apply_band_beasts` they generalize the old `_open_surface`
+# so any cell of the overworld grid can be built from its plan `Cell` (ADR 0003).
+def scatter(gm: GameMap, tile, chance: float, *, over=None) -> None:
+    """Sprinkle `tile` across the map with per-cell probability `chance`,
+    optionally only over tiles whose current kind is in `over`."""
+    for x in range(gm.width):
+        for y in range(gm.height):
+            if over is not None and int(gm.tiles["kind"][x, y]) not in over:
+                continue
+            if rng.random() < chance:
+                gm.tiles[x, y] = tile
 
-    for _ in range(rng.randint(*beast_range)):
-        bx, by = rng.randint(2, w - 3), rng.randint(2, h - 3)
+
+def edge_belt(gm: GameMap, tile, side: str, depth: int, chance: float) -> None:
+    """Paint a ragged belt of `tile` `depth` tiles deep along one edge
+    (`'n'|'s'|'e'|'w'`) — forest fringes, and the diegetic Sea/Mountain border
+    the plan asks bordering Regions to paint where a neighbour is missing."""
+    w, h = gm.width, gm.height
+    for d in range(depth):
+        fade = chance * (1.0 - d / max(depth, 1))
+        if side == "n":
+            band = [(x, d) for x in range(w)]
+        elif side == "s":
+            band = [(x, h - 1 - d) for x in range(w)]
+        elif side == "w":
+            band = [(d, y) for y in range(h)]
+        else:  # 'e'
+            band = [(w - 1 - d, y) for y in range(h)]
+        for x, y in band:
+            if rng.random() < fade:
+                gm.tiles[x, y] = tile
+
+
+def patch(gm: GameMap, tile, cx: int, cy: int, radius: int, chance: float) -> None:
+    """A soft round blob of `tile` centred on (cx, cy): each tile within
+    `radius` is painted with probability `chance`, fading toward the rim — a
+    copse, a fen, a rockfall, as opposed to `scatter`'s even sprinkle."""
+    for x in range(max(0, cx - radius), min(gm.width, cx + radius + 1)):
+        for y in range(max(0, cy - radius), min(gm.height, cy + radius + 1)):
+            dist = max(abs(x - cx), abs(y - cy))
+            if dist <= radius and rng.random() < chance * (1.0 - dist / (radius + 1)):
+                gm.tiles[x, y] = tile
+
+
+def patches(gm: GameMap, tile, count: int, radius: int, chance: float) -> None:
+    """Scatter `count` `patch`es of `tile` at random centres."""
+    for _ in range(count):
+        cx = rng.randint(radius, gm.width - 1 - radius)
+        cy = rng.randint(radius, gm.height - 1 - radius)
+        patch(gm, tile, cx, cy, radius, chance)
+
+
+def apply_band_beasts(gm: GameMap, band: str) -> None:
+    """Seed wandering beasts from the Region's band (content.BAND_BEASTS),
+    regardless of terrain — the plan's Free/Wild/Dark/Perilous beast model."""
+    (lo, hi), table = content.BAND_BEASTS[band]
+    for _ in range(rng.randint(lo, hi)):
+        bx, by = rng.randint(2, gm.width - 3), rng.randint(2, gm.height - 3)
         if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
-            _weighted(content.WILD_BEASTS).spawn(gm, bx, by)
+            _weighted(table).spawn(gm, bx, by)
 
-    gm.entry_xy = (w // 2, h // 2)
-    gm.start_xy = (w // 2, h // 2)
+
+# Per-band terrain feel for placeholder surfaces: (tree, low-grass) chances,
+# keyed by the band constants so the names stay in step with `overworld`.
+_BAND_TERRAIN = {
+    overworld.FREE:     (0.05, 0.20),   # green, settled
+    overworld.WILD:     (0.10, 0.16),   # mixed open country
+    overworld.DARK:     (0.05, 0.10),   # sparse, harsh
+    overworld.PERILOUS: (0.07, 0.10),   # broken, ill-kept
+}
+
+
+def generate_placeholder_surface(engine, cell) -> GameMap:
+    """A walkable Surface built straight from a plan `Cell` — the generic filler
+    that makes any un-authored grid cell enterable before its cluster refines it.
+
+    Bands drive both the terrain feel and the wandering beasts. Where a
+    neighbour is missing (Sea to the west, Mountain-wall to the east/edges),
+    paint the barrier diegetically so the uncrossable edge reads in-world."""
+    w, h = MAP_WIDTH, MAP_HEIGHT
+    gm = GameMap(engine, w, h, name=cell.region_name, outdoors=True)
+    gm.tiles[:] = tile_types.grass
+
+    tree_chance, low_chance = _BAND_TERRAIN[cell.band]
+    scatter(gm, tile_types.grass_low, low_chance)
+    scatter(gm, tile_types.tree, tree_chance)
+    if cell.band == overworld.DARK:
+        patches(gm, tile_types.hill, 3, 3, 0.7)     # bare rock breaking the ground
+    elif cell.band == overworld.PERILOUS:
+        patches(gm, tile_types.water, 3, 2, 0.7)    # fen and standing water
+
+    # Diegetic border: a missing neighbour becomes an in-world barrier.
+    x, y = cell.coord
+    if not overworld.is_walkable((x - 1, y)):   # nothing to the west -> the Sea
+        edge_belt(gm, tile_types.water, "w", 3, 0.85)
+    if not overworld.is_walkable((x + 1, y)):   # nothing east -> the Mountain-wall
+        edge_belt(gm, tile_types.hill, "e", 3, 0.85)
+    if not overworld.is_walkable((x, y - 1)):
+        edge_belt(gm, tile_types.hill, "n", 2, 0.7)
+    if not overworld.is_walkable((x, y + 1)):
+        edge_belt(gm, tile_types.hill, "s", 2, 0.7)
+
+    apply_band_beasts(gm, cell.band)
+
+    gm.entry_xy = nearest_walkable(gm, w // 2, h // 2)
+    gm.start_xy = gm.entry_xy
     return gm
 
 
+# ---------------------------------------------------------------------------
+# Tyrn Gorthad — the Barrow-downs (the main quest's barrow, re-homed here from
+# the Weather Hills to match the geography of ADR 0003).
+# ---------------------------------------------------------------------------
 def generate_barrow_downs(engine) -> GameMap:
-    # Open, treeless downs south of the Old Forest — barrow-country (empty now).
-    return _open_surface(engine, "The Barrow-downs", tree_chance=0.02, low_chance=0.22)
+    cell = overworld.cell((-1, 0))
+    gm = generate_placeholder_surface(engine, cell)
+    gm.name = "The Barrow-downs (Tyrn Gorthad)"
 
-
-def generate_chetwood(engine) -> GameMap:
-    # The wooded country north of Bree.
-    return _open_surface(engine, "The Chetwood, north of Bree", tree_chance=0.16, low_chance=0.16)
-
-
-def generate_south_downs(engine) -> GameMap:
-    # Rolling downs along the Greenway, south of Bree.
-    return _open_surface(engine, "The South Downs", tree_chance=0.04, low_chance=0.20)
+    # A broken barrow-arch stands among the mounds: Enter here to descend into
+    # the deep barrow where the star-brooch and the wights lie.
+    bx, by = MAP_WIDTH // 2 + 6, MAP_HEIGHT // 2
+    bx, by = nearest_walkable(gm, bx, by)
+    gm.tiles[bx, by] = tile_types.ruin_entrance
+    gm.ruin_entrance_xy = (bx, by)
+    gm.barrow_entrance_xy = (bx, by)   # where the player surfaces from the deeps
+    return gm
 
 
 # ---------------------------------------------------------------------------
-# The Barrow of Amon Gûl (dungeon)
+# Room-and-corridor deeps — the shared dungeon under a barrow or watchtower.
 # ---------------------------------------------------------------------------
-def generate_ruin(engine, depth: int) -> GameMap:
+def generate_ruin(
+    engine, depth: int, *,
+    name: str = "The Barrows of Tyrn Gorthad",
+    max_depth: int = MAX_RUIN_DEPTH,
+    treasure: bool = True,
+) -> GameMap:
+    """One Level of a deeps. The deepest Level (`depth == max_depth`) either
+    holds the quest `treasure` (the star-brooch) or, for a treasure-less ruin
+    such as the Amon Sûl watch-vaults, simply ends."""
     w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name=f"The Barrow of Amon Gûl — depth {depth}")
+    gm = GameMap(engine, w, h, name=f"{name} — depth {depth}")
     gm.tiles[:] = tile_types.wall
 
     rooms: List[RectRoom] = []
@@ -358,12 +456,12 @@ def generate_ruin(engine, depth: int) -> GameMap:
     gm.tiles[up] = tile_types.up_stairs
     gm.entry_xy = up
 
-    # Down stair or the heirloom in the last room
+    # Down stair to the next Level, or — at the bottom — the quest treasure.
     last = rooms[-1].center
-    if depth < MAX_RUIN_DEPTH:
+    if depth < max_depth:
         gm.tiles[last] = tile_types.down_stairs
         gm.down_xy = last
-    else:
+    elif treasure:
         brooch = content.star_brooch.spawn(gm, *last)
         brooch.pickup_event = "heirloom"
 
