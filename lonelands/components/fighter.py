@@ -66,6 +66,7 @@ class Fighter(BaseComponent):
         *,
         soak: int = 0,              # armour Soak subtracted from incoming damage
         bleed_on_hit: int = 0,      # Bleed stacks a heavy foe inflicts on any hit
+        kind: str = "",             # foe kind for weapon bonus-vs ("orc", "beast"…)
         attack_desc: str = "strikes",
         xp_reward: int = 0,
         corpse_char: str = "%",
@@ -78,6 +79,7 @@ class Fighter(BaseComponent):
         self.base_damage = damage
         self.base_soak = soak
         self.bleed_on_hit = bleed_on_hit
+        self.kind = kind
         self.attack_desc = attack_desc
         self.xp_reward = xp_reward
         self.corpse_char = corpse_char
@@ -131,14 +133,35 @@ class Fighter(BaseComponent):
 
     @property
     def attack_bonus(self) -> int:
-        """The bonus added to this fighter's d20 attack roll: its base plus, for
-        the hero, the attribute- and level-derived to-hit (Brawn + periodic +to
-        -hit). Foes carry no Hero, so they use the base alone."""
+        """The bonus added to this fighter's d20 attack roll: its base, the
+        wielded weapon's +hit, plus (for the hero) the attribute- and level-
+        derived to-hit (Brawn + periodic +to-hit). Foes carry no Hero, so they
+        use base + weapon alone."""
         base = self.base_attack_bonus
+        weapon = self._weapon
+        if weapon is not None:
+            base += weapon.attack_bonus
         hero = getattr(self.parent, "hero", None)
         if hero is not None:
             base += hero.attack_bonus
         return base
+
+    @property
+    def pierce(self) -> int:
+        """Soak the wielded weapon ignores on a landed blow (0 with no weapon)."""
+        weapon = self._weapon
+        return weapon.pierce if weapon is not None else 0
+
+    def bonus_vs_damage(self, target: "Actor") -> int:
+        """Extra damage the wielded weapon deals against ``target`` when its
+        bonus-vs kind matches the target's ``kind`` (0 otherwise)."""
+        weapon = self._weapon
+        if weapon is None or not weapon.bonus_vs:
+            return 0
+        tf = getattr(target, "fighter", None)
+        if tf is not None and tf.kind == weapon.bonus_vs:
+            return weapon.bonus_vs_damage
+        return 0
 
     @property
     def soak(self) -> int:

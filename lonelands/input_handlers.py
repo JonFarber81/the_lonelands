@@ -214,7 +214,7 @@ class InventorySelectHandler(AskUserHandler):
         super().on_render(console)
         items = self.engine.player.inventory.items
         h = max(6, len(items) + 4)
-        w = 48
+        w = 72
         x, y = 4, 4
         _panel(console, x, y, w, h, self.title)
         if not items:
@@ -224,8 +224,10 @@ class InventorySelectHandler(AskUserHandler):
             for i, item in enumerate(items):
                 key = chr(ord("a") + i)
                 worn = " (worn)" if eq.item_is_equipped(item) else ""
+                stats = (f"  [{item.equippable.stat_line()}]"
+                         if item.equippable is not None else "")
                 console.print(x + 2, y + 2 + i,
-                              f"({key}) {item.char} {item.name}{item.count_label}{worn}",
+                              f"({key}) {item.char} {item.name}{item.count_label}{worn}{stats}",
                               fg=color.menu_text)
         console.print(x + 2, y + h - 1, " a-z use/equip · Esc close ", fg=color.gray)
 

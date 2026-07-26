@@ -9,3 +9,4 @@ class EquipmentType(Enum):
     SHIELD = auto()
     ARMOUR = auto()
     HELM = auto()
+    ACCESSORY = auto()  # cloak/ring/token: pluses to non-combat stats
