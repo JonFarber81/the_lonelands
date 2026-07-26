@@ -192,10 +192,12 @@ class MeleeAction(ActionWithDirection):
 
 class BumpAction(ActionWithDirection):
     def perform(self) -> None:
-        if self.target_actor and self.target_actor.fighter and self.target_actor.ai:
-            return MeleeAction(self.entity, self.dx, self.dy).perform()
+        # A friendly NPC is spoken to, never struck; anyone else with a fighter
+        # (the player included) is a valid combat target.
         if self.target_actor and self.target_actor.npc is not None:
             return TalkAction(self.entity, self.target_actor).perform()
+        if self.target_actor and self.target_actor.fighter:
+            return MeleeAction(self.entity, self.dx, self.dy).perform()
         return MovementAction(self.entity, self.dx, self.dy).perform()
 
 

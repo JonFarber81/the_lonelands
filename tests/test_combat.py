@@ -147,6 +147,27 @@ def test_player_attacking_a_foe_uses_the_attacker_roll_path():
     assert foe.fighter.endurance < start  # the foe took the hit
 
 
+# --- Enemy AI actually reaches the player (regression) ----------------------
+
+def test_adjacent_foe_ai_strikes_the_player():
+    """A foe's turn must route a bump into the player through to a melee.
+
+    Regression: BumpAction gated melee on the target having an .ai, which the
+    player never has, so enemy attacks were silently swallowed as Impossible.
+    """
+    from lonelands.actions import BumpAction
+
+    engine, gm, player = make_world()
+    foe = spawn_foe(gm, content.cave_goblin)  # adjacent at (1,1)
+    foe.fighter.base_attack = 99  # unreachable parry TN -> the blow lands
+    start = player.fighter.endurance
+
+    BumpAction(foe, 1, 0).perform()  # foe at (1,1) bumps player at (2,1)
+
+    assert player.fighter.endurance < start  # the player took the hit
+    assert "for" in last_message(engine)
+
+
 # --- helpers ---------------------------------------------------------------
 
 def _seed_where(tn, predicate, rank=2):
