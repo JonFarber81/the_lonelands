@@ -65,40 +65,43 @@ def make_player() -> Actor:
 # Values seed from the current shop prices so buy prices are unchanged; items
 # not sold in Bree keep Value 0 (not sellable) for now — selling gear you can't
 # rebuy is deferred (issue #31, out of scope).
-def _weapon(name, char, dmg, injury, prof, load, edge=1, desc="", value=0) -> Item:
+def _weapon(name, char, dmg, load, *, attack_bonus=0, pierce=0,
+            bonus_vs="", bonus_vs_damage=0, desc="", value=0) -> Item:
     return Item(
         char=char, color=color.weapon_c, name=name, description=desc, value=value,
         equippable=Equippable(
-            EquipmentType.WEAPON, load=load, damage=dmg, edge=edge,
-            injury=injury, proficiency=prof,
+            EquipmentType.WEAPON, load=load, damage=dmg, attack_bonus=attack_bonus,
+            pierce=pierce, bonus_vs=bonus_vs, bonus_vs_damage=bonus_vs_damage,
         ),
     )
 
 
 dunedain_sword = _weapon(
-    "Dúnedain sword", "/", 5, 16, "Swords", 2,
+    "Dúnedain sword", "/", 5, 2, attack_bonus=1,
     desc="A long, leaf-bladed sword of the North-kingdom, its make older than any town near.",
 )
-short_sword = _weapon("short sword", "/", 4, 14, "Swords", 1, value=12,
+short_sword = _weapon("short sword", "/", 4, 1, value=12,
                       desc="A plain, serviceable blade.")
-hunting_dagger = _weapon("hunting dagger", "-", 3, 12, "Daggers", 0, edge=2, value=7,
+hunting_dagger = _weapon("hunting dagger", "-", 3, 0, attack_bonus=1, value=7,
                          desc="Keen and quick; it bites deep on a true stroke.")
-war_spear = _weapon("war spear", "|", 4, 16, "Spears", 2, value=10,
-                    desc="An ash-hafted spear.")
+# A spear's reach lets it slip past armour: a small pierce is its property.
+war_spear = _weapon("war spear", "|", 4, 2, pierce=1, value=10,
+                    desc="An ash-hafted spear; its point slips past mail.")
 
 ranger_bow = Item(
     char="}", color=color.weapon_c, name="Ranger's bow",
     description="A tall bow of yew. (Ranged mastery awaits a later day on the road.)",
-    equippable=Equippable(
-        EquipmentType.RANGED, load=1, damage=4, edge=1, injury=14,
-        proficiency="Bows", ranged=True,
-    ),
+    equippable=Equippable(EquipmentType.RANGED, load=1, damage=4, ranged=True),
 )
 
+# Armour splits two ways (ADR 0005): heavy gear grants **Soak** (subtracts from a
+# blow), light gear and shields grant **+Defence** (harder to hit in the first
+# place). So leathers now dodge rather than soak, mail soaks, shields add Defence.
 leather_gear = Item(
     char="[", color=color.beast_c, name="Ranger's leathers", value=10,
-    description="Weathered leather and a travel-worn cloak of Rangers' grey-green.",
-    equippable=Equippable(EquipmentType.ARMOUR, load=1, soak_bonus=1),
+    description="Weathered leather and a travel-worn cloak of Rangers' grey-green; "
+                "light enough to slip a blow.",
+    equippable=Equippable(EquipmentType.ARMOUR, load=1, defence_bonus=1),
 )
 mail_corslet = Item(
     char="[", color=(0x9A, 0x9E, 0xA6), name="corslet of mail",
@@ -115,6 +118,52 @@ travellers_hood = Item(
     description="A hood sewn with hidden bands of leather.",
     equippable=Equippable(EquipmentType.HELM, load=0, defence_bonus=1),
 )
+
+# ---------------------------------------------------------------------------
+# Accessories — the cloak/ring/token slot. Their pluses touch *non-combat*
+# stats: +attribute, +Stealth, a Path synergy (ADR 0005). A +Wits token still
+# sharpens Defence downstream, since Wits feeds it.
+# ---------------------------------------------------------------------------
+ranger_star = Item(
+    char="*", color=(0xC0, 0xC4, 0xCE), name="star of the Dúnedain", value=14,
+    description="A six-rayed silver star, the badge worn at a Ranger's shoulder. "
+                "It quickens the wary eye.",
+    equippable=Equippable(EquipmentType.ACCESSORY, attributes={"Wits": 1}),
+)
+elven_brooch = Item(
+    char="*", color=(0x8E, 0xC8, 0x9A), name="leaf-brooch of green", value=12,
+    description="A brooch shaped as a beech-leaf, elven-made; the eye slides "
+                "past the one who wears it.",
+    equippable=Equippable(EquipmentType.ACCESSORY, stealth_bonus=2,
+                          path_synergy="the Hidden Path"),
+)
+
+# ---------------------------------------------------------------------------
+# Uniques — hand-authored, named gear with fixed, characterful stats, outside
+# the (later) Plain/Fine/Rare affix bands (ADR 0005). What you see is what it
+# is; there is no identification.
+# ---------------------------------------------------------------------------
+angolar = _weapon(
+    "Angolar, the Ford-blade", "/", "2d6", 2, attack_bonus=2, pierce=1,
+    bonus_vs="orc", bonus_vs_damage=2, value=120,
+    desc="A grey Númenórean blade drawn from the Brandywine ford, its edge cold "
+         "against the Enemy's brood. Runes name it Angolar.",
+)
+mail_of_the_last_watch = Item(
+    char="[", color=(0xB6, 0xBE, 0xC8), name="Mail of the Last Watch", value=110,
+    description="A hauberk of star-silver rings borne by the last warden of Amon "
+                "Sûl; blows turn from it as rain from stone.",
+    equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=3),
+)
+cloak_of_lorien = Item(
+    char="(", color=(0x7C, 0xA6, 0x86), name="Grey Mantle of Lórien", value=90,
+    description="A leaf-woven cloak out of the Golden Wood; the wearer walks "
+                "unseen and thinks the clearer for it.",
+    equippable=Equippable(EquipmentType.ACCESSORY, attributes={"Wits": 1},
+                          stealth_bonus=3, path_synergy="the Hidden Path"),
+)
+
+UNIQUES: List[Item] = [angolar, mail_of_the_last_watch, cloak_of_lorien]
 
 # ---------------------------------------------------------------------------
 # Consumables
@@ -171,12 +220,13 @@ wolf_fang = _trade_good("wolf-fang", "'", color.wolf_c, 4,
 # Creatures of Eriador
 # ---------------------------------------------------------------------------
 def _beast(char, name, col, endurance, defence, attack_bonus, damage, xp,
-           soak=0, bleed_on_hit=0, ai=HostileEnemy, desc="mauls", loot=None) -> Actor:
+           soak=0, bleed_on_hit=0, kind="", ai=HostileEnemy, desc="mauls",
+           loot=None) -> Actor:
     return Actor(
         char=char, color=col, name=name, ai_cls=ai,
         fighter=Fighter(
             endurance=endurance, defence=defence, attack_bonus=attack_bonus,
-            damage=damage, soak=soak, bleed_on_hit=bleed_on_hit,
+            damage=damage, soak=soak, bleed_on_hit=bleed_on_hit, kind=kind,
             attack_desc=desc, xp_reward=xp, loot=loot,
         ),
         inventory=Inventory(0),
@@ -198,32 +248,32 @@ def _beast(char, name, col, endurance, defence, attack_bonus, damage, xp,
 # an early level. Reward tracks danger: weak skirmishers pay little, pack-hunters
 # and the barrow-wight pay best. (Anchor: level 1→2 = 20 XP; see character.xp_to_next.)
 cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 3, "1d4", 4,
-                     desc="claws",
+                     kind="orc", desc="claws",
                      loot=[[(None, 60), (Coins(1, 2), 40)]])
 orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 4, "1d6", 7,
-                     soak=1, desc="hacks at",
+                     soak=1, kind="orc", desc="hacks at",
                      loot=[
                          [(None, 35), (Coins(2, 4), 60), (Coins(4, 6), 5)],
                          [(None, 88), (orc_trophy, 12)],
                      ])
 orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 4, "1d4", 5,
-                    desc="looses at",
+                    kind="orc", desc="looses at",
                     loot=[[(None, 50), (Coins(1, 3), 50)]])
 great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 4, "1d6", 6,
-                      bleed_on_hit=1, desc="bites",
+                      bleed_on_hit=1, kind="beast", desc="bites",
                       loot=[[(None, 45), (spider_silk, 55)]])
 # The barrow-wight is the deadliest routine foe: a tough, named undead that only
 # stirs in the deep barrow. It pays the richest XP of any foe and additionally
 # drops a grave-hoard of coins.
 wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 6, "1d8+1", 14,
-               soak=2, bleed_on_hit=1, desc="chills",
+               soak=2, bleed_on_hit=1, kind="undead", desc="chills",
                loot=[[(None, 40), (Coins(5, 10), 60)]])
 
 wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 4, "1d4", 5, ai=SkittishBeast,
-              desc="snaps at",
+              kind="beast", desc="snaps at",
               loot=[[(None, 35), (wolf_pelt, 60), (wolf_fang, 5)]])
 warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 8, bleed_on_hit=1,
-              desc="savages",
+              kind="beast", desc="savages",
               loot=[[(None, 25), (warg_pelt, 72), (wolf_fang, 3)]])
 
 
@@ -244,11 +294,15 @@ def items_for_depth(depth: int) -> List[Tuple[Item, int]]:
         (healing_herbs, 24), (lembas, 12), (hunting_dagger, 6),
     ]
     if depth >= 1:
-        table += [(athelas, 8), (short_sword, 5), (buckler, 4), (leather_gear, 4)]
+        table += [(athelas, 8), (short_sword, 5), (buckler, 4), (leather_gear, 4),
+                  (ranger_star, 3)]
     if depth >= 2:
-        table += [(miruvor, 6), (travellers_hood, 4), (war_spear, 4)]
+        table += [(miruvor, 6), (travellers_hood, 4), (war_spear, 4),
+                  (elven_brooch, 3)]
     if depth >= 3:
-        table += [(mail_corslet, 4)]
+        # The deeps hold the richest gear — and, rarely, a named Unique.
+        table += [(mail_corslet, 4), (angolar, 1),
+                  (mail_of_the_last_watch, 1), (cloak_of_lorien, 1)]
     return table
 
 

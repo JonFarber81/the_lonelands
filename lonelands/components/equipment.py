@@ -15,6 +15,7 @@ _SLOT_FOR_TYPE = {
     EquipmentType.SHIELD: "shield",
     EquipmentType.ARMOUR: "body",
     EquipmentType.HELM: "head",
+    EquipmentType.ACCESSORY: "token",
 }
 
 
@@ -28,6 +29,7 @@ class Equipment(BaseComponent):
         shield: Optional["Item"] = None,
         body: Optional["Item"] = None,
         head: Optional["Item"] = None,
+        token: Optional["Item"] = None,
     ) -> None:
         self.slots: Dict[str, Optional["Item"]] = {
             "weapon": weapon,
@@ -35,6 +37,7 @@ class Equipment(BaseComponent):
             "shield": shield,
             "body": body,
             "head": head,
+            "token": token,
         }
 
     @property
@@ -63,6 +66,22 @@ class Equipment(BaseComponent):
     @property
     def soak_bonus(self) -> int:
         return self._sum("soak_bonus")
+
+    @property
+    def stealth_bonus(self) -> int:
+        return self._sum("stealth_bonus")
+
+    @property
+    def ability_charges(self) -> int:
+        return self._sum("ability_charges")
+
+    def attribute_bonus(self, attribute: str) -> int:
+        """Total +attribute lent by worn accessories (0 if none touch it)."""
+        total = 0
+        for item in self.slots.values():
+            if item is not None and item.equippable is not None:
+                total += item.equippable.attributes.get(attribute, 0)
+        return total
 
     def item_is_equipped(self, item: "Item") -> bool:
         return item in self.slots.values()

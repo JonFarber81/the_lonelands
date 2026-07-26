@@ -63,21 +63,28 @@ class Hero(BaseComponent):
         self._timers_touched_this_turn = False
 
     # --- Attributes -------------------------------------------------------
+    # Each attribute is the hero's innate score plus any +attribute lent by worn
+    # accessories (a token of +Wits sharpens Defence, +Brawn his blows, and so on).
+    def _equip_attr(self, attribute: str) -> int:
+        eq = getattr(self.parent, "equipment", None)
+        return eq.attribute_bonus(attribute) if eq is not None else 0
+
     @property
     def brawn(self) -> int:
-        return self.attributes["Brawn"]
+        return self.attributes["Brawn"] + self._equip_attr("Brawn")
 
     @property
     def wits(self) -> int:
-        return self.attributes["Wits"]
+        return self.attributes["Wits"] + self._equip_attr("Wits")
 
     @property
     def will(self) -> int:
-        return self.attributes["Will"]
+        return self.attributes["Will"] + self._equip_attr("Will")
 
     def modifier(self, attribute: str) -> int:
-        """The d20 modifier for ``attribute`` (0 if unknown)."""
-        return self.attributes.get(attribute, 0)
+        """The d20 modifier for ``attribute`` (0 if unknown), including any
+        +attribute from worn accessories."""
+        return self.attributes.get(attribute, 0) + self._equip_attr(attribute)
 
     # --- Derived combat contributions ------------------------------------
     @property

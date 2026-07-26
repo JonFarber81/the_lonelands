@@ -124,10 +124,12 @@ class MeleeAction(ActionWithDirection):
             )
             return
 
-        # A hit: roll damage (+ any flat melee-damage perk), subtract Soak (a clean
-        # blow always stings for 1+).
-        raw = roll_damage(af.damage) + af.melee_damage_bonus
-        dmg = max(1, raw - tf.soak)
+        # A hit: roll damage (+ any flat melee-damage perk and a weapon's bonus-
+        # vs-kind), subtract Soak — which a piercing weapon partly ignores (a
+        # clean blow always stings for 1+).
+        raw = roll_damage(af.damage) + af.melee_damage_bonus + af.bonus_vs_damage(target)
+        soak = max(0, tf.soak - af.pierce)
+        dmg = max(1, raw - soak)
         if crit:
             dmg += roll_damage(af.damage)  # the Critical carries a second roll
         if ambush:
@@ -194,7 +196,13 @@ class PickupAction(Action):
             if item.x == x and item.y == y:
                 inv.add(item)  # merges fungible stacks; raises if the pack is full
                 self.engine.game_map.entities.remove(item)
-                self.engine.message_log.add_message(f"You take the {item.name}.", color.item_c)
+                # Gear shows its full stat line on the spot — there is no
+                # identification (ADR 0005).
+                line = ""
+                if item.equippable is not None:
+                    line = f" [{item.equippable.stat_line()}]"
+                self.engine.message_log.add_message(
+                    f"You take the {item.name}.{line}", color.item_c)
                 event = getattr(item, "pickup_event", None)
                 if event:
                     self.engine.quest_log.notify_event(event, self.engine)

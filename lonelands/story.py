@@ -233,7 +233,7 @@ def make_halbarad() -> Actor:
         # Stock is item references; buy/sell prices derive from each item's Value.
         stock = [
             content.short_sword, content.war_spear, content.buckler,
-            content.leather_gear, content.travellers_hood,
+            content.leather_gear, content.travellers_hood, content.ranger_star,
             content.healing_herbs, content.athelas, content.lembas,
             content.hunting_dagger,
         ]
