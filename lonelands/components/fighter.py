@@ -144,7 +144,28 @@ class Fighter(BaseComponent):
     def soak(self) -> int:
         eq = getattr(self.parent, "equipment", None)
         bonus = eq.soak_bonus if eq else 0
+        hero = getattr(self.parent, "hero", None)
+        if hero is not None:
+            # Long Watch/Kindled Heart perks: flat Soak, a live low-HP rally, and
+            # an active defensive stance.
+            bonus += hero.perk_bonus("soak_bonus")
+            bonus += hero.rally_soak_bonus()
+            bonus += hero.stance_soak
         return self.base_soak + bonus
+
+    @property
+    def crit_face(self) -> int:
+        """The lowest natural d20 face that scores a Critical (normally 20; a
+        Swift Wrath capstone widens the range downward). Read by MeleeAction."""
+        hero = getattr(self.parent, "hero", None)
+        widen = hero.perk_bonus("crit_range") if hero is not None else 0
+        return 20 - max(0, widen)
+
+    @property
+    def melee_damage_bonus(self) -> int:
+        """Flat damage added to this fighter's melee blows (Swift Wrath)."""
+        hero = getattr(self.parent, "hero", None)
+        return hero.perk_bonus("melee_damage_bonus") if hero is not None else 0
 
     @property
     def damage(self) -> Union[int, str]:
@@ -186,11 +207,13 @@ class Fighter(BaseComponent):
             death_message = f"The {self.parent.name} is slain."
             death_color = color.enemy_die
             engine.message_log.add_message(death_message, death_color)
-            if engine.player.hero is not None and self.xp_reward:
-                engine.player.hero.add_xp(self.xp_reward)
-                engine.message_log.add_message(
-                    f"You gain {self.xp_reward} experience.", color.xp_filled
-                )
+            if engine.player.hero is not None:
+                if self.xp_reward:
+                    engine.player.hero.add_xp(self.xp_reward)
+                    engine.message_log.add_message(
+                        f"You gain {self.xp_reward} experience.", color.xp_filled
+                    )
+                engine.player.hero.on_kill()  # Reaver's Instinct readies deeds
             engine.quest_log.notify_kill(self.parent.name, engine)
             self._resolve_loot()
 

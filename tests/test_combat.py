@@ -221,3 +221,104 @@ def test_adjacent_foe_ai_strikes_the_player():
 
     assert player.fighter.endurance < start  # the player took the hit
     assert "for" in last_message(engine)
+
+
+# --- XP from kills (ADR-0005, issue #37) ------------------------------------
+
+def _slay(engine, player, foe):
+    """Drive a real MeleeAction to kill an adjacent foe to the player's right.
+
+    The foe is softened to 1 Endurance with a trivial Defence so any landed
+    blow fells it; we seed a plain (non-crit) hit so the kill is deterministic.
+    """
+    foe.fighter.base_defence = 2  # trivial Defence -> the player always hits
+    foe.fighter.endurance = 1     # a single landed blow fells it
+    seed = _seed_where(player.fighter.attack_bonus, 2,
+                       lambda r: r.is_success and not r.is_crit)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+    assert foe.fighter.dead
+    # Clear the corpse so a follow-up foe can be slain on the same tile.
+    engine.game_map.entities.discard(foe)
+
+
+def _messages(engine):
+    return [m.plain_text for m in engine.message_log.messages]
+
+
+def test_slaying_a_foe_grants_its_xp_reward():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)  # xp_reward = 4
+    reward = foe.fighter.xp_reward
+    assert reward > 0
+    before = player.hero.xp_total
+
+    _slay(engine, player, foe)
+
+    assert player.hero.xp_total == before + reward
+    assert any("experience" in m for m in _messages(engine))
+
+
+def test_no_xp_message_wraps_a_zero_reward_foe():
+    """Guard the add_xp/message contract: a hypothetical 0-XP foe stays silent."""
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.xp_reward = 0
+    before = player.hero.xp_total
+
+    _slay(engine, player, foe)
+
+    assert player.hero.xp_total == before
+    assert not any("experience" in m for m in _messages(engine))
+
+
+def test_enough_kills_advance_the_hero_a_level():
+    engine, gm, player = make_world()
+    assert player.hero.level == 1
+    # Level 1 -> 2 needs 20 XP; cave-goblins pay 4, so five kills crosses it.
+    reward = content.cave_goblin.fighter.xp_reward
+    from lonelands.character import xp_to_next
+    kills_needed = xp_to_next(1) // reward + 1
+
+    for i in range(kills_needed):
+        foe = content.cave_goblin.spawn(gm, 3, 1)
+        _slay(engine, player, foe)
+
+    assert player.hero.level >= 2
+    assert any("Level 2" in m or "hardier" in m for m in _messages(engine))
+
+
+def test_loot_still_resolves_on_a_kill():
+    """The XP grant must not disturb loot: coins/items still drop as before."""
+    engine, gm, player = make_world()
+    coins_before = player.hero.coins
+    # Orc soldiers have a rich coin table; sweep seeds until one kill pays coins.
+    for seed in range(2000):
+        engine, gm, player = make_world()
+        coins_before = player.hero.coins
+        foe = content.orc_soldier.spawn(gm, 3, 1)
+        foe.fighter.base_defence = 2
+        foe.fighter.endurance = 1
+        set_seed(seed)
+        hit = roll_check(player.fighter.attack_bonus, 2)
+        if not (hit.is_success and not hit.is_crit):
+            continue
+        set_seed(seed)
+        MeleeAction(player, 1, 0).perform()
+        assert foe.fighter.dead
+        if player.hero.coins > coins_before:
+            break
+    else:
+        raise AssertionError("no seed produced a coin drop")
+
+    assert player.hero.coins > coins_before  # the coin economy still pays out
+
+
+def test_every_combat_foe_grants_xp():
+    """Under ADR-0005 no combat foe is worth 0 XP."""
+    foes = [
+        content.cave_goblin, content.orc_soldier, content.orc_archer,
+        content.great_spider, content.wight, content.wolf, content.warg,
+    ]
+    for foe in foes:
+        assert foe.fighter.xp_reward > 0, f"{foe.name} grants no XP"

@@ -36,6 +36,7 @@ class RollResult:
     tn: int                  # target number the total is measured against
     dice: List[int] = field(default_factory=list)  # every d20 rolled (2 under adv/dis)
     damage: Optional[int] = None  # Endurance dealt, once a combat hit resolves it
+    crit_face: int = CRIT    # lowest face that Crits (a perk may widen it below 20)
 
     @property
     def total(self) -> int:
@@ -43,7 +44,7 @@ class RollResult:
 
     @property
     def is_crit(self) -> bool:
-        return self.die == CRIT
+        return self.die >= self.crit_face
 
     @property
     def is_fumble(self) -> bool:
