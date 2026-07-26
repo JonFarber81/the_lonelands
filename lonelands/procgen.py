@@ -422,6 +422,58 @@ def thread_road(gm: GameMap, coord: overworld.Coord) -> None:
         _lay_road(gm, x, y)                # so a fording tile is not re-laid as dry road
 
 
+# ---------------------------------------------------------------------------
+# Diegetic borders — paint the plan's in-world barrier on every closed edge.
+# ---------------------------------------------------------------------------
+# The overworld plan makes a missing neighbour read *in-world* rather than as an
+# invisible wall (`overworld.border_edges`, ADR 0003 / issue #15): open water for
+# the Sea, a mountain ridge for the Misty-Mountain wall, a dense wood for the soft
+# cut-off land borders, and a visible pass where a Gateway Region fronts the wall.
+# The belt each hard/soft frame paints, as (tile, depth, chance) — one table so
+# the barrier's look lives in a single place (GATE is painted by _gateway_pass).
+_BORDER_BELT = {
+    overworld.SEA:      (tile_types.water, 3, 0.85),   # open water, hard
+    overworld.MOUNTAIN: (tile_types.hill, 3, 0.85),    # a mountain ridge, hard
+    overworld.WOOD:     (tile_types.tree, 2, 0.70),    # a dense wood, soft
+}
+_GATE_PASS = 3   # width of the road pass cut through a gateway's mountain ridge
+
+
+def _gateway_pass(gm: GameMap, edge: str) -> None:
+    """A mountain ridge with a road pass cut through its middle: a Gateway
+    Region's wall-facing edge reads as a crossing you could take, not masonry.
+    The ridge is the plain Mountain belt, so a gate looks like the wall it pierces."""
+    tile, depth, chance = _BORDER_BELT[overworld.MOUNTAIN]
+    edge_belt(gm, tile, edge, depth, chance)
+    mx, my = _EDGE_MIDPOINT[edge]
+    half = _GATE_PASS // 2
+    for d in range(depth):
+        if edge == "n":
+            cells = [(mx + o, d) for o in range(-half, half + 1)]
+        elif edge == "s":
+            cells = [(mx + o, gm.height - 1 - d) for o in range(-half, half + 1)]
+        elif edge == "w":
+            cells = [(d, my + o) for o in range(-half, half + 1)]
+        else:  # 'e'
+            cells = [(gm.width - 1 - d, my + o) for o in range(-half, half + 1)]
+        for cx, cy in cells:
+            if gm.in_bounds(cx, cy):
+                gm.tiles[cx, cy] = tile_types.road
+
+
+def diegetic_borders(gm: GameMap, coord: overworld.Coord) -> None:
+    """Paint the plan's diegetic barrier along every closed edge of the cell at
+    `coord` (`overworld.border_edges`), so no edge of the playable map reads as an
+    invisible wall (issue #15). The shared helper every surface generator calls;
+    a cell with all four neighbours present is a no-op."""
+    for edge, kind in overworld.border_edges(coord).items():
+        if kind == overworld.GATE:
+            _gateway_pass(gm, edge)                             # a crossing in the wall
+        else:
+            tile, depth, chance = _BORDER_BELT[kind]
+            edge_belt(gm, tile, edge, depth, chance)
+
+
 def snap_to_road(gm: GameMap, edge: str, near: Tuple[int, int]):
     """The road/bridge tile on `edge` ('n'|'s'|'e'|'w') nearest to `near`, or
     None if that edge carries no road — where a crossing player lands so they
@@ -460,16 +512,9 @@ def generate_placeholder_surface(engine, cell) -> GameMap:
     elif cell.band == overworld.PERILOUS:
         patches(gm, tile_types.water, 3, 2, 0.7)    # fen and standing water
 
-    # Diegetic border: a missing neighbour becomes an in-world barrier.
-    x, y = cell.coord
-    if not overworld.is_walkable((x - 1, y)):   # nothing to the west -> the Sea
-        edge_belt(gm, tile_types.water, "w", 3, 0.85)
-    if not overworld.is_walkable((x + 1, y)):   # nothing east -> the Mountain-wall
-        edge_belt(gm, tile_types.hill, "e", 3, 0.85)
-    if not overworld.is_walkable((x, y - 1)):
-        edge_belt(gm, tile_types.hill, "n", 2, 0.7)
-    if not overworld.is_walkable((x, y + 1)):
-        edge_belt(gm, tile_types.hill, "s", 2, 0.7)
+    # Diegetic border: every closed edge becomes an in-world barrier — Sea,
+    # Mountain-wall, soft wood, or a Gateway's pass (issue #15).
+    diegetic_borders(gm, cell.coord)
 
     # Thread the plan's roads across the seams, after the terrain and borders so
     # the road reads on top of them (and fords any water it crosses).
