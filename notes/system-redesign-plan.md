@@ -8,7 +8,7 @@ is a self-contained slice (one PR, or a small handful) that leaves `main`
 playable. Phases 1→2→3 are the spine and go in order; 4 and 5 can run in parallel
 once 2 lands; 6 sits on top of 5.
 
-**Progress:** Phases 1–4 have **landed** on `main`; Phases 5–6 remain.
+**Progress:** Phases 1–5 have **landed** on `main`; Phase 6 remains.
 
 ---
 
@@ -58,7 +58,7 @@ once 2 lands; 6 sits on top of 5.
 - `input_handlers.py`: replace `AdvancementHandler` with a **Path/perk** buy UI.
 - Tests: prereq/capstone gating, a passive and an active perk end-to-end.
 
-## Phase 5 — equipment overhaul (stats + named Uniques) *(needs Phase 1)*
+## Phase 5 — equipment overhaul (stats + named Uniques)  ✅ **landed**  *(needs Phase 1)*
 - `equipment_types.py`: add an **ACCESSORY** slot.
 - `equippable.py`: split armour into **soak** (heavy) vs **+Defence** (light +
   shields); add weapon **property** (pierce / bonus-vs-type); add accessory

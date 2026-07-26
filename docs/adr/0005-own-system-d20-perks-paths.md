@@ -90,7 +90,8 @@ copyright question we are knowingly setting aside.)
 ## Status
 
 Accepted; implemented incrementally (build plan: `notes/system-redesign-plan.md`).
-Phases 1–4 have landed — the d20 core, the new character model, kill-XP, and the
-five Ranger Paths & perks; Phases 5–6 (the equipment overhaul and the affix
-generator) remain. Supersedes the "routine foes grant no experience" decision of
-ADR 0004. Terms recorded in `CONTEXT.md`.
+Phases 1–5 have landed — the d20 core, the new character model, kill-XP, the
+five Ranger Paths & perks, and the equipment overhaul (soak/Defence split,
+weapon properties, an accessory slot, and hand-authored named Uniques); Phase 6
+(the affix generator) remains. Supersedes the "routine foes grant no experience"
+decision of ADR 0004. Terms recorded in `CONTEXT.md`.
