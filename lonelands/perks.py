@@ -14,9 +14,9 @@ A :class:`Perk` is a frozen dataclass carrying:
 * ``capstone`` — a Path-defining perk gated behind full investment
 * passive modifier fields — flat bonuses the Fighter reads (``atk_bonus``,
   ``defence_bonus``, ``soak_bonus``, ``max_endurance_bonus``,
-  ``melee_damage_bonus``, ``crit_range``) plus fields for systems not yet built
-  (``ranged_bonus``,
-  ``ranged_damage_bonus``, ``stealth_bonus`` — see the TODOs where they'd apply)
+  ``melee_damage_bonus``, ``crit_range``, and the Far Shot ranged fields
+  ``ranged_bonus`` / ``ranged_damage_bonus``, read by the Shot flow — ADR 0006),
+  plus ``stealth_bonus`` for the stealth layer not yet built
 * ambush fields — a first-strike advantage / bonus damage the melee flow reads
 * rally fields — a low-Endurance trigger the Fighter reads live
 * ``active`` — an optional :class:`ActiveSpec` for a charge/cooldown ability
@@ -82,9 +82,10 @@ class Perk:
     # --- on-kill trigger (read by Fighter.die when the hero slays a foe) ---
     readies_actives_on_kill: bool = False  # a kill clears this hero's active cooldowns
 
-    # --- fields for systems not yet built (wired where cheap, else TODO) ---
-    ranged_bonus: int = 0        # TODO: to-hit for a future ranged attack action
-    ranged_damage_bonus: int = 0  # TODO: damage for a future ranged attack action
+    # --- Far Shot ranged fields (read by the Shot flow — ADR 0006) --------
+    ranged_bonus: int = 0        # +to-hit added to a Shot's d20 (via Hero/Fighter)
+    ranged_damage_bonus: int = 0  # flat damage added to a landed Shot
+    # --- field for a system not yet built ---------------------------------
     stealth_bonus: int = 0       # TODO: consumed by a future stealth/detection layer
 
     # --- ambush (read by MeleeAction on a first strike) -------------------
@@ -157,9 +158,9 @@ PATHS: List[Path] = [
         "far_shot", "The Far Shot",
         "Marksmanship — the Ranger who kills before the foe closes.",
         [
-            # NOTE: no ranged attack action exists yet. The ranged_* fields are
-            # authored so a future ranged flow can read them; only fs_footwork's
-            # Defence is live today. See TODO(ranged) in fighter.py / actions.py.
+            # The Shot flow reads these ranged_* fields live (ADR 0006): Steady
+            # Aim/Deadeye feed to-hit, Fletcher's Eye/Deadeye feed damage, and
+            # fs_footwork's Defence is style-agnostic.
             Perk("fs_aim", "far_shot", "Steady Aim",
                  "A patient eye down the shaft. +1 to-hit with bows. (ranged)",
                  cost=1, tier=1, ranged_bonus=1),

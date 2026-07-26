@@ -30,6 +30,7 @@ class Equippable(BaseComponent):
         damage: Union[int, str] = 0,  # damage roll: a flat int or dice spec ("2d6+1")
         attack_bonus: int = 0,    # +hit the weapon adds to the wielder's d20
         ranged: bool = False,
+        effective_range: int = 0, # bows: tiles a Shot carries with no falloff (0 = melee)
         # A weapon *property* (ADR 0005): pierce ignores some Soak, and a
         # bonus-vs applies extra damage against foes of a given kind.
         pierce: int = 0,          # Soak ignored on a landed blow
@@ -52,6 +53,7 @@ class Equippable(BaseComponent):
         self.damage = damage
         self.attack_bonus = attack_bonus
         self.ranged = ranged
+        self.effective_range = effective_range
         self.pierce = pierce
         self.bonus_vs = bonus_vs
         self.bonus_vs_damage = bonus_vs_damage
@@ -73,6 +75,8 @@ class Equippable(BaseComponent):
         parts: List[str] = []
         if self.is_weapon:
             parts.append(f"dmg {self.damage}")
+            if self.effective_range:
+                parts.append(f"range {self.effective_range}")
             if self.attack_bonus:
                 parts.append(f"{self.attack_bonus:+d} hit")
             if self.pierce:

@@ -209,11 +209,12 @@ def generate_bree(engine) -> GameMap:
         gm.tiles[48, hy] = T.floor
 
     # --- the folk of Bree -------------------------------------------------
-    elder, healer, halbarad, innkeeper = story.make_town_npcs()
+    elder, healer, halbarad, innkeeper, fletcher = story.make_town_npcs()
     innkeeper.spawn(gm, 15, 17)     # Butterbur, in the Pony's coach-yard
     elder.spawn(gm, 17, 17)         # Dírhael, lodging at the Pony
     halbarad.spawn(gm, 6, 20)       # Halbarad, keeping watch by the West-gate
     healer.spawn(gm, 12, 29)        # Mistress Rushlight, in her physic-garden
+    fletcher.spawn(gm, 22, 22)      # Cob, at his stall by the market square
 
     gm.entry_xy = (cx, cy)          # fallback landing = the market square
     gm.start_xy = (cx, cy)          # a new game begins at the crossing
