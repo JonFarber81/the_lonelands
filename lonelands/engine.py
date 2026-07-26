@@ -56,7 +56,6 @@ class Engine:
                 except Impossible:
                     pass
         self.turn_count += 1
-        self._passive_regen()
 
     def _tick_bleed(self) -> None:
         """Bleed damage-over-time on every living fighter, once per round."""
@@ -75,20 +74,6 @@ class Engine:
                 self.message_log.add_message(
                     f"The {actor.name} bleeds for {lost} endurance.", color.enemy_atk
                 )
-
-    def _passive_regen(self) -> None:
-        # A slow trickle of Hope when out of danger and not miserable.
-        hero = self.player.hero
-        if hero is None:
-            return
-        enemies_near = any(
-            self.game_map.visible[a.x, a.y]
-            for a in self.game_map.actors
-            if a.ai is not None
-        )
-        if not enemies_near and self.turn_count % 25 == 0 and not hero.is_miserable:
-            if hero.hope < hero.max_hope:
-                hero.hope += 1
 
     # --- vision -----------------------------------------------------------
     def update_fov(self) -> None:

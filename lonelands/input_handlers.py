@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import tcod
 
-from lonelands import actions, color, tor
-from lonelands.render_functions import render_pips
+from lonelands import actions, character, color
 from lonelands.actions import (
     Action,
     BumpAction,
@@ -265,114 +264,65 @@ class InventoryDropHandler(InventorySelectHandler):
 # Character sheet
 # ===========================================================================
 class CharacterScreenHandler(AskUserHandler):
+    # What each attribute governs — shown beside its modifier so the sheet reads
+    # on its own.
+    _ATTR_GOVERNS = {
+        "Brawn": "melee hit & damage, HP",
+        "Wits": "ranged, Defence, stealth",
+        "Will": "morale, healing, Paths",
+    }
+
     def on_render(self, console: tcod.console.Console) -> None:
         super().on_render(console)
         hero = self.engine.player.hero
-        w, h = 62, 40
+        f = self.engine.player.fighter
+        w, h = 60, 26
         x, y = 4, 3
         _panel(console, x, y, w, h, f"{self.engine.player.name} — Character")
         cy = y + 2
         lineage = f"{hero.true_name} · " if hero.true_name else ""
         console.print(x + 2, cy, f"{lineage}{hero.culture} · {hero.calling}",
                       fg=color.ranger_green)
-        cy += 1
-        console.print(x + 2, cy, f"Valour {hero.valour}   Wisdom {hero.wisdom}   "
-                                 f"Hope {hero.hope}/{hero.max_hope}   Coins {hero.coins}",
-                      fg=color.menu_text)
-        cy += 1
-        console.print(x + 2, cy, f"Experience unspent: {hero.xp}   "
-                                 f"(raise skills with [+] keys below)", fg=color.xp_filled)
         cy += 2
 
-        for attr in tor.ATTRIBUTES:
-            console.print(x + 2, cy, f"{attr}  {hero.attributes[attr]}  "
-                                     f"(TN {hero.attr_tn(attr)})", fg=color.menu_title)
-            cy += 1
-            for skill in tor.SKILL_GROUPS[attr]:
-                rk = hero.skills[skill]
-                cost = hero.cost_to_raise_skill(skill)
-                console.print(x + 4, cy, f"{skill:<11}", fg=color.menu_text)
-                render_pips(console, x + 15, cy, rk, skill=skill)
-                console.print(x + 22, cy, f"  raise: {cost}xp", fg=color.menu_text)
-                cy += 1
-            cy += 1
-
-        # Proficiencies
-        console.print(x + 2, cy, "Weapon proficiencies", fg=color.menu_title)
+        console.print(x + 2, cy, f"Level {hero.level}", fg=color.menu_title)
+        console.print(x + 16, cy, f"XP {hero.xp} / {hero.xp_to_next} to next",
+                      fg=color.xp_filled)
         cy += 1
-        for prof in tor.PROFICIENCIES:
-            rk = hero.proficiencies[prof]
-            console.print(x + 4, cy, f"{prof:<11}", fg=color.menu_text)
-            render_pips(console, x + 15, cy, rk, fill=color.pip_prof)
-            console.print(x + 22, cy, f"  raise: {hero.cost_to_raise_prof(prof)}xp",
-                          fg=color.menu_text)
+        pp = hero.perk_points
+        pp_col = color.xp_filled if pp else color.gray
+        console.print(x + 2, cy, f"Perk points  {pp}", fg=pp_col)
+        console.print(x + 16, cy, f"Coins {hero.coins}", fg=color.gold_c)
+        cy += 2
+
+        console.print(x + 2, cy, "ATTRIBUTES", fg=color.frame_bright)
+        cy += 1
+        for attr in character.ATTRIBUTES:
+            governs = self._ATTR_GOVERNS.get(attr, "")
+            console.print(x + 4, cy, f"{attr:<7}{hero.modifier(attr):+d}",
+                          fg=color.menu_title)
+            console.print(x + 16, cy, governs, fg=color.gray)
             cy += 1
+        cy += 1
+
+        console.print(x + 2, cy, "IN THE FIELD", fg=color.frame_bright)
+        cy += 1
+        console.print(x + 4, cy, f"Endurance  {f.endurance}/{f.max_endurance}",
+                      fg=color.menu_text)
+        cy += 1
+        console.print(x + 4, cy,
+                      f"Defence {f.defence}   Attack +{f.attack_bonus}   "
+                      f"Soak {f.soak}   Load {hero.load}", fg=color.menu_text)
+        cy += 1
+        console.print(x + 4, cy, f"Wielding  {f.weapon_name}", fg=color.weapon_c)
+        if hero.is_weary:
+            cy += 1
+            console.print(x + 4, cy, "Weary — burdened past your vigour.",
+                          fg=color.enemy_atk)
+
         console.print(x + 2, y + h - 1,
-                      " Advancement: open [A] to spend experience · Esc close ", fg=color.gray)
-
-    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        if event.sym == KeySym.a:
-            self.engine.event_handler = AdvancementHandler(self.engine)
-            return self.engine.event_handler
-        return super().ev_keydown(event)
-
-
-class AdvancementHandler(AskUserHandler):
-    """Spend experience to raise skills and proficiencies."""
-
-    def __init__(self, engine: "Engine"):
-        super().__init__(engine)
-        self.cursor = 0
-        self.rows = [("skill", s) for s in tor.ALL_SKILLS] + \
-                    [("prof", p) for p in tor.PROFICIENCIES]
-
-    def on_render(self, console) -> None:
-        super().on_render(console)
-        hero = self.engine.player.hero
-        w, h = 52, len(self.rows) + 6
-        x, y = 6, 2
-        _panel(console, x, y, w, h, "Advancement — spend experience")
-        console.print(x + 2, y + 1, f"Unspent experience: {hero.xp}", fg=color.xp_filled)
-        for i, (kind, name) in enumerate(self.rows):
-            if kind == "skill":
-                rk = hero.skills[name]
-                cost = hero.cost_to_raise_skill(name)
-            else:
-                rk = hero.proficiencies[name]
-                cost = hero.cost_to_raise_prof(name)
-            sel = i == self.cursor
-            fg = color.selected if sel else color.menu_text
-            prefix = "> " if sel else "  "
-            label = name if kind == "skill" else name + "*"
-            affordable = "" if rk >= 6 else f"  ({cost}xp)"
-            row = y + 3 + i
-            console.print(x + 2, row, f"{prefix}{label:<12}", fg=fg)
-            pip_fill = color.pip_prof if kind == "prof" else None
-            render_pips(console, x + 16, row, rk, skill=name, fill=pip_fill)
-            console.print(x + 23, row, affordable, fg=fg)
-        console.print(x + 2, y + h - 1, " ↑/↓ move · Enter raise · Esc close ", fg=color.gray)
-
-    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        if event.sym in (KeySym.UP, KeySym.k):
-            self.cursor = (self.cursor - 1) % len(self.rows)
-            return None
-        if event.sym in (KeySym.DOWN, KeySym.j):
-            self.cursor = (self.cursor + 1) % len(self.rows)
-            return None
-        if event.sym in CONFIRM_KEYS:
-            kind, name = self.rows[self.cursor]
-            hero = self.engine.player.hero
-            ok = hero.raise_skill(name) if kind == "skill" else hero.raise_prof(name)
-            if ok:
-                self.engine.message_log.add_message(
-                    f"Through long practice, your {name} improves.", color.status_effect_applied)
-            else:
-                self.engine.message_log.add_message(
-                    "Not enough experience for that yet.", color.impossible)
-            return None
-        if event.sym == KeySym.ESCAPE:
-            return self.on_exit()
-        return None
+                      " Paths & perks arrive in a later chapter · Esc close ",
+                      fg=color.gray)
 
 
 # ===========================================================================
@@ -416,18 +366,19 @@ ENTER/> <  use a gate, stair, or barrow-entrance you stand upon
 g          pick up what lies underfoot
 i          use or equip from your pack
 d          set down an item
-c          your character sheet   (A within: spend experience)
+c          your character sheet
 q          your errands and tidings
 ?          this help
 Esc        the wayfarer's menu
 
-THE ROLL   Deeds are tested with a Feat die (d12) plus Success dice (d6),
-           one per rank of the skill. Meet the Target Number to succeed.
-           A 6 (tengwar) marks a great success; the Gandalf rune (12) never
-           fails; the Eye (11) counts for nothing and courts ill fortune.
+THE ROLL   Deeds are tested with a d20 plus an attribute (Brawn, Wits, or
+           Will) against a Target Number. A natural 20 is a Critical; a
+           natural 1 a Fumble. Slaying foes grants XP; levels come often,
+           each granting +HP, a periodic +to-hit, and now and then a perk point.
 
-VITALS     Endurance is your vigour — at 0 you fall. Hope steels the heart.
-           Grow Weary as burdens mount; a Wound is grave. Athelas mends both.
+VITALS     Endurance is your vigour — at 0 you fall. Grow Weary as burdens
+           mount past your strength; a Bleed wound worsens each round until
+           it's staunched. Athelas mends flesh and stops the bleeding.
 """
 
 

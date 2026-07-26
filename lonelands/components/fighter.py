@@ -124,13 +124,21 @@ class Fighter(BaseComponent):
     def defence(self) -> int:
         eq = getattr(self.parent, "equipment", None)
         bonus = eq.defence_bonus if eq else 0
+        hero = getattr(self.parent, "hero", None)
+        if hero is not None:
+            bonus += hero.defence_bonus  # Wits sharpens the hero's Defence
         return self.base_defence + bonus
 
     @property
     def attack_bonus(self) -> int:
-        """The bonus added to this fighter's d20 attack roll. (Attribute- and
-        perk-derived bonuses land in Phase 2; for now it is the base value.)"""
-        return self.base_attack_bonus
+        """The bonus added to this fighter's d20 attack roll: its base plus, for
+        the hero, the attribute- and level-derived to-hit (Brawn + periodic +to
+        -hit). Foes carry no Hero, so they use the base alone."""
+        base = self.base_attack_bonus
+        hero = getattr(self.parent, "hero", None)
+        if hero is not None:
+            base += hero.attack_bonus
+        return base
 
     @property
     def soak(self) -> int:
