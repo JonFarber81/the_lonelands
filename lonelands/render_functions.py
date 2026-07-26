@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Tuple
 
 import tcod
 
-from lonelands import color, tor
+from lonelands import character, color
 from lonelands.config import (
     LOG_HEIGHT,
     LOG_Y,
@@ -33,31 +33,6 @@ def render_bar(
         console.draw_rect(x=x, y=y, width=fill, height=1, ch=ord(" "), bg=fg_full)
     console.print(x=x + 1, y=y, string=f"{label} {value}/{maximum}", fg=color.white)
 
-
-_ATTR_PIP = {
-    "Strength": color.pip_strength,
-    "Heart": color.pip_heart,
-    "Wits": color.pip_wits,
-}
-
-# A skill/proficiency's rank drawn as a row of pips. Filled pips glow in the
-# governing attribute's colour (or steel for a weapon proficiency); empty pips
-# recede into an unlit slot. Returns the width consumed so callers can lay out
-# whatever follows.
-def render_pips(
-    console, x: int, y: int, rank: int, skill: str = "",
-    max_rank: int = 6, fill=None,
-) -> int:
-    if fill is None:
-        fill = _ATTR_PIP.get(tor.SKILL_TO_ATTR.get(skill, ""), color.pip_prof)
-    # "●" (U+25CF) is absent from the game font, so filled pips must use the
-    # bullet "•" (present); empty pips use the smaller middot "·". Colour then
-    # carries the real signal: a lit pip glows, an unlit one recedes.
-    for i in range(max_rank):
-        lit = i < rank
-        console.print(x + i, y, "•" if lit else "·",
-                      fg=fill if lit else color.pip_empty)
-    return max_rank
 
 
 def get_names_at(x: int, y: int, engine: "Engine") -> str:
@@ -163,8 +138,8 @@ def render_sidebar(console, engine: "Engine") -> None:
     render_bar(console, ix, y, w, f.endurance, f.max_endurance,
                color.bar_filled, color.bar_empty, "END")
     y += 1
-    render_bar(console, ix, y, w, hero.hope, hero.max_hope,
-               color.hope_filled, color.hope_empty, "HOPE")
+    render_bar(console, ix, y, w, hero.xp, max(1, hero.xp_to_next),
+               color.xp_filled, color.xp_empty, f"LVL {hero.level}")
     y += 2
 
     # Conditions
@@ -173,43 +148,30 @@ def render_sidebar(console, engine: "Engine") -> None:
         conds.append(("Weary", color.enemy_atk))
     if f.bleed > 0:
         conds.append((f"Bleeding ({f.bleed})", color.player_die))
-    if hero.is_miserable:
-        conds.append(("Miserable", color.sauron_eye))
     if not conds:
         conds.append(("Hale", color.health_recovered))
     console.print(x=ix, y=y, string="· " + "  ".join(c[0] for c in conds), fg=conds[0][1])
     y += 2
 
-    # Attributes
+    # Attributes (small d20 modifiers)
     console.print(x=ix, y=y, string="ATTRIBUTES", fg=color.frame_bright)
     y += 1
-    for attr in ("Strength", "Heart", "Wits"):
-        rating = hero.attributes[attr]
-        tn = hero.attr_tn(attr)
-        console.print(x=ix, y=y, string=f"{attr:<9}{rating}  (TN {tn})", fg=color.menu_text)
+    for attr in character.ATTRIBUTES:
+        console.print(x=ix, y=y, string=f"{attr:<9}{hero.modifier(attr):+d}",
+                      fg=color.menu_text)
         y += 1
     y += 1
 
-    # Key skills / proficiencies
-    console.print(x=ix, y=y, string="OF NOTE", fg=color.frame_bright)
+    # Advancement
+    console.print(x=ix, y=y, string="ADVANCEMENT", fg=color.frame_bright)
     y += 1
-    notable = [
-        ("Swords", hero.proficiencies.get("Swords", 0)),
-        ("Bows", hero.proficiencies.get("Bows", 0)),
-        ("Battle", hero.skills.get("Battle", 0)),
-        ("Hunting", hero.skills.get("Hunting", 0)),
-        ("Stealth", hero.skills.get("Stealth", 0)),
-        ("Explore", hero.skills.get("Explore", 0)),
-    ]
-    for i, (nm, rk) in enumerate(notable):
-        col = ix + (0 if i % 2 == 0 else (w // 2 + 1))
-        console.print(x=col, y=y, string=f"{nm[:6]:<6}", fg=color.menu_text)
-        render_pips(console, col + 6, y, rk, skill=nm)
-        if i % 2 == 1:
-            y += 1
-    if len(notable) % 2 == 1:
-        y += 1
+    console.print(x=ix, y=y, string=f"Level {hero.level}   XP {hero.xp}/{hero.xp_to_next}",
+                  fg=color.menu_text)
     y += 1
+    pp = hero.perk_points
+    pp_col = color.xp_filled if pp else color.gray
+    console.print(x=ix, y=y, string=f"Perk points  {pp}", fg=pp_col)
+    y += 2
 
     # Wielded
     console.print(x=ix, y=y, string="WIELDED", fg=color.frame_bright)
@@ -220,9 +182,8 @@ def render_sidebar(console, engine: "Engine") -> None:
                   fg=color.menu_text)
     y += 2
 
-    # Coins & XP
-    console.print(x=ix, y=y, string=f"Coins {hero.coins}    XP {hero.xp}",
-                  fg=color.gold_c)
+    # Purse
+    console.print(x=ix, y=y, string=f"Coins {hero.coins}", fg=color.gold_c)
     y += 2
 
     # Quests

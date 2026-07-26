@@ -48,27 +48,6 @@ class HealingConsumable(Consumable):
             raise Impossible("Your endurance is already full.")
 
 
-class HopeConsumable(Consumable):
-    """Draughts and lembas that lift the heart."""
-
-    def __init__(self, amount: int):
-        self.amount = amount
-
-    def activate(self, action: ItemAction) -> None:
-        consumer = action.entity
-        if consumer.hero is None:
-            raise Impossible("This does nothing for you.")
-        restored = consumer.hero.restore_hope(self.amount)
-        if restored > 0:
-            self.engine.message_log.add_message(
-                f"The {self.parent.name} rekindles your heart (+{restored} Hope).",
-                color.hope_gain,
-            )
-            self.consume()
-        else:
-            raise Impossible("Your heart is already high.")
-
-
 class RemedyConsumable(Consumable):
     """Athelas: heals endurance and staunches Bleed."""
 

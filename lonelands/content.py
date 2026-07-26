@@ -36,16 +36,7 @@ def sell_price(item: Item) -> int:
 # ---------------------------------------------------------------------------
 def make_player() -> Actor:
     hero = Hero(
-        attributes={"Strength": 6, "Heart": 4, "Wits": 5},
-        skills={
-            "Awe": 1, "Athletics": 2, "Awareness": 3, "Hunting": 3, "Craft": 1,
-            "Enhearten": 1, "Travel": 3, "Insight": 2, "Healing": 2, "Battle": 2,
-            "Persuade": 1, "Stealth": 2, "Scan": 3, "Explore": 3, "Lore": 2,
-        },
-        proficiencies={"Swords": 3, "Bows": 2, "Spears": 1, "Daggers": 1},
-        max_hope=12,
-        valour=2,
-        wisdom=2,
+        attributes={"Brawn": 3, "Wits": 2, "Will": 2},
         culture="Ranger of the North",
         calling="Warden",
         true_name="Tarandir",
@@ -55,10 +46,10 @@ def make_player() -> Actor:
         color=color.player_c,
         name="Greycloak",
         ai_cls=None,
-        # Phase 1: a temporary flat attack bonus stands in until the attribute-
-        # and perk-derived to-hit of Phase 2 lands.
+        # The hero's Defence and to-hit fold in his attributes (Wits → Defence,
+        # Brawn → attack); the base numbers here are the residue on top of those.
         fighter=Fighter(
-            endurance=26, defence=14, attack_bonus=4, damage=1,
+            endurance=26, defence=12, attack_bonus=1, damage=1,
             soak=0, attack_desc="strikes",
         ),
         hero=hero,
@@ -140,13 +131,13 @@ healing_herbs = Item(
 )
 lembas = Item(
     char="%", color=(0xD8, 0xD0, 0xA0), name="waybread", value=3, stackable=True,
-    description="Wrapped in leaves; a small bite lifts the heart on a long road.",
-    consumable=consumable.HopeConsumable(amount=3),
+    description="Wrapped in leaves; a small bite restores vigour on a long road.",
+    consumable=consumable.HealingConsumable(amount=4),
 )
 miruvor = Item(
     char="!", color=color.hope_gain, name="draught of the Dúnedain", stackable=True,
-    description="A cordial that kindles new strength in the weary heart.",
-    consumable=consumable.HopeConsumable(amount=5),
+    description="A cordial that kindles new strength in the weary body.",
+    consumable=consumable.HealingConsumable(amount=8),
 )
 
 # Quest item — the goal of the main quest.
