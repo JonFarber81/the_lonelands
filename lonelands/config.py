@@ -17,7 +17,8 @@ SIDEBAR_WIDTH = SCREEN_WIDTH - MAP_WIDTH  # 30
 
 # The bottom-left "Chronicle" pane is a framed box. Reading top-to-bottom:
 #   LOG_Y            frame top border (carries the " Chronicle " title)
-#   TRAY_Y           the dice tray — the player's latest roll, rendered as dice
+#   TRAY_Y..         the dice tray — the player's latest roll, rendered as dice.
+#                    Dice are two cells tall, so the tray spans TRAY_ROWS rows.
 #   TRAY_DIVIDER_Y   a thin rule separating the tray from the prose
 #   LOG_TEXT_Y..     the scrolling message log (LOG_TEXT_HEIGHT rows)
 #   (frame bottom border)
@@ -25,9 +26,11 @@ LOG_Y = MAP_HEIGHT
 LOG_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT   # 10
 
 TRAY_Y = LOG_Y + 1
-TRAY_DIVIDER_Y = LOG_Y + 2
-LOG_TEXT_Y = LOG_Y + 3
-LOG_TEXT_HEIGHT = LOG_HEIGHT - 4          # 6 rows of prose (borders + tray + rule)
+TRAY_ROWS = 2                             # dice are 2 cells tall
+TRAY_DIVIDER_Y = TRAY_Y + TRAY_ROWS
+LOG_TEXT_Y = TRAY_DIVIDER_Y + 1
+# borders (2) + tray (TRAY_ROWS) + rule (1) leave the rest for prose (5 rows)
+LOG_TEXT_HEIGHT = LOG_HEIGHT - (3 + TRAY_ROWS)
 
 # --- Font -----------------------------------------------------------------
 # We render with a heavy monospace that fills its cell for legibility at small
