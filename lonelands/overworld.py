@@ -152,13 +152,36 @@ SHIRE_ROAD = [(-4, 0), (-3, -1), (-2, -1), (-1, 0), (0, 0)]  # Michel Delving ->
 ROAD_CELLS: Set[Coord] = set(EAST_ROAD) | set(GREENWAY) | set(SHIRE_ROAD)
 
 
+# --- the Impassable frame --------------------------------------------------
+# What a cell/edge that is *not* a Region borders on: open water to the west and
+# SW (the Great Sea / Gulf of Lune), the Misty-Mountain wall to the east, or —
+# for a coord off the north/south of the window — cut-off land (soft). This is
+# the single geometry both the grid's absent cells (`_default_cell`) and the
+# diegetic border a neighbour paints (`border_edges`) read from (ADR 0003).
+SEA = "sea"            # hard: open water — the Great Sea / Gulf of Lune (west/SW)
+MOUNTAIN = "mountain"  # hard: the Misty Mountains wall (east)
+WOOD = "wood"          # soft: dense wood — a cut-off land border (north/south)
+
+
+def _impassable_frame(x: int, y: int):
+    """The frame that makes `(x, y)` Impassable — `SEA` or `MOUNTAIN` — or None
+    if it is walkable land within the window. `(7, 0)` is the wall's one gap (the
+    East Road's run to the Fords), so the east wall is *every* `x >= 7` cell but
+    that one; a neighbour off the far east (`x >= 8`) is Mountain all the same."""
+    if x <= -7 or (x <= -6 and y >= 2):     # the west wall, and the SW Gulf of Lune
+        return SEA
+    if (x, y) == (6, 4):                    # the Misty-Mountain wall's southern foot
+        return MOUNTAIN
+    if x >= 7 and (x, y) != (7, 0):         # the east wall, save its one gap at (7,0)
+        return MOUNTAIN
+    return None
+
+
 def _default_cell(x: int, y: int):
     """Role/band/note for an un-authored cell, or None if it is Impassable
     (the Sea / Mountain-wall frame). Mirrors build_overworld.default_cell."""
-    if x <= -7:                      return None
-    if x >= 7 and y != 0:            return None
-    if (x, y) == (6, 4):             return None
-    if x <= -6 and y >= 2:           return None
+    if _impassable_frame(x, y) is not None:
+        return None
     if -6 <= x <= 0 and 0 <= y <= 1: band = FREE      # Shire / Arthedain green
     elif y <= -3 and x >= 4:         band = DARK       # Angmar / Rhudaur NE
     elif x >= 5 and y <= 0:          band = DARK       # Rhudaur east
@@ -277,3 +300,43 @@ def road_edges(coord: Coord) -> FrozenSet[str]:
     """The set of edges (subset of `EDGES`) a road crosses at `coord` — empty if
     the cell carries no road."""
     return ROAD_EDGES.get(coord, frozenset())
+
+
+# ---------------------------------------------------------------------------
+# Diegetic borders — the per-edge barrier model (Infra D, issue #15). Where a
+# cell has no neighbour Region, the block reads *in-world*: the frame beyond the
+# edge (`_impassable_frame`) decides what the bordering cell paints (ADR 0003's
+# diegetic-border rule) — **hard walls** of Mountain (east) or Sea (west/SW),
+# **soft** dense wood for the cut-off land borders (north/south), and a **gate**
+# where a Gateway Region fronts the wall: a visible crossing, not masonry.
+GATE = "gate"          # a crossing in the wall — a Gateway Region's threshold
+
+
+def _frame(coord: Coord) -> str:
+    """The frame an off-grid `coord` borders on — `SEA`, `MOUNTAIN`, or (for the
+    cut-off land north/south) the soft `WOOD`. Only meaningful for coords absent
+    from `GRID`; reads the same geometry as the grid's own Impassable rule."""
+    return _impassable_frame(*coord) or WOOD
+
+
+def border_edges(coord: Coord) -> Dict[str, str]:
+    """For the cell at `coord`, the barrier each **closed** edge should paint,
+    keyed by edge (subset of `EDGES`). An edge with no neighbour Region maps to
+    `SEA` / `MOUNTAIN` / `WOOD` by the frame beyond it; a Gateway Region's
+    *eastward* wall edge — the way through the Misty Mountains (Redhorn Pass, the
+    Fords of Bruinen) — reads instead as a `GATE`, a crossing rather than a wall,
+    so its threshold stays visibly enterable. Its other wall edges stay walled:
+    the range simply runs on. A cell with all four neighbours present returns {}."""
+    here = GRID.get(coord)
+    if here is None:
+        return {}
+    out: Dict[str, str] = {}
+    for edge, (dx, dy) in EDGE_DELTA.items():
+        nb = (coord[0] + dx, coord[1] + dy)
+        if nb in GRID:
+            continue                        # a real neighbour — no barrier here
+        kind = _frame(nb)
+        if here.role == GATEWAY and kind == MOUNTAIN and edge == "e":
+            kind = GATE                     # the pass/ford east through the wall
+        out[edge] = kind
+    return out
