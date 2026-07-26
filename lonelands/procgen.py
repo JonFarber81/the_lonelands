@@ -56,6 +56,17 @@ def _weighted(table):
     return table[-1][0]
 
 
+def building(gm: GameMap, x0: int, y0: int, x1: int, y1: int, door) -> None:
+    """A rectangular stone building: four walls, a floored interior, and a door
+    in the wall at `door`. Shared by the Bree houses and the wayside posts."""
+    gm.tiles[x0:x1 + 1, y0] = tile_types.building_wall
+    gm.tiles[x0:x1 + 1, y1] = tile_types.building_wall
+    gm.tiles[x0, y0:y1 + 1] = tile_types.building_wall
+    gm.tiles[x1, y0:y1 + 1] = tile_types.building_wall
+    gm.tiles[x0 + 1:x1, y0 + 1:y1] = tile_types.floor
+    gm.tiles[door] = tile_types.door
+
+
 def _line(x1, y1, x2, y2):
     """Yield an L-shaped path of coordinates from (x1,y1) to (x2,y2)."""
     if rng.random() < 0.5:
@@ -137,22 +148,14 @@ def generate_bree(engine) -> GameMap:
     gm.tiles[8:41, 33] = T.cobble                        # a south-side lane
     gm.tiles[34, 7:34] = T.cobble                        # an east cross-lane
 
-    def building(x0, y0, x1, y1, door):
-        gm.tiles[x0:x1 + 1, y0] = T.building_wall
-        gm.tiles[x0:x1 + 1, y1] = T.building_wall
-        gm.tiles[x0, y0:y1 + 1] = T.building_wall
-        gm.tiles[x1, y0:y1 + 1] = T.building_wall
-        gm.tiles[x0 + 1:x1, y0 + 1:y1] = T.floor
-        gm.tiles[door] = T.door
-
     # --- The Prancing Pony: an inn hall with a walled stable-yard ---------
-    building(11, 9, 20, 20, door=(15, 20))       # outer walls; archway on the Road
+    building(gm, 11, 9, 20, 20, door=(15, 20))   # outer walls; archway on the Road
     gm.tiles[12:20, 15:20] = T.cobble            # the coach-yard (open, cobbled)
     gm.tiles[15, 14] = T.door                    # hall door, yard -> common-room
     gm.tiles[15, 20] = T.door                    # the great archway onto the street
 
     # --- the moot-hall and the houses of the Bree-folk --------------------
-    building(28, 6, 38, 13, door=(33, 13))       # the moot-hall (civic, large)
+    building(gm, 28, 6, 38, 13, door=(33, 13))   # the moot-hall (civic, large)
     houses = [
         (5, 6, 9, 10, (7, 10)),                  # north-west cottages
         (5, 14, 9, 18, (7, 18)),
@@ -170,10 +173,10 @@ def generate_bree(engine) -> GameMap:
         (39, 33, 43, 37, (41, 33)),
     ]
     for x0, y0, x1, y1, door in houses:
-        building(x0, y0, x1, y1, door)
+        building(gm, x0, y0, x1, y1, door)
 
     # the herb-wife's cot, with a physic-garden beside it
-    building(6, 27, 11, 31, door=(11, 29))
+    building(gm, 6, 27, 11, 31, door=(11, 29))
     for gx in range(12, 15):
         for gy in range(27, 32):
             if rng.random() < 0.6:
@@ -339,9 +342,11 @@ def apply_band_beasts(gm: GameMap, band: str) -> None:
     regardless of terrain — the plan's Free/Wild/Dark/Perilous beast model."""
     (lo, hi), table = content.BAND_BEASTS[band]
     for _ in range(rng.randint(lo, hi)):
-        bx, by = rng.randint(2, gm.width - 3), rng.randint(2, gm.height - 3)
-        if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
-            _weighted(table).spawn(gm, bx, by)
+        for _try in range(24):     # retry so dense terrain (a wood, a fen) still fills
+            bx, by = rng.randint(2, gm.width - 3), rng.randint(2, gm.height - 3)
+            if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
+                _weighted(table).spawn(gm, bx, by)
+                break
 
 
 # Per-band terrain feel for placeholder surfaces: (tree, low-grass) chances,
@@ -493,6 +498,28 @@ def snap_to_road(gm: GameMap, edge: str, near: Tuple[int, int]):
     return min(roads, key=lambda p: abs(p[0] - nx) + abs(p[1] - ny))
 
 
+def _open_surface(engine, cell) -> GameMap:
+    """A blank grass Surface for the cell — the common canvas every open-country
+    generator paints onto before `_finish_surface` seals it."""
+    gm = GameMap(engine, MAP_WIDTH, MAP_HEIGHT, name=cell.region_name, outdoors=True)
+    gm.tiles[:] = tile_types.grass
+    return gm
+
+
+def _finish_surface(gm: GameMap, cell) -> GameMap:
+    """The shared tail of every open-country Surface: paint the diegetic border
+    on each closed edge (issue #15), thread the plan's roads across the seams on
+    top of the terrain (issue #14), seed band-appropriate wandering beasts
+    (ADR 0003), and land the player on a walkable centre tile. Terrain is painted
+    by the caller *before* this — the roads and borders read over it."""
+    diegetic_borders(gm, cell.coord)
+    thread_road(gm, cell.coord)
+    apply_band_beasts(gm, cell.band)
+    gm.entry_xy = nearest_walkable(gm, gm.width // 2, gm.height // 2)
+    gm.start_xy = gm.entry_xy
+    return gm
+
+
 def generate_placeholder_surface(engine, cell) -> GameMap:
     """A walkable Surface built straight from a plan `Cell` — the generic filler
     that makes any un-authored grid cell enterable before its cluster refines it.
@@ -500,9 +527,7 @@ def generate_placeholder_surface(engine, cell) -> GameMap:
     Bands drive both the terrain feel and the wandering beasts. Where a
     neighbour is missing (Sea to the west, Mountain-wall to the east/edges),
     paint the barrier diegetically so the uncrossable edge reads in-world."""
-    w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name=cell.region_name, outdoors=True)
-    gm.tiles[:] = tile_types.grass
+    gm = _open_surface(engine, cell)
 
     tree_chance, low_chance = _BAND_TERRAIN[cell.band]
     scatter(gm, tile_types.grass_low, low_chance)
@@ -512,19 +537,91 @@ def generate_placeholder_surface(engine, cell) -> GameMap:
     elif cell.band == overworld.PERILOUS:
         patches(gm, tile_types.water, 3, 2, 0.7)    # fen and standing water
 
-    # Diegetic border: every closed edge becomes an in-world barrier — Sea,
-    # Mountain-wall, soft wood, or a Gateway's pass (issue #15).
-    diegetic_borders(gm, cell.coord)
+    return _finish_surface(gm, cell)
 
-    # Thread the plan's roads across the seams, after the terrain and borders so
-    # the road reads on top of them (and fords any water it crosses).
-    thread_road(gm, cell.coord)
 
-    apply_band_beasts(gm, cell.band)
+# ---------------------------------------------------------------------------
+# Cluster 2 — Bree & environs (issue #17). Lore-appropriate terrain for the
+# named anchors around the crossroads (terrain by *place*, not by band), mostly
+# composed from the terrain toolkit above, with hand-placed set-pieces where a
+# landmark needs one (Sarn Ford's river, ford, and watch-post). Bree and the
+# Barrow-downs are authored elsewhere; these give identity to the wilderness and
+# landmark cells that ring them, each sealed by `_finish_surface` (borders,
+# roads, beasts).
+# ---------------------------------------------------------------------------
+def generate_chetwood(engine) -> GameMap:
+    """Chetwood (0,-1): the wooded country north of Bree the Greenway climbs
+    through — close-grown trees and copses, denser than open Wild-Lands."""
+    cell = overworld.cell((0, -1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.18)         # undergrowth
+    scatter(gm, tile_types.tree, 0.24)              # the wood proper
+    patches(gm, tile_types.tree, 6, 4, 0.6)         # thicker copses within it
+    return _finish_surface(gm, cell)
 
-    gm.entry_xy = nearest_walkable(gm, w // 2, h // 2)
-    gm.start_xy = gm.entry_xy
-    return gm
+
+def generate_midgewater(engine) -> GameMap:
+    """Midgewater (1,-1): the biting fen where it is easy to lose the Road — a
+    marsh of standing meres and reed-beds, a few stunted alders on the tussocks."""
+    cell = overworld.cell((1, -1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.35)         # reed-beds and sedge
+    patches(gm, tile_types.water, 12, 3, 0.75)      # meres and standing pools
+    scatter(gm, tile_types.tree, 0.04)              # stunted alders on the tussocks
+    return _finish_surface(gm, cell)
+
+
+def generate_old_forest(engine) -> GameMap:
+    """Old Forest (-2,1): the ancient wood whose trees are awake and
+    ill-disposed — near-solid timber, with a single grassed heart-glade kept
+    open so a traveller can win through."""
+    cell = overworld.cell((-2, 1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.14)
+    scatter(gm, tile_types.tree, 0.42)              # a close-grown ancient wood
+    patches(gm, tile_types.tree, 8, 5, 0.7)         # brakes and thickets
+    patch(gm, tile_types.grass, gm.width // 2, gm.height // 2, 4, 1.0)  # heart-glade
+    return _finish_surface(gm, cell)
+
+
+def generate_sarn_ford(engine) -> GameMap:
+    """Sarn Ford (-1,1): the Brandywine crossing kept by the Rangers — the river
+    runs the map north-south, forded at its heart, with a small stone watch-post
+    on the east bank above the ford."""
+    cell = overworld.cell((-1, 1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.16)
+    scatter(gm, tile_types.tree, 0.05)
+
+    river_x, ford_y = gm.width // 2, gm.height // 2
+    for y in range(gm.height):                      # the Brandywine, three wide
+        for dx in range(-1, 2):
+            gm.tiles[river_x + dx, y] = tile_types.water
+    for dx in range(-2, 3):                         # the ford (stony shallows)
+        gm.tiles[river_x + dx, ford_y] = tile_types.bridge
+    for x in list(range(river_x - 7, river_x - 1)) + list(range(river_x + 3, river_x + 9)):
+        gm.tiles[x, ford_y] = tile_types.road       # the track down to each bank
+    for wy in (ford_y - 1, ford_y, ford_y + 1):     # willows crowding the banks
+        gm.tiles[river_x - 2, wy] = tile_types.tree
+        gm.tiles[river_x + 2, wy] = tile_types.tree
+
+    # the Rangers' watch-post: a small stone hut above the east landing
+    px0, py0, px1, py1 = river_x + 4, ford_y - 5, river_x + 8, ford_y - 2
+    building(gm, px0, py0, px1, py1, door=((px0 + px1) // 2, py1))
+
+    return _finish_surface(gm, cell)
+
+
+def generate_south_downs(engine) -> GameMap:
+    """South Downs (0,1): the low rolling downs south of the Great Road the
+    Greenway crosses — close-cropped turf heaped into grassy hills, a lone thorn
+    here and there."""
+    cell = overworld.cell((0, 1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.22)         # close-cropped down-turf
+    patches(gm, tile_types.hill, 8, 4, 0.55)        # the rolling downs
+    scatter(gm, tile_types.tree, 0.03)              # a lone thorn on the skyline
+    return _finish_surface(gm, cell)
 
 
 # ---------------------------------------------------------------------------
