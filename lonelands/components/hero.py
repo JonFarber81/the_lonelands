@@ -101,6 +101,19 @@ class Hero(BaseComponent):
         plus any Defence perks."""
         return self.wits + self.perk_bonus("defence_bonus")
 
+    @property
+    def ranged_attack_bonus(self) -> int:
+        """The hero's contribution to a Shot's d20 (ADR 0006): Wits (the aimed
+        eye, not Brawn), the same periodic level to-hit melee earns, and the Far
+        Shot Path's flat ranged to-hit perks. The bow's own +hit is added on the
+        Fighter, mirroring how melee adds the weapon's +hit there."""
+        return self.wits + self._level_to_hit + self.perk_bonus("ranged_bonus")
+
+    @property
+    def ranged_damage_bonus(self) -> int:
+        """Flat damage the Far Shot Path adds to a Shot (Fletcher's Eye/Deadeye)."""
+        return self.perk_bonus("ranged_damage_bonus")
+
     # --- Paths & perks ----------------------------------------------------
     def owned_perks(self) -> List["perks.Perk"]:
         return [perks.ALL_PERKS[pid] for pid in self.perks if pid in perks.ALL_PERKS]

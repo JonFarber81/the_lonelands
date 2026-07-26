@@ -29,7 +29,9 @@ def new_game() -> Engine:
     # Starting gear of a Ranger walking alone.
     _grant(player, content.short_sword, equip=True)
     _grant(player, content.leather_gear, equip=True)
-    _grant(player, content.ranger_bow, equip=True)
+    _grant(player, content.shortbow, equip=True)  # a bow in the ranged slot (ADR 0006)
+    quiver = _grant(player, content.arrows)        # a small starting quiver
+    quiver.quantity = 20
     _grant(player, content.hunting_dagger)
     _grant(player, content.healing_herbs)
     _grant(player, content.healing_herbs)

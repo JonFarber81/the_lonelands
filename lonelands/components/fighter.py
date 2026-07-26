@@ -202,6 +202,67 @@ class Fighter(BaseComponent):
             return eq.weapon.name
         return "bare hands"
 
+    # --- Ranged: a parallel attack path keyed off Wits (ADR 0006) ---------
+    # Melee reads the `weapon` slot above; a Shot reads the `ranged` slot below.
+    # Both stay equipped at once — the action, not a swap, picks the weapon.
+    @property
+    def _ranged(self):
+        eq = getattr(self.parent, "equipment", None)
+        if eq is not None and eq.ranged is not None:
+            return eq.ranged.equippable
+        return None
+
+    @property
+    def has_ranged_weapon(self) -> bool:
+        return self._ranged is not None
+
+    @property
+    def ranged_weapon_name(self) -> str:
+        eq = getattr(self.parent, "equipment", None)
+        if eq is not None and eq.ranged is not None:
+            return eq.ranged.name
+        return "no bow"
+
+    @property
+    def ranged_attack_bonus(self) -> int:
+        """The bonus added to a Shot's d20: the bow's +hit plus (for the hero)
+        Wits + level to-hit + Far Shot perks. No bow means no shot — 0."""
+        bow = self._ranged
+        if bow is None:
+            return 0
+        base = bow.attack_bonus
+        hero = getattr(self.parent, "hero", None)
+        if hero is not None:
+            base += hero.ranged_attack_bonus
+        return base
+
+    @property
+    def ranged_damage(self) -> Union[int, str]:
+        """The bow's damage dice (0 with no bow)."""
+        bow = self._ranged
+        return bow.damage if bow is not None else 0
+
+    @property
+    def ranged_damage_bonus(self) -> int:
+        """Flat damage the Far Shot Path adds to a Shot (0 for a foe / no hero)."""
+        hero = getattr(self.parent, "hero", None)
+        return hero.ranged_damage_bonus if hero is not None else 0
+
+    @property
+    def effective_range(self) -> int:
+        """Tiles a Shot carries with no falloff (the bow's stat; 0 with no bow)."""
+        bow = self._ranged
+        return bow.effective_range if bow is not None else 0
+
+    def range_penalty(self, distance: int) -> int:
+        """The to-hit penalty for a Shot at ``distance`` tiles (Chebyshev): none
+        within the bow's effective range, then −1 per 3 tiles beyond it (ADR
+        0006). Returned as a positive number the caller subtracts from the roll."""
+        excess = distance - self.effective_range
+        if excess <= 0:
+            return 0
+        return (excess + 2) // 3
+
     # --- Statuses ---------------------------------------------------------
     def apply_bleed(self, stacks: int) -> None:
         """Add Bleed stacks (each ticks ``BLEED_DAMAGE`` at the bearer's round)."""

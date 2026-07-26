@@ -5,12 +5,32 @@ from typing import TYPE_CHECKING, Optional, Tuple
 from lonelands import color
 from lonelands import tile_types
 from lonelands.components.fighter import CRIT_BLEED
-from lonelands.dice import roll_check, roll_damage
+from lonelands.dice import rng, roll_check, roll_damage
 from lonelands.exceptions import Impossible
 
 if TYPE_CHECKING:
     from lonelands.engine import Engine
     from lonelands.entity import Actor, Entity, Item
+
+
+# --- Shared combat helpers ------------------------------------------------
+def resolve_ambush(hero, target_fighter) -> Tuple[bool, int, int]:
+    """The Hidden Path ambush, shared by melee and ranged (ADR 0006): an opening
+    strike against an unmarked foe (one still at full Endurance) lands with
+    advantage and bonus damage. Returns ``(is_ambush, advantage, bonus_damage)``.
+
+    Advantage is +1 only when a perk actually grants it, so a bonus-damage-only
+    ambush still counts as an ambush (its flavour and damage) without a second
+    die. A foe (no Hero) never ambushes."""
+    if hero is None:
+        return False, 0, 0
+    bonus = hero.perk_bonus("ambush_bonus_damage")
+    is_ambush = bool(
+        target_fighter.endurance >= target_fighter.max_endurance
+        and (hero.ambush_advantage or bonus)
+    )
+    advantage = 1 if (is_ambush and hero.ambush_advantage) else 0
+    return is_ambush, advantage, bonus
 
 
 class Action:
@@ -94,14 +114,9 @@ class MeleeAction(ActionWithDirection):
         hero = getattr(attacker, "hero", None)
 
         # Hidden Path ambush: an opening blow against an unmarked foe (still at
-        # full Endurance) strikes with advantage and bonus damage.
-        ambush_dmg = hero.perk_bonus("ambush_bonus_damage") if hero is not None else 0
-        ambush = bool(
-            hero is not None
-            and tf.endurance >= tf.max_endurance
-            and (hero.ambush_advantage or ambush_dmg)
-        )
-        advantage = 1 if (ambush and hero.ambush_advantage) else 0
+        # full Endurance) strikes with advantage and bonus damage. The Shot flow
+        # calls the same helper (ADR 0006).
+        ambush, advantage, ambush_dmg = resolve_ambush(hero, tf)
 
         result = roll_check(af.attack_bonus, tf.defence, advantage=advantage)
         # Tell the roll its Crit threshold (Swift Wrath widens it below 20) so the
@@ -156,6 +171,151 @@ class MeleeAction(ActionWithDirection):
                 f"left bleeding!",
                 color.player_die if target is engine.player else color.enemy_atk,
             )
+
+
+# --- Ranged: arrows & the Shot (ADR 0006, issue #46) ----------------------
+# Arrow recovery: this fraction of loosed arrows can be picked back up (they
+# land on the target's tile). A deliberate future perk lever.
+ARROW_RECOVERY_CHANCE = 0.5
+
+
+def _ammo_stack(actor: "Actor"):
+    """The actor's arrow Stack, if the pack holds one (matched by the canonical
+    ammo name, since arrows are a fungible Stack, not distinct gear)."""
+    from lonelands import content
+    inv = getattr(actor, "inventory", None)
+    if inv is None:
+        return None
+    for item in inv.items:
+        if item.stackable and item.name == content.AMMO_NAME:
+            return item
+    return None
+
+
+def _spend_one_arrow(stack: "Item", actor: "Actor") -> None:
+    """Consume a single arrow from ``stack``, removing the empty Stack."""
+    stack.quantity -= 1
+    if stack.quantity <= 0 and actor.inventory is not None:
+        actor.inventory.remove(stack)
+
+
+def _chebyshev(a: "Actor", b: "Actor") -> int:
+    """Grid (king-move) distance — the metric a Shot's range falloff uses."""
+    return max(abs(a.x - b.x), abs(a.y - b.y))
+
+
+def is_hostile_actor(actor: "Actor") -> bool:
+    """Whether ``actor`` is a living combatant (not a townsfolk) — a valid mark
+    for a Shot and the thing whose adjacency spoils one. Callers exclude the
+    acting hero themselves (the hero also matches this shape)."""
+    return (
+        actor.npc is None
+        and actor.fighter is not None and not actor.fighter.dead
+    )
+
+
+def _has_adjacent_hostile(engine: "Engine", actor: "Actor") -> bool:
+    """Whether a living, non-friendly fighter stands in any of ``actor``'s eight
+    neighbours — the point-blank condition that spoils a Shot (Disadvantage)."""
+    gm = engine.game_map
+    for dx in (-1, 0, 1):
+        for dy in (-1, 0, 1):
+            if dx == 0 and dy == 0:
+                continue
+            other = gm.get_actor_at(actor.x + dx, actor.y + dy)
+            if other is not None and other is not actor and is_hostile_actor(other):
+                return True
+    return False
+
+
+def _maybe_recover_arrow(engine: "Engine", target: "Actor") -> None:
+    """Half of loosed arrows survive to be picked up: drop one on the target's
+    tile on a coin-flip (ADR 0006). Recovery rate is a future perk lever."""
+    if rng.random() >= ARROW_RECOVERY_CHANCE:
+        return
+    from lonelands import content
+    content.arrows.spawn(engine.game_map, target.x, target.y)
+
+
+class RangedAttackAction(Action):
+    """Loose an arrow at a chosen foe (ADR 0006): the d20 core keyed off Wits,
+    with a per-bow effective range and falloff beyond it, Disadvantage at point-
+    blank, the shared Hidden Path ambush, and no Bleed on a Critical. Costs a
+    full turn and spends one arrow; half of spent arrows are recoverable."""
+
+    def __init__(self, entity: "Actor", target: "Actor"):
+        super().__init__(entity)
+        self.target = target
+
+    def perform(self) -> None:
+        attacker = self.entity
+        af = attacker.fighter
+        engine = self.engine
+        if af is None or not af.has_ranged_weapon:
+            raise Impossible("You have no bow readied.")
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to shoot.")
+        ammo = _ammo_stack(attacker)
+        if ammo is None:
+            raise Impossible("Your quiver is empty.")
+
+        tf = target.fighter
+        is_player = attacker is engine.player
+        hero = getattr(attacker, "hero", None)
+
+        _spend_one_arrow(ammo, attacker)  # an arrow is spent, hit or miss
+
+        distance = _chebyshev(attacker, target)
+        penalty = af.range_penalty(distance)
+
+        # A foe at your elbow spoils the aim (Disadvantage); the Hidden Path
+        # ambush lends Advantage. The two fold into one signed advantage int.
+        adjacent = _has_adjacent_hostile(engine, attacker)
+        ambush, ambush_adv, ambush_dmg = resolve_ambush(hero, tf)
+        advantage = ambush_adv + (-1 if adjacent else 0)
+
+        # A Shot Crits only on a natural 20 — Swift Wrath's widened melee crit
+        # does not carry to the bow (ADR 0006), so the default crit_face stands.
+        result = roll_check(af.ranged_attack_bonus - penalty, tf.defence,
+                            advantage=advantage)
+        engine.note_roll(result, attacker)  # feeds the dice tray (player rolls only)
+
+        who = "You" if is_player else f"The {attacker.name}"
+        target_name = "you" if target is engine.player else f"the {target.name}"
+        loose = "loose" if is_player else "looses"
+        strike = "strike" if is_player else "strikes"
+        atk_color = color.player_atk if is_player else color.enemy_atk
+
+        crit = result.is_crit
+        if not (crit or result.is_success):
+            verb = "the arrow flies wild" if result.is_fumble else "miss"
+            engine.message_log.add_message(
+                f"{who} {loose} an arrow at {target_name} but {verb}.",
+                color.sauron_eye if result.is_fumble else color.gray,
+            )
+            _maybe_recover_arrow(engine, target)
+            return
+
+        # A hit: roll the bow's damage (+ any Far Shot damage perk), subtract
+        # Soak — a clean shot always stings for 1+. No pierce, no Bleed.
+        raw = roll_damage(af.ranged_damage) + af.ranged_damage_bonus
+        dmg = max(1, raw - tf.soak)
+        if crit:
+            dmg += roll_damage(af.ranged_damage)  # the Critical carries a second roll
+        if ambush:
+            dmg += ambush_dmg
+        result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
+        tf.take_damage(dmg)
+
+        flavour = " A CRITICAL shot!" if crit else ""
+        if ambush:
+            flavour += " From the shadows!"
+        engine.message_log.add_message(
+            f"{who} {loose} an arrow and {strike} {target_name} for {dmg} endurance.{flavour}",
+            atk_color,
+        )
+        _maybe_recover_arrow(engine, target)
 
 
 class BumpAction(ActionWithDirection):

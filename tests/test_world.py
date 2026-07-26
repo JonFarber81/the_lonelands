@@ -163,7 +163,7 @@ def test_bree_all_edges_and_npcs_are_reachable_on_foot(game):
     assert any((x, H - 1) in seen for x in range(W)), "south edge unreachable"
 
     npcs = [a for a in gm.actors if a is not player]
-    assert len(npcs) == 4
+    assert len(npcs) == 5  # elder, healer, halbarad, innkeeper, fletcher (ADR 0006)
     for npc in npcs:
         assert walk[npc.x, npc.y], f"{npc.name} stands on an unwalkable tile"
         assert (npc.x, npc.y) in seen, f"{npc.name} is unreachable"

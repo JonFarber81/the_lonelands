@@ -141,6 +141,8 @@ class MainGameEventHandler(EventHandler):
         if key in CONFIRM_KEYS or key in (KeySym.GREATER, KeySym.LESS):
             return TakeInteractAction(player)
 
+        if key == KeySym.f:
+            return self._begin_ranged()
         if key == KeySym.g:
             return PickupAction(player)
         if key == KeySym.i:
@@ -160,6 +162,135 @@ class MainGameEventHandler(EventHandler):
         if key == KeySym.ESCAPE:
             return EscapeMenuHandler(self.engine)
         return None
+
+    def _begin_ranged(self) -> Optional[BaseEventHandler]:
+        """Enter lock-on firing mode (ADR 0006). Refuses with no bow readied or
+        an empty quiver, and if nothing is in sight to shoot."""
+        player = self.engine.player
+        f = player.fighter
+        if f is None or not f.has_ranged_weapon:
+            self.engine.message_log.add_message("You have no bow readied.", color.impossible)
+            return None
+        if actions._ammo_stack(player) is None:
+            self.engine.message_log.add_message("Your quiver is empty.", color.impossible)
+            return None
+        handler = RangedTargetHandler(self.engine)
+        if handler.target is None:
+            self.engine.message_log.add_message(
+                "There is nothing in sight to shoot.", color.impossible)
+            return MainGameEventHandler(self.engine)
+        return handler
+
+
+# ===========================================================================
+# Lock-on targeting (ADR 0006) — the game's first targeting UI, built reusable
+# ===========================================================================
+class LockOnHandler(EventHandler):
+    """Pick a visible foe with a clear line, nearest pre-selected; cycle with Tab
+    or the move-keys, confirm to act, Esc to cancel. Subclasses define what
+    confirming does (``on_target``). A future 'look' mode can reuse this."""
+
+    prompt = "Take aim"
+
+    def __init__(self, engine: "Engine"):
+        super().__init__(engine)
+        self.targets: List["Actor"] = self._gather_targets()
+        self.index = 0  # the nearest foe, pre-selected
+        engine.event_handler = self
+
+    def _gather_targets(self) -> List["Actor"]:
+        """Living, non-friendly fighters in sight (FOV is the range cap, and a
+        visible tile has a clear line under symmetric shadowcasting), sorted
+        nearest-first by grid distance."""
+        engine = self.engine
+        gm = engine.game_map
+        player = engine.player
+        foes = [
+            a for a in gm.actors
+            if a is not player and actions.is_hostile_actor(a)
+            and gm.visible[a.x, a.y]
+        ]
+        foes.sort(key=lambda a: (actions._chebyshev(player, a),
+                                 (a.x - player.x) ** 2 + (a.y - player.y) ** 2))
+        return foes
+
+    @property
+    def target(self) -> Optional["Actor"]:
+        if not self.targets:
+            return None
+        return self.targets[self.index % len(self.targets)]
+
+    def _cycle(self, step: int) -> None:
+        if self.targets:
+            self.index = (self.index + step) % len(self.targets)
+
+    def _status_text(self, target: "Actor") -> str:
+        """The shooting readout for the current mark: distance, and whether the
+        Shot suffers falloff (long shot) or point-blank Disadvantage."""
+        player = self.engine.player
+        f = player.fighter
+        dist = actions._chebyshev(player, target)
+        parts = [f"{dist} tiles"]
+        penalty = f.range_penalty(dist)
+        if penalty:
+            parts.append(f"long shot -{penalty}")
+        if actions._has_adjacent_hostile(self.engine, player):
+            parts.append("point-blank!")
+        return " · ".join(parts)
+
+    def on_render(self, console) -> None:
+        self.engine.render(console)
+        target = self.target
+        if target is not None:
+            # A bright reticle over the mark, and its name/range across the top.
+            console.rgb["bg"][target.x, target.y] = color.needs_target
+            console.rgb["fg"][target.x, target.y] = color.near_black
+            banner = (f" {self.prompt} — the {target.name}  "
+                      f"({self._status_text(target)}) ")
+        else:
+            banner = f" {self.prompt} — nothing in sight "
+        console.draw_rect(x=0, y=0, width=MAP_WIDTH, height=1, ch=ord(" "),
+                          bg=(0x24, 0x1E, 0x12))
+        console.print(x=1, y=0, string=banner[: MAP_WIDTH - 2], fg=color.needs_target)
+        console.print(x=1, y=MAP_HEIGHT - 1,
+                      string="[Tab] cycle  [f/Enter] loose  [Esc] cancel",
+                      fg=color.gray)
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        key = event.sym
+        if key == KeySym.ESCAPE:
+            return self._cancel()
+        if key == KeySym.TAB:
+            self._cycle(1)
+            return None
+        if key in MOVE_KEYS:
+            dx, dy = MOVE_KEYS[key]
+            # Right/down step forward through the ring, left/up step back.
+            self._cycle(1 if (dx + dy) > 0 else -1)
+            return None
+        if key in (KeySym.f,) or key in CONFIRM_KEYS:
+            target = self.target
+            if target is None:
+                return self._cancel()
+            return self.on_target(target)
+        return None
+
+    def _cancel(self) -> BaseEventHandler:
+        self.engine.event_handler = MainGameEventHandler(self.engine)
+        return self.engine.event_handler
+
+    def on_target(self, target: "Actor") -> Optional[BaseEventHandler]:
+        raise NotImplementedError()
+
+
+class RangedTargetHandler(LockOnHandler):
+    """Lock-on that looses an arrow at the chosen foe (a full turn)."""
+
+    def on_target(self, target: "Actor") -> Optional[BaseEventHandler]:
+        self.handle_action(actions.RangedAttackAction(self.engine.player, target))
+        if self.engine.player.fighter is None or self.engine.player.fighter._dead:
+            return GameOverEventHandler(self.engine)
+        return MainGameEventHandler(self.engine)
 
 
 class GameOverEventHandler(EventHandler):
@@ -507,6 +638,8 @@ MOVEMENT   arrows, hjkl, yubn, or numpad. Move into a foe to strike;
            move into a townsfolk to speak.
 WAIT       . (period) or z
 ENTER/> <  use a gate, stair, or barrow-entrance you stand upon
+f          loose an arrow — lock onto the nearest foe in sight, then
+           Tab/move to cycle, f or Enter to shoot, Esc to cancel
 g          pick up what lies underfoot
 i          use or equip from your pack
 d          set down an item
@@ -521,6 +654,11 @@ THE ROLL   Deeds are tested with a d20 plus an attribute (Brawn, Wits, or
            Will) against a Target Number. A natural 20 is a Critical; a
            natural 1 a Fumble. Slaying foes grants XP; levels come often,
            each granting +HP, a periodic +to-hit, and now and then a perk point.
+
+THE BOW    A bow rides the ranged slot beside your melee weapon — no swap.
+           A Shot is keyed off Wits and spends an arrow; it flies true within
+           the bow's range, then falls off past it, and a foe at your elbow
+           spoils the aim. Half your arrows can be gathered up again (g).
 
 VITALS     Endurance is your vigour — at 0 you fall. Grow Weary as burdens
            mount past your strength; a Bleed wound worsens each round until

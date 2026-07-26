@@ -112,6 +112,33 @@ hero rolls; a foe never rolls (the dice tray stays the player's).
   death track.)*
 - **Endurance** — the single HP pool; grows with level. **0 Endurance = death.**
 
+## Ranged combat
+
+Loosing arrows is the same `d20` core as melee, but keyed off **Wits** rather
+than Brawn and reaching across the map (see ADR 0006). Melee is a **bump**;
+ranged is a deliberate, aimed act.
+
+- **Bow** — a ranged weapon held in the **ranged** slot, *alongside* a melee
+  weapon in the weapon slot: the Ranger nocks an arrow at range, then draws steel
+  when a foe closes — no swap step. A bow carries damage dice and an **effective
+  range** (a shortbow reaches less far than a longbow). *Avoid*: gun, sling.
+- **Arrow** — the ammunition a bow spends. A fungible **Stack** in the pack; each
+  **Shot** spends one, and an empty quiver refuses to fire. A share of spent
+  arrows are **recoverable** — left on the target's tile to be picked up.
+- **Shot** — one ranged attack: `d20 + Wits + level + ranged perks + bow − range
+  penalty vs Defence`, then `bow damage − soak` on a hit. A **Critical** still
+  hits and adds damage, but a Shot's Critical opens **no Bleed** (Bleed stays a
+  melee/heavy-foe signature). Costs the hero a full turn. *(The hero rolls; the
+  dice tray shows the Shot exactly as it shows a swing.)*
+- **Lock-on** — the targeting mode a Shot begins in: the **nearest visible foe**
+  is pre-selected; the Ranger **cycles** through the other visible foes and looses
+  at the chosen one. A foe must be **in sight with a clear line** to be shot.
+- **Effective range** — the distance (a per-bow stat) within which a Shot takes no
+  **range penalty**. Beyond it, accuracy falls off with distance; combined with a
+  point-blank penalty (a Shot loosed with a foe **adjacent** is at
+  **Disadvantage**), a bow's sweet spot is short-to-medium range. The Far Shot
+  Path pushes that reach outward.
+
 ## Trade & loot
 
 The Wild pays in **both** glory and goods. A slain foe grants **XP** (quests

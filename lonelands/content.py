@@ -89,11 +89,47 @@ hunting_dagger = _weapon("hunting dagger", "-", 3, 0, attack_bonus=1, value=7,
 war_spear = _weapon("war spear", "|", 4, 2, pierce=1, value=10,
                     desc="An ash-hafted spear; its point slips past mail.")
 
-ranger_bow = Item(
-    char="}", color=color.weapon_c, name="Ranger's bow",
-    description="A tall bow of yew. (Ranged mastery awaits a later day on the road.)",
-    equippable=Equippable(EquipmentType.RANGED, load=1, damage=4, ranged=True),
+# Bows go in the `ranged` slot and are loosed with `f` (ADR 0006). Each carries
+# damage dice and an **effective range** — the reach within which a Shot takes no
+# falloff. A bow is keyed off Wits, not Brawn, and spends an arrow per Shot.
+def _bow(name, dmg, effective_range, load, *, attack_bonus=0, desc="", value=0,
+         unique=False) -> Item:
+    return Item(
+        char="}", color=color.weapon_c, name=name, description=desc, value=value,
+        equippable=Equippable(
+            EquipmentType.RANGED, load=load, damage=dmg, ranged=True,
+            effective_range=effective_range, attack_bonus=attack_bonus,
+            unique=unique,
+        ),
+    )
+
+
+shortbow = _bow(
+    "shortbow", "1d6", 4, 1, value=15,
+    desc="A short bow of horn and yew, quick to draw; its arrows carry true out "
+         "to middling range.",
 )
+longbow = _bow(
+    "longbow", "1d8", 6, 2, value=30,
+    desc="A tall war-bow of the Dúnedain, its long stave sending shafts far and hard.",
+)
+
+# Arrows: the ammunition a bow spends — a fungible Stack in the pack, one spent
+# per Shot, half of them recoverable off the target's tile (ADR 0006). Matched
+# by AMMO_NAME wherever the Shot flow needs "the quiver".
+AMMO_NAME = "arrows"
+
+
+def _quiver(n: int) -> Item:
+    return Item(
+        char="\\", color=(0xB8, 0xA0, 0x78), name=AMMO_NAME, value=1,
+        stackable=True, quantity=n,
+        description="A sheaf of grey-fletched arrows for a bow.",
+    )
+
+
+arrows = _quiver(1)          # the canonical single-arrow template (shop unit, drops)
+arrow_bundle = _quiver(4)    # a small sheaf a bow-foe leaves behind
 
 # Armour splits two ways (ADR 0005): heavy gear grants **Soak** (subtracts from a
 # blow), light gear and shields grant **+Defence** (harder to hit in the first
@@ -259,7 +295,10 @@ orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 4, "1d6", 7,
                      ])
 orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 4, "1d4", 5,
                     kind="orc", desc="looses at",
-                    loot=[[(None, 50), (Coins(1, 3), 50)]])
+                    loot=[
+                        [(None, 50), (Coins(1, 3), 50)],
+                        [(None, 45), (arrow_bundle, 55)],  # a bowman leaves shafts
+                    ])
 great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 4, "1d6", 6,
                       bleed_on_hit=1, kind="beast", desc="bites",
                       loot=[[(None, 45), (spider_silk, 55)]])
@@ -292,14 +331,14 @@ def monsters_for_depth(depth: int) -> List[Tuple[Actor, int]]:
 
 def items_for_depth(depth: int) -> List[Tuple[Item, int]]:
     table: List[Tuple[Item, int]] = [
-        (healing_herbs, 24), (lembas, 12), (hunting_dagger, 6),
+        (healing_herbs, 24), (lembas, 12), (hunting_dagger, 6), (arrow_bundle, 10),
     ]
     if depth >= 1:
         table += [(athelas, 8), (short_sword, 5), (buckler, 4), (leather_gear, 4),
-                  (ranger_star, 3)]
+                  (ranger_star, 3), (shortbow, 3)]
     if depth >= 2:
         table += [(miruvor, 6), (travellers_hood, 4), (war_spear, 4),
-                  (elven_brooch, 3)]
+                  (elven_brooch, 3), (longbow, 2)]
     if depth >= 3:
         # The deeps hold the richest gear — and, rarely, a named Unique.
         table += [(mail_corslet, 4), (angolar, 1),

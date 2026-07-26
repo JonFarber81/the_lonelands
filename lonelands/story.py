@@ -337,5 +337,40 @@ def make_innkeeper() -> Actor:
     return _npc("@", (0xC8, 0xA0, 0x62), "Butterbur", "Keeper of the Prancing Pony", tree)
 
 
+# ---------------------------------------------------------------------------
+# Cob the fletcher — bows, arrows, and the marksman's trade (ADR 0006)
+# ---------------------------------------------------------------------------
+def make_fletcher() -> Actor:
+    def open_shop(engine):
+        from lonelands import input_handlers
+        # Arrows sell one shaft at a time (a coin apiece); a longbow for the
+        # Ranger who would strike from afar, and a spare shortbow besides.
+        stock = [
+            content.longbow, content.shortbow, content.arrows,
+        ]
+        return input_handlers.ShopHandler(engine, "Cob's fletchery", stock)
+
+    tree = {
+        "root": {
+            "text": "Cob the fletcher sits amid shavings and feathers, binding a "
+                    "shaft between blunt, clever fingers.\n\"Bow or shaft, wanderer? "
+                    "A Ranger's no good without both, and I've the best in Bree.\"",
+            "options": [
+                opt("Show me your bows and arrows.", handler=open_shop),
+                opt("What makes a good bow?", goto="craft"),
+                opt("Good day to you.", goto=None),
+            ],
+        },
+        "craft": {
+            "text": "\"A shortbow's quick and true up close; a longbow carries far "
+                    "and hits the harder for it. Either way, keep your quiver full — "
+                    "a shaft loosed is oft a shaft you'll walk over and pick up again.\"",
+            "options": [opt("(step back)", goto="root")],
+        },
+    }
+    return _npc("@", (0xA8, 0x8C, 0x54), "Cob", "Fletcher of Bree", tree)
+
+
 def make_town_npcs() -> List[Actor]:
-    return [make_elder(), make_healer(), make_halbarad(), make_innkeeper()]
+    return [make_elder(), make_healer(), make_halbarad(), make_innkeeper(),
+            make_fletcher()]
