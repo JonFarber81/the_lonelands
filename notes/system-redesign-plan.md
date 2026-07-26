@@ -8,9 +8,11 @@ is a self-contained slice (one PR, or a small handful) that leaves `main`
 playable. Phases 1→2→3 are the spine and go in order; 4 and 5 can run in parallel
 once 2 lands; 6 sits on top of 5.
 
+**Progress:** Phases 1–4 have **landed** on `main`; Phases 5–6 remain.
+
 ---
 
-## Phase 1 — d20 resolution + combat spine
+## Phase 1 — d20 resolution + combat spine  ✅ **landed**
 *The riskiest core swap; do it first and tune the feel before building on it.*
 
 - `dice.py`: replace the Feat+Success pool with **Check** — `d20 + modifier vs
@@ -28,7 +30,7 @@ once 2 lands; 6 sits on top of 5.
   attack bonus.
 - Tests: rewrite `test_dice.py`, `test_combat.py`.
 
-## Phase 2 — new character model (attributes, single HP, curve)
+## Phase 2 — new character model (attributes, single HP, curve)  ✅ **landed**
 - `tor.py` → rename/replace: **Brawn · Wits · Will**; delete `SKILL_GROUPS`,
   `ALL_SKILLS`, `PROFICIENCIES`. (Rename the module off `tor` too.)
 - `hero.py`: attributes drive checks & derived combat numbers; **single Endurance
@@ -39,13 +41,13 @@ once 2 lands; 6 sits on top of 5.
 - `input_handlers.py`: rewrite `CharacterScreenHandler` for the new sheet.
 - Tests: `test_tor.py` (→ new name), hero/level tests.
 
-## Phase 3 — XP from kills *(small; folds near Phase 2)*
+## Phase 3 — XP from kills *(small; folds near Phase 2)*  ✅ **landed**
 - `fighter.die()`: grant `xp_reward` for **all** foes; keep loot resolution.
 - `content.py`: assign `xp_reward` across foes; tune the curve so levels land
   **frequently** in normal play. Supersedes ADR 0004's no-XP rule.
 - Tests: kill→XP→level.
 
-## Phase 4 — Paths & perks *(largest content phase; needs Phase 2)*
+## Phase 4 — Paths & perks *(largest content phase; needs Phase 2)*  ✅ **landed**
 - New `perks.py`: a **Path**/**Perk** data model — per-perk cost, in-Path
   prerequisites, capstone gating, and an **effect hook** (passive modifiers +
   active abilities on charges/cooldowns).

@@ -165,8 +165,10 @@ def test_nothing_slice_drops_nothing():
     assert not [it for it in gm.items if it.x == 3 and it.y == 3]
 
 
-def test_wight_keeps_its_xp_reward_and_carries_loot():
-    assert content.wight.fighter.xp_reward == 10
+def test_wight_grants_xp_and_carries_loot():
+    # Post-ADR-0005 (#37) every foe grants XP; the wight, as a tough named
+    # undead, still pays the largest kill-XP and keeps its grave-hoard loot.
+    assert content.wight.fighter.xp_reward > 0
     assert content.wight.fighter.loot  # grave-hoard coin roll
 
 

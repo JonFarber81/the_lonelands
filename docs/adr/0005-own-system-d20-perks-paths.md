@@ -89,6 +89,8 @@ copyright question we are knowingly setting aside.)
 
 ## Status
 
-Accepted; not yet implemented (build plan: `notes/system-redesign-plan.md`).
-Supersedes the "routine foes grant no experience" decision of ADR 0004. Terms
-recorded in `CONTEXT.md`.
+Accepted; implemented incrementally (build plan: `notes/system-redesign-plan.md`).
+Phases 1–4 have landed — the d20 core, the new character model, kill-XP, and the
+five Ranger Paths & perks; Phases 5–6 (the equipment overhaul and the affix
+generator) remain. Supersedes the "routine foes grant no experience" decision of
+ADR 0004. Terms recorded in `CONTEXT.md`.

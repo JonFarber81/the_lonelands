@@ -91,15 +91,32 @@ class MeleeAction(ActionWithDirection):
         tf = target.fighter
         engine = self.engine
         is_player = attacker is engine.player
+        hero = getattr(attacker, "hero", None)
 
-        result = roll_check(af.attack_bonus, tf.defence)
+        # Hidden Path ambush: an opening blow against an unmarked foe (still at
+        # full Endurance) strikes with advantage and bonus damage.
+        ambush_dmg = hero.perk_bonus("ambush_bonus_damage") if hero is not None else 0
+        ambush = bool(
+            hero is not None
+            and tf.endurance >= tf.max_endurance
+            and (hero.ambush_advantage or ambush_dmg)
+        )
+        advantage = 1 if (ambush and hero.ambush_advantage) else 0
+
+        result = roll_check(af.attack_bonus, tf.defence, advantage=advantage)
+        # Tell the roll its Crit threshold (Swift Wrath widens it below 20) so the
+        # dice tray and the log agree on a widened Critical.
+        result.crit_face = af.crit_face
         engine.note_roll(result, attacker)  # feeds the dice tray (player rolls only)
 
         who = "You" if is_player else f"The {attacker.name}"
         target_name = "you" if target is engine.player else f"the {target.name}"
         atk_color = color.player_atk if is_player else color.enemy_atk
 
-        if not result.is_success:
+        # A Critical is a natural crit-face or higher (Swift Wrath widens it); a
+        # natural 1 always fumbles.
+        crit = result.is_crit
+        if not (crit or result.is_success):
             verb = "swing wildly" if result.is_fumble else "miss"
             engine.message_log.add_message(
                 f"{who} {af.attack_desc} at {target_name} but {verb}.",
@@ -107,16 +124,22 @@ class MeleeAction(ActionWithDirection):
             )
             return
 
-        # A hit: roll damage, subtract Soak (a clean blow always stings for 1+).
-        raw = roll_damage(af.damage)
+        # A hit: roll damage (+ any flat melee-damage perk), subtract Soak (a clean
+        # blow always stings for 1+).
+        raw = roll_damage(af.damage) + af.melee_damage_bonus
         dmg = max(1, raw - tf.soak)
-        crit = result.is_crit
         if crit:
             dmg += roll_damage(af.damage)  # the Critical carries a second roll
+        if ambush:
+            dmg += ambush_dmg
+        if hero is not None:
+            dmg += hero.consume_primed()  # Swift Wrath: spend a primed next-hit
         result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
         tf.take_damage(dmg)
 
         flavour = " A CRITICAL blow!" if crit else ""
+        if ambush:
+            flavour += " From the shadows!"
         engine.message_log.add_message(
             f"{who} {af.attack_desc} {target_name} for {dmg} endurance.{flavour}",
             atk_color,
@@ -208,6 +231,27 @@ class EquipAction(Action):
 
     def perform(self) -> None:
         self.entity.equipment.toggle_equip(self.item)
+
+
+class ActivateAbilityAction(Action):
+    """Fire one of the hero's Path actives (Paths & perks, issue #38).
+
+    A heal/stance resolves at once; a "wrath"-style active primes the hero's next
+    melee hit. Either way this counts as the player's turn, so cooldowns tick and
+    foes act afterwards. Impossible if the ability isn't ready."""
+
+    def __init__(self, entity: "Actor", perk_id: str):
+        super().__init__(entity)
+        self.perk_id = perk_id
+
+    def perform(self) -> None:
+        hero = getattr(self.entity, "hero", None)
+        if hero is None or not hero.ability_ready(self.perk_id):
+            raise Impossible("That ability is not ready.")
+        message = hero.activate_ability(self.perk_id)
+        if message is None:
+            raise Impossible("That ability is not ready.")
+        self.engine.message_log.add_message(message, color.hope_gain)
 
 
 class TakeInteractAction(Action):

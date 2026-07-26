@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import tcod
 
-from lonelands import actions, character, color
+from lonelands import actions, character, color, perks
 from lonelands.actions import (
     Action,
+    ActivateAbilityAction,
     BumpAction,
     DropItem,
     EquipAction,
@@ -104,6 +105,10 @@ class EventHandler(BaseEventHandler):
         except Impossible as exc:
             self.engine.message_log.add_message(exc.args[0], color.impossible)
             return False
+        # A player turn has passed: advance perk cooldowns/stances, then foes act.
+        hero = getattr(self.engine.player, "hero", None)
+        if hero is not None:
+            hero.end_player_turn()
         self.engine.handle_enemy_turns()
         self.engine.update_fov()
         return True
@@ -144,6 +149,10 @@ class MainGameEventHandler(EventHandler):
             return InventoryDropHandler(self.engine)
         if key == KeySym.c:
             return CharacterScreenHandler(self.engine)
+        if key == KeySym.p:
+            return PathsHandler(self.engine)
+        if key == KeySym.a:
+            return AbilitiesHandler(self.engine)
         if key == KeySym.q:
             return QuestScreenHandler(self.engine)
         if key in (KeySym.SLASH, KeySym.QUESTION):
@@ -320,9 +329,142 @@ class CharacterScreenHandler(AskUserHandler):
             console.print(x + 4, cy, "Weary — burdened past your vigour.",
                           fg=color.enemy_atk)
 
+        cy += 2
+        console.print(x + 2, cy, "PATHS", fg=color.frame_bright)
+        cy += 1
+        owned = hero.perks
+        for path in perks.PATHS:
+            count = sum(1 for pk in path.perks if pk.id in owned)
+            col = color.ranger_green if count else color.gray
+            console.print(x + 4, cy, f"{path.name:<20} {count}/{len(path.perks)}",
+                          fg=col)
+            cy += 1
+
         console.print(x + 2, y + h - 1,
-                      " Paths & perks arrive in a later chapter · Esc close ",
+                      " p Paths & perks · a abilities · Esc close ",
                       fg=color.gray)
+
+
+# ===========================================================================
+# Paths & perks (issue #38)
+# ===========================================================================
+class PathsHandler(AskUserHandler):
+    """Buy perks across the five Ranger Paths. Each perk gets a letter; press it
+    to buy when it is affordable and its in-Path prerequisites (and capstone
+    gating) are met. A Ranger blends freely across Paths."""
+
+    def _perk_list(self) -> List["perks.Perk"]:
+        return [pk for path in perks.PATHS for pk in path.perks]
+
+    @staticmethod
+    def _locked_reason(hero, pk) -> str:
+        if hero.perk_points < pk.cost:
+            return "need pts"
+        if not perks.prerequisites_met(pk, hero.perks):
+            return "capstone locked" if pk.capstone else "prereq needed"
+        return "-"
+
+    def on_render(self, console) -> None:
+        super().on_render(console)
+        hero = self.engine.player.hero
+        w, h = 78, 49
+        x, y = 2, 2
+        _panel(console, x, y, w, h, "Paths of the Ranger")
+        pp_col = color.xp_filled if hero.perk_points else color.gray
+        console.print(x + 2, y + 1,
+                      f"Perk points: {hero.perk_points}    "
+                      f"(★ = capstone · blend freely across Paths)", fg=pp_col)
+        cy = y + 3
+        idx = 0
+        for path in perks.PATHS:
+            console.print(x + 2, cy, path.name, fg=color.menu_title)
+            cy += 1
+            console.print(x + 4, cy, path.blurb, fg=color.gray)
+            cy += 1
+            for pk in path.perks:
+                letter = chr(ord("a") + idx)
+                if hero.has_perk(pk.id):
+                    status, col = "owned", color.ranger_green
+                elif hero.can_buy(pk):
+                    status, col = f"BUY ({pk.cost}pp)", color.selected
+                else:
+                    status, col = self._locked_reason(hero, pk), color.dark_gray
+                tag = "*" if pk.capstone else " "
+                console.print(
+                    x + 4, cy,
+                    f"({letter}){tag}{pk.name:<18} T{pk.tier} {pk.cost}pp   "
+                    f"{status:<16}{pk.desc}"[:w - 6],
+                    fg=col,
+                )
+                cy += 1
+                idx += 1
+            cy += 1
+        console.print(x + 2, y + h - 1,
+                      " a-t buy a perk · Esc close ", fg=color.gray)
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        rows = self._perk_list()
+        index = event.sym - KeySym.a
+        if 0 <= index < len(rows):
+            pk = rows[index]
+            hero = self.engine.player.hero
+            if hero.has_perk(pk.id):
+                self.engine.message_log.add_message(
+                    f"You already walk that road ({pk.name}).", color.invalid)
+            elif hero.buy_perk(pk):
+                self.engine.message_log.add_message(
+                    f"You take up {pk.name}. {pk.desc}", color.xp_filled)
+            else:
+                self.engine.message_log.add_message(
+                    f"You cannot take {pk.name} yet.", color.impossible)
+            return None
+        return super().ev_keydown(event)
+
+
+class AbilitiesHandler(AskUserHandler):
+    """List the hero's owned Path actives with their charge/cooldown state and
+    fire a ready one. Firing produces an ActivateAbilityAction (a full turn):
+    heal/stance resolve at once, a Wrath-style active primes the next melee hit."""
+
+    def on_render(self, console) -> None:
+        super().on_render(console)
+        hero = self.engine.player.hero
+        actives = hero.actives()
+        w = 56
+        h = max(6, len(actives) + 5)
+        x, y = 4, 4
+        _panel(console, x, y, w, h, "Deeds & Abilities")
+        if not actives:
+            console.print(x + 2, y + 2,
+                          "You have learned no active deeds yet.", fg=color.gray)
+        for i, pk in enumerate(actives):
+            letter = chr(ord("a") + i)
+            cd = hero.cooldown_left(pk.id)
+            if hero.is_primed(pk.id):
+                state, col = "primed", color.hope_gain
+            elif cd > 0:
+                state, col = f"cooldown {cd}", color.dark_gray
+            else:
+                state, col = "ready", color.selected
+            console.print(x + 2, y + 2 + i,
+                          f"({letter}) {pk.active.name:<16} {state:<12}{pk.desc}"[:w - 4],
+                          fg=col)
+        console.print(x + 2, y + h - 1,
+                      " a-z use a ready deed · Esc close ", fg=color.gray)
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        hero = self.engine.player.hero
+        actives = hero.actives()
+        index = event.sym - KeySym.a
+        if 0 <= index < len(actives):
+            pk = actives[index]
+            if not hero.ability_ready(pk.id):
+                self.engine.message_log.add_message(
+                    f"{pk.active.name} is not ready.", color.impossible)
+                return None
+            self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
+            return MainGameEventHandler(self.engine)
+        return super().ev_keydown(event)
 
 
 # ===========================================================================
@@ -367,6 +509,8 @@ g          pick up what lies underfoot
 i          use or equip from your pack
 d          set down an item
 c          your character sheet
+p          your Paths & perks — spend perk points
+a          your active deeds (abilities on cooldown/charge)
 q          your errands and tidings
 ?          this help
 Esc        the wayfarer's menu

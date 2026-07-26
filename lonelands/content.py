@@ -193,32 +193,36 @@ def _beast(char, name, col, endurance, defence, attack_bonus, damage, xp,
 # resolve_roll). A `None` slice is "nothing"; a kill may resolve several rolls.
 # Danger and reward climb together — warg/orc-packs (Dark/Perilous bands) pay
 # best. Balance anchor: healing herb = 4 coins, short sword = 12.
-cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 3, "1d4", 0,
+# XP rewards (ADR-0005): every combat foe now grants experience, and levels come
+# thick and fast — the curve asks 20 XP for level 1→2, so ~4-5 routine kills earns
+# an early level. Reward tracks danger: weak skirmishers pay little, pack-hunters
+# and the barrow-wight pay best. (Anchor: level 1→2 = 20 XP; see character.xp_to_next.)
+cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 3, "1d4", 4,
                      desc="claws",
                      loot=[[(None, 60), (Coins(1, 2), 40)]])
-orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 4, "1d6", 0,
+orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 4, "1d6", 7,
                      soak=1, desc="hacks at",
                      loot=[
                          [(None, 35), (Coins(2, 4), 60), (Coins(4, 6), 5)],
                          [(None, 88), (orc_trophy, 12)],
                      ])
-orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 4, "1d4", 0,
+orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 4, "1d4", 5,
                     desc="looses at",
                     loot=[[(None, 50), (Coins(1, 3), 50)]])
-great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 4, "1d6", 0,
+great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 4, "1d6", 6,
                       bleed_on_hit=1, desc="bites",
                       loot=[[(None, 45), (spider_silk, 55)]])
-# The barrow-wight is the one foe worth experience: a tough, named undead that
-# only stirs in the deep barrow. Kept modest so quests remain the main path. It
-# keeps its XP and additionally drops a grave-hoard of coins.
-wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 6, "1d8+1", 10,
+# The barrow-wight is the deadliest routine foe: a tough, named undead that only
+# stirs in the deep barrow. It pays the richest XP of any foe and additionally
+# drops a grave-hoard of coins.
+wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 6, "1d8+1", 14,
                soak=2, bleed_on_hit=1, desc="chills",
                loot=[[(None, 40), (Coins(5, 10), 60)]])
 
-wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 4, "1d4", 0, ai=SkittishBeast,
+wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 4, "1d4", 5, ai=SkittishBeast,
               desc="snaps at",
               loot=[[(None, 35), (wolf_pelt, 60), (wolf_fang, 5)]])
-warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 0, bleed_on_hit=1,
+warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 8, bleed_on_hit=1,
               desc="savages",
               loot=[[(None, 25), (warg_pelt, 72), (wolf_fang, 3)]])
 
