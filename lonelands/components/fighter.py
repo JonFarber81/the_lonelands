@@ -85,6 +85,11 @@ class Fighter(BaseComponent):
 
     # --- Vitals -----------------------------------------------------------
     @property
+    def dead(self) -> bool:
+        """True once this fighter has been slain (its actor is now a corpse)."""
+        return self._dead
+
+    @property
     def endurance(self) -> int:
         return self._endurance
 

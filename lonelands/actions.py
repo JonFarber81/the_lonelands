@@ -192,11 +192,14 @@ class MeleeAction(ActionWithDirection):
 
 class BumpAction(ActionWithDirection):
     def perform(self) -> None:
-        # A friendly NPC is spoken to, never struck; anyone else with a fighter
-        # (the player included) is a valid combat target.
-        if self.target_actor and self.target_actor.npc is not None:
-            return TalkAction(self.entity, self.target_actor).perform()
-        if self.target_actor and self.target_actor.fighter:
+        # A friendly NPC is spoken to, never struck; anyone else with a living
+        # fighter (the player included) is a valid combat target. A corpse stays
+        # on the map as a dead actor with a fighter, so gate on `not dead` — that
+        # lets the player step onto the tile and pick up any loot underneath.
+        target = self.target_actor
+        if target and target.npc is not None:
+            return TalkAction(self.entity, target).perform()
+        if target and target.fighter and not target.fighter.dead:
             return MeleeAction(self.entity, self.dx, self.dy).perform()
         return MovementAction(self.entity, self.dx, self.dy).perform()
 
