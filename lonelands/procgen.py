@@ -10,6 +10,7 @@ so no map carries a "gate" tile any more — Enter is reserved for stairs and th
 barrow entrance (the vertical axis)."""
 from __future__ import annotations
 
+import math
 from typing import List, Tuple
 
 from lonelands import content, overworld, story, tile_types
@@ -258,11 +259,12 @@ def generate_weathertop(engine) -> GameMap:
 
     ruin_xy = (w - 6, ford_y)
 
-    # The old road runs west-edge -> ford -> the barrow, so the player arriving
-    # from Bree on the west can follow it east to the ruin.
+    # The Great East Road runs west-edge -> ford -> past the ruin to the east
+    # edge, so it threads continuously through Weathertop across both seams and
+    # the player can follow it on toward the Trollshaws (issue #14).
     for x in range(0, river_x - 1):
         gm.tiles[x, ford_y] = tile_types.road
-    for x in range(river_x + 3, ruin_xy[0] + 1):
+    for x in range(river_x + 3, w):
         gm.tiles[x, ford_y] = tile_types.road
 
     # The watchtower entrance (Enter here to descend into the watch-vaults).
@@ -352,6 +354,93 @@ _BAND_TERRAIN = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Road threading — lay the meandering roads of the plan across cell seams.
+# ---------------------------------------------------------------------------
+# The plan's roads are per-edge metadata (`overworld.ROAD_EDGES`, ADR 0003). A
+# road enters and leaves a cell at the **midpoint of the edge it crosses**, so
+# the shared midpoint is the same tile on both sides of a seam and the road meets
+# its neighbour there. Between edges the line bows through the cell centre with a
+# half-sine offset, so it meanders like the journey-map rather than running dead
+# straight. Where the line falls on water it lays a bridge/ford instead of
+# drowning. Endpoints (edge midpoint, centre) carry zero offset, keeping seams
+# tile-exact regardless of the meander.
+ROAD_ROW = MAP_HEIGHT // 2
+ROAD_COL = MAP_WIDTH // 2
+_EDGE_MIDPOINT = {
+    "w": (0, ROAD_ROW),
+    "e": (MAP_WIDTH - 1, ROAD_ROW),
+    "n": (ROAD_COL, 0),
+    "s": (ROAD_COL, MAP_HEIGHT - 1),
+}
+_ROAD_MEANDER = 4      # peak perpendicular bow, in tiles
+
+
+def _lay_road(gm: GameMap, x: int, y: int) -> None:
+    if not gm.in_bounds(x, y):
+        return
+    if int(gm.tiles["kind"][x, y]) == tile_types.KIND_WATER:
+        gm.tiles[x, y] = tile_types.bridge      # a ford/bridge over the water
+    else:
+        gm.tiles[x, y] = tile_types.road
+
+
+def _road_route(x0, y0, x1, y1, sign):
+    """A 4-connected tile path from (x0,y0) to (x1,y1), bowed perpendicular by a
+    half-sine (peak `_ROAD_MEANDER`, direction `sign`) so the road meanders."""
+    dx, dy = x1 - x0, y1 - y0
+    steps = max(abs(dx), abs(dy)) or 1
+    length = math.hypot(dx, dy) or 1.0
+    perp = (-dy / length, dx / length)
+    out: List[Tuple[int, int]] = []
+    last = None
+    for i in range(steps + 1):
+        t = i / steps
+        off = sign * _ROAD_MEANDER * math.sin(math.pi * t)
+        x = round(x0 + dx * t + perp[0] * off)
+        y = round(y0 + dy * t + perp[1] * off)
+        if last is not None and x != last[0] and y != last[1]:
+            out.append((last[0], y))    # a knee, so the run stays 4-connected
+        out.append((x, y))
+        last = (x, y)
+    return out
+
+
+def thread_road(gm: GameMap, coord: overworld.Coord) -> None:
+    """Paint the meandering road of the cell at `coord` onto its Surface, from
+    each crossed edge midpoint through the cell centre so it meets the
+    neighbouring Region's road across every seam (`overworld.ROAD_EDGES`)."""
+    edges = overworld.road_edges(coord)
+    if not edges:
+        return
+    tiles = set()
+    for i, edge in enumerate(sorted(edges)):
+        mx, my = _EDGE_MIDPOINT[edge]
+        sign = 1 if i % 2 == 0 else -1     # alternate the bow for an S-weave
+        tiles.update(_road_route(mx, my, ROAD_COL, ROAD_ROW, sign))
+    for x, y in tiles:                     # paint each once, off the original terrain,
+        _lay_road(gm, x, y)                # so a fording tile is not re-laid as dry road
+
+
+def snap_to_road(gm: GameMap, edge: str, near: Tuple[int, int]):
+    """The road/bridge tile on `edge` ('n'|'s'|'e'|'w') nearest to `near`, or
+    None if that edge carries no road — where a crossing player lands so they
+    arrive on the road (issue #14)."""
+    w, h = gm.width, gm.height
+    if edge in ("e", "w"):
+        col = w - 1 if edge == "e" else 0
+        line = [(col, y) for y in range(h)]
+    else:
+        row = h - 1 if edge == "s" else 0
+        line = [(x, row) for x in range(w)]
+    roads = [(x, y) for (x, y) in line
+             if int(gm.tiles["kind"][x, y]) == tile_types.KIND_ROAD]
+    if not roads:
+        return None
+    nx, ny = near
+    return min(roads, key=lambda p: abs(p[0] - nx) + abs(p[1] - ny))
+
+
 def generate_placeholder_surface(engine, cell) -> GameMap:
     """A walkable Surface built straight from a plan `Cell` — the generic filler
     that makes any un-authored grid cell enterable before its cluster refines it.
@@ -381,6 +470,10 @@ def generate_placeholder_surface(engine, cell) -> GameMap:
         edge_belt(gm, tile_types.hill, "n", 2, 0.7)
     if not overworld.is_walkable((x, y + 1)):
         edge_belt(gm, tile_types.hill, "s", 2, 0.7)
+
+    # Thread the plan's roads across the seams, after the terrain and borders so
+    # the road reads on top of them (and fords any water it crosses).
+    thread_road(gm, cell.coord)
 
     apply_band_beasts(gm, cell.band)
 

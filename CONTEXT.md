@@ -27,6 +27,16 @@ generic **placeholder surfaces** built from their plan `Cell` (band-tinted
 terrain + band-driven wandering beasts + a diegetic Sea/Mountain border where a
 neighbour is missing), to be refined cluster-by-cluster later.
 
+The **Great Roads** (the East Road, the Greenway, the Shire Road) are **edge
+metadata**, not decoration: `overworld.ROAD_EDGES` records, per cell, which of
+its four edges a road crosses (diagonal path steps staircase into orthogonal
+knees, since movement is 4-neighbour). Each road enters and leaves a cell at the
+**midpoint of the edge it crosses**, so the shared midpoint is the same tile on
+both sides of a seam and the road meets its neighbour there; between edges it
+meanders through the cell centre. A road that crosses water lays a **ford/bridge**
+so it never drowns. Crossing a road edge **snaps the player onto the road**, so
+the Great Roads stay continuous across every cluster seam.
+
 Landmarks around the Bree hub:
 
 - **Bree** `(0,0)` — the hub Region, the town at the meeting of the roads. Where
