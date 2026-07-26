@@ -23,6 +23,9 @@ class Consumable(BaseComponent):
     def consume(self) -> None:
         item = self.parent
         inventory = item.parent
+        if item.stackable and item.quantity > 1:
+            item.quantity -= 1
+            return
         if hasattr(inventory, "items") and item in inventory.items:
             inventory.items.remove(item)
 

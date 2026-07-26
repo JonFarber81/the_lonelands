@@ -223,11 +223,8 @@ class PickupAction(Action):
         inv = actor.inventory
         for item in list(self.engine.game_map.items):
             if item.x == x and item.y == y:
-                if len(inv.items) >= inv.capacity:
-                    raise Impossible("Your pack is full.")
+                inv.add(item)  # merges fungible stacks; raises if the pack is full
                 self.engine.game_map.entities.remove(item)
-                item.parent = inv
-                inv.items.append(item)
                 self.engine.message_log.add_message(f"You take the {item.name}.", color.item_c)
                 event = getattr(item, "pickup_event", None)
                 if event:

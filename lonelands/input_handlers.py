@@ -216,7 +216,8 @@ class InventorySelectHandler(AskUserHandler):
             for i, item in enumerate(items):
                 key = chr(ord("a") + i)
                 worn = " (worn)" if eq.item_is_equipped(item) else ""
-                console.print(x + 2, y + 2 + i, f"({key}) {item.char} {item.name}{worn}",
+                console.print(x + 2, y + 2 + i,
+                              f"({key}) {item.char} {item.name}{item.count_label}{worn}",
                               fg=color.menu_text)
         console.print(x + 2, y + h - 1, " a-z use/equip · Esc close ", fg=color.gray)
 
@@ -557,40 +558,80 @@ class DialogHandler(EventHandler):
 # Shop
 # ===========================================================================
 class ShopHandler(EventHandler):
-    def __init__(self, engine: "Engine", title: str, stock: List[Tuple["Item", int]]):
+    """A merchant's stall with a Buy view (the merchant's stock, priced at each
+    item's Value) and a Sell view (the hero's sellable items, priced at
+    `content.sell_price`). Tab toggles between the two."""
+
+    def __init__(self, engine: "Engine", title: str, stock: List["Item"]):
         super().__init__(engine)
         self.title = title
         self.stock = stock
+        self.mode = "buy"  # or "sell"
         self.cursor = 0
         engine.event_handler = self
 
+    # --- Views ------------------------------------------------------------
+    def _sell_items(self) -> List["Item"]:
+        from lonelands import content
+        return [it for it in self.engine.player.inventory.items
+                if content.sell_price(it) > 0]
+
+    def _rows(self) -> List[Tuple["Item", int]]:
+        """(item, price) pairs for the active view: buy = Value, sell = sell_price."""
+        from lonelands import content
+        if self.mode == "buy":
+            return [(it, it.value) for it in self.stock]
+        return [(it, content.sell_price(it)) for it in self._sell_items()]
+
     def on_render(self, console) -> None:
         self.engine.render(console)
-        w, h = 52, len(self.stock) + 7
+        rows = self._rows()
+        w, h = 52, max(len(rows), 1) + 7
         x = (SCREEN_WIDTH - w) // 2
         y = 6
         _panel(console, x, y, w, h, self.title)
         hero = self.engine.player.hero
-        console.print(x + 2, y + 1, f"Your purse: {hero.coins} coins", fg=color.gold_c)
-        for i, (item, price) in enumerate(self.stock):
+        verb = "Buy" if self.mode == "buy" else "Sell"
+        console.print(x + 2, y + 1,
+                      f"Your purse: {hero.coins} coins        [{verb}]", fg=color.gold_c)
+        if not rows:
+            console.print(x + 2, y + 3, "(nothing to sell)", fg=color.gray)
+        for i, (item, price) in enumerate(rows):
             sel = i == self.cursor
             fg = color.selected if sel else color.menu_text
-            afford = color.gold_c if hero.coins >= price else color.impossible
+            if self.mode == "buy":
+                afford = color.gold_c if hero.coins >= price else color.impossible
+            else:
+                afford = color.gold_c
             prefix = "> " if sel else "  "
-            console.print(x + 2, y + 3 + i, f"{prefix}{item.char} {item.name:<26}", fg=fg)
+            label = f"{prefix}{item.char} {item.name}{item.count_label}"
+            console.print(x + 2, y + 3 + i, label[:w - 14], fg=fg)
             console.print(x + w - 10, y + 3 + i, f"{price:>3} c", fg=afford)
-        console.print(x + 2, y + h - 1, " ↑/↓ · Enter buy · Esc leave ", fg=color.gray)
+        hint = (" Tab buy/sell · Enter buy · Esc leave "
+                if self.mode == "buy"
+                else " Tab buy/sell · Enter sell 1 · Shift+Enter sell all · Esc leave ")
+        console.print(x + 2, y + h - 1, hint, fg=color.gray)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        if event.sym in (KeySym.UP, KeySym.k):
-            self.cursor = (self.cursor - 1) % len(self.stock)
+        rows = self._rows()
+        if event.sym == KeySym.TAB:
+            self.mode = "sell" if self.mode == "buy" else "buy"
+            self.cursor = 0
             return None
-        if event.sym in (KeySym.DOWN, KeySym.j):
-            self.cursor = (self.cursor + 1) % len(self.stock)
-            return None
-        if event.sym in CONFIRM_KEYS:
-            self._buy()
-            return None
+        if rows:
+            if event.sym in (KeySym.UP, KeySym.k):
+                self.cursor = (self.cursor - 1) % len(rows)
+                return None
+            if event.sym in (KeySym.DOWN, KeySym.j):
+                self.cursor = (self.cursor + 1) % len(rows)
+                return None
+            if event.sym in CONFIRM_KEYS:
+                if self.mode == "buy":
+                    self._buy()
+                else:
+                    whole = bool(event.mod & tcod.event.Modifier.SHIFT)
+                    self._sell(whole_stack=whole)
+                return None
         if event.sym == KeySym.ESCAPE:
             self.engine.event_handler = MainGameEventHandler(self.engine)
             return self.engine.event_handler
@@ -598,21 +639,49 @@ class ShopHandler(EventHandler):
 
     def _buy(self) -> None:
         import copy
-        item, price = self.stock[self.cursor]
+        item = self.stock[self.cursor]
+        price = item.value
         hero = self.engine.player.hero
         inv = self.engine.player.inventory
         if hero.coins < price:
             self.engine.message_log.add_message("You cannot afford that.", color.impossible)
             return
-        if len(inv.items) >= inv.capacity:
-            self.engine.message_log.add_message("Your pack is full.", color.impossible)
+        clone = copy.deepcopy(item)
+        clone.quantity = 1
+        try:
+            inv.add(clone)
+        except Impossible as exc:
+            self.engine.message_log.add_message(str(exc), color.impossible)
             return
         hero.coins -= price
-        clone = copy.deepcopy(item)
-        clone.parent = inv
-        inv.items.append(clone)
         self.engine.message_log.add_message(
             f"You buy the {item.name} for {price} coins.", color.item_c)
+
+    def _sell(self, whole_stack: bool) -> None:
+        from lonelands import content
+        rows = self._rows()
+        if not rows:
+            return
+        item = rows[self.cursor][0]
+        hero = self.engine.player.hero
+        inv = self.engine.player.inventory
+        unit = content.sell_price(item)
+        count = item.quantity if (whole_stack and item.stackable) else 1
+        gained = unit * count
+        # Selling worn gear: take it off first.
+        eq = self.engine.player.equipment
+        if eq and eq.item_is_equipped(item):
+            eq.toggle_equip(item, add_message=False)
+        if item.stackable and item.quantity > count:
+            item.quantity -= count
+        else:
+            inv.remove(item)
+        hero.coins += gained
+        noun = item.name if count == 1 else f"{count}× {item.name}"
+        self.engine.message_log.add_message(
+            f"You sell {noun} for {gained} coins.", color.gold_c)
+        if self.cursor >= len(self._rows()) and self.cursor > 0:
+            self.cursor -= 1
 
 
 # ===========================================================================

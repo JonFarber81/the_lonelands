@@ -231,11 +231,12 @@ def make_halbarad() -> Actor:
 
     def open_shop(engine):
         from lonelands import input_handlers
+        # Stock is item references; buy/sell prices derive from each item's Value.
         stock = [
-            (content.short_sword, 12), (content.war_spear, 10), (content.buckler, 8),
-            (content.leather_gear, 10), (content.travellers_hood, 6),
-            (content.healing_herbs, 4), (content.athelas, 6), (content.lembas, 3),
-            (content.hunting_dagger, 7),
+            content.short_sword, content.war_spear, content.buckler,
+            content.leather_gear, content.travellers_hood,
+            content.healing_herbs, content.athelas, content.lembas,
+            content.hunting_dagger,
         ]
         return input_handlers.ShopHandler(engine, "Halbarad's stores", stock)
 

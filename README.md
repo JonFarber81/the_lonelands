@@ -41,9 +41,15 @@ is absent the map falls back to the font's own glyphs, so the game always runs.
   **Piercing Blow** → Protection test vs the weapon's Injury → a **Wound**.
 - **Quests & dialog trees**: a main quest (recover the star-brooch of Arnor) and
   two side quests, given and resolved through branching conversations.
-- **Equipment, inventory, a shop, consumables** (athelas mends wounds), and
+- **Equipment, inventory, consumables** (athelas mends wounds), and
   Middle-earth-appropriate creatures (orcs, cave-goblins, great spiders, wargs,
   a barrow-wight in the deep).
+- **A living economy** (see `docs/adr/0004`): slain foes drop **loot** — coins
+  into your purse, sellable **trade-goods** (pelts, spider-silk, orc-trophies)
+  onto the corpse tile. Haul them back to **Halbarad's shop** in Bree and toggle
+  to the **Sell** view (`Tab`) to turn them into coin; fungible goods and
+  consumables **stack** (`×N`). Every item carries a Value the merchant buys and
+  sells against — so the kill → loot → sell → spend loop is closed.
 - **A single-slot save**: pause with `Esc` to save-and-continue or save-and-quit,
   and pick up where you left off from the title screen's **Continue** option.
 
