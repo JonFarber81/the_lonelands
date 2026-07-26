@@ -1,17 +1,23 @@
 """Combat component shared by the player and all creatures.
 
 Endurance is the vitality pool (reaching 0 fells the combatant). Combat uses the
-TOR feat+success dice: an attack is a proficiency test against the defender's
-Parry-derived TN; a *great* success threatens a Piercing Blow, which forces a
-Protection test against the weapon's Injury rating or inflicts a Wound."""
+d20 core: an attack is ``d20 + attack bonus vs the defender's Defence``; on a hit
+the attacker rolls weapon damage and subtracts the defender's Soak. A natural 20
+is a Critical (auto-hit, bonus damage, and a Bleed); a natural 1 is a Fumble
+(auto-miss). Bleed is a damage-over-time status ticked once per round."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union
 
 from lonelands import color
 from lonelands.components.base_component import BaseComponent
-from lonelands.dice import rng, skill_check
+from lonelands.dice import rng
 from lonelands.render_order import RenderOrder
+
+# Bleed: each remaining stack ticks this much Endurance at the start of the
+# bearer's round, then decays by one. Crits (and heavy foes) apply fresh stacks.
+BLEED_DAMAGE = 2
+CRIT_BLEED = 2  # Bleed stacks a Critical opens on the target
 
 if TYPE_CHECKING:
     from lonelands.entity import Actor, Item
@@ -54,14 +60,12 @@ class Fighter(BaseComponent):
     def __init__(
         self,
         endurance: int,
-        defence: int,          # base TN an attacker must meet to hit
-        prowess: int,          # natural attack success dice (unarmed / monster)
-        damage: int,           # natural weapon damage
+        defence: int,               # base Defence: the TN an attacker must hit
+        attack_bonus: int,          # base bonus added to this fighter's d20 attack
+        damage: Union[int, str],    # natural weapon damage (flat or dice notation)
         *,
-        attack: int = 12,      # TN the player's Parry test must meet when this foe strikes
-        edge: int = 1,
-        injury: int = 14,
-        protection: int = 0,   # natural armour success dice
+        soak: int = 0,              # armour Soak subtracted from incoming damage
+        bleed_on_hit: int = 0,      # Bleed stacks a heavy foe inflicts on any hit
         attack_desc: str = "strikes",
         xp_reward: int = 0,
         corpse_char: str = "%",
@@ -70,17 +74,15 @@ class Fighter(BaseComponent):
         self.max_endurance = endurance
         self._endurance = endurance
         self.base_defence = defence
-        self.base_attack = attack
-        self.base_prowess = prowess
+        self.base_attack_bonus = attack_bonus
         self.base_damage = damage
-        self.base_edge = edge
-        self.base_injury = injury
-        self.base_protection = protection
+        self.base_soak = soak
+        self.bleed_on_hit = bleed_on_hit
         self.attack_desc = attack_desc
         self.xp_reward = xp_reward
         self.corpse_char = corpse_char
         self.loot = loot
-        self.wounded = False
+        self.bleed = 0  # remaining Bleed stacks
         self._dead = False
 
     # --- Vitals -----------------------------------------------------------
@@ -122,47 +124,24 @@ class Fighter(BaseComponent):
     def defence(self) -> int:
         eq = getattr(self.parent, "equipment", None)
         bonus = eq.defence_bonus if eq else 0
-        penalty = 2 if self.wounded else 0
-        return self.base_defence + bonus - penalty
+        return self.base_defence + bonus
 
     @property
-    def attack(self) -> int:
-        """The TN the player's Parry test must meet to turn this foe's blow
-        aside. A wounded foe strikes less surely."""
-        penalty = 2 if self.wounded else 0
-        return self.base_attack - penalty
+    def attack_bonus(self) -> int:
+        """The bonus added to this fighter's d20 attack roll. (Attribute- and
+        perk-derived bonuses land in Phase 2; for now it is the base value.)"""
+        return self.base_attack_bonus
 
     @property
-    def protection(self) -> int:
+    def soak(self) -> int:
         eq = getattr(self.parent, "equipment", None)
-        bonus = eq.protection_bonus if eq else 0
-        return self.base_protection + bonus
+        bonus = eq.soak_bonus if eq else 0
+        return self.base_soak + bonus
 
     @property
-    def prowess(self) -> int:
-        weapon = self._weapon
-        hero = getattr(self.parent, "hero", None)
-        base = self.base_prowess
-        if weapon is not None and hero is not None and weapon.proficiency:
-            base = hero.proficiencies.get(weapon.proficiency, 0)
-        if self.wounded:
-            base = max(0, base - 1)
-        return base
-
-    @property
-    def damage(self) -> int:
+    def damage(self) -> Union[int, str]:
         weapon = self._weapon
         return weapon.damage if weapon is not None else self.base_damage
-
-    @property
-    def edge(self) -> int:
-        weapon = self._weapon
-        return weapon.edge if weapon is not None else self.base_edge
-
-    @property
-    def injury(self) -> int:
-        weapon = self._weapon
-        return weapon.injury if weapon is not None else self.base_injury
 
     @property
     def weapon_name(self) -> str:
@@ -171,18 +150,21 @@ class Fighter(BaseComponent):
             return eq.weapon.name
         return "bare hands"
 
-    # --- Resolution -------------------------------------------------------
-    def protection_test(self, injury_tn: int) -> bool:
-        result = skill_check(injury_tn, self.protection)
-        self.engine.note_roll(result, self.parent)  # tray shows the player's saves
-        return result.is_success
+    # --- Statuses ---------------------------------------------------------
+    def apply_bleed(self, stacks: int) -> None:
+        """Add Bleed stacks (each ticks ``BLEED_DAMAGE`` at the bearer's round)."""
+        if stacks > 0:
+            self.bleed += stacks
 
-    def inflict_wound(self) -> bool:
-        """Returns True if the wound is mortal."""
-        if self.wounded:
-            return True
-        self.wounded = True
-        return False
+    def tick_bleed(self) -> int:
+        """Bleed for one round: deal ``BLEED_DAMAGE`` and decay a stack. Returns
+        the Endurance lost (0 if not bleeding)."""
+        if self.bleed <= 0 or self._dead:
+            return 0
+        self.bleed -= 1
+        before = self._endurance
+        self.take_damage(BLEED_DAMAGE)
+        return before - self._endurance
 
     def die(self) -> None:
         engine = self.engine

@@ -70,7 +70,7 @@ class HopeConsumable(Consumable):
 
 
 class RemedyConsumable(Consumable):
-    """Athelas: heals endurance and mends a Wound."""
+    """Athelas: heals endurance and staunches Bleed."""
 
     def __init__(self, amount: int):
         self.amount = amount
@@ -79,10 +79,10 @@ class RemedyConsumable(Consumable):
         consumer = action.entity
         fighter = consumer.fighter
         did_something = False
-        if fighter.wounded:
-            fighter.wounded = False
+        if fighter.bleed > 0:
+            fighter.bleed = 0
             self.engine.message_log.add_message(
-                f"The clean scent of {self.parent.name} closes your wound.",
+                f"The clean scent of {self.parent.name} staunches your bleeding.",
                 color.health_recovered,
             )
             did_something = True

@@ -175,8 +175,7 @@ def make_healer() -> Actor:
     def heal(engine):
         p = engine.player
         healed = p.fighter.heal(p.fighter.max_endurance)
-        if p.fighter.wounded:
-            p.fighter.wounded = False
+        p.fighter.bleed = 0
         restored = p.hero.restore_hope(4)
         engine.message_log.add_message(
             f"The herb-wife's care mends you (+{healed} endurance, +{restored} Hope).",
