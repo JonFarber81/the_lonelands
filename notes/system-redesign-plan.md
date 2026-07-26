@@ -8,7 +8,7 @@ is a self-contained slice (one PR, or a small handful) that leaves `main`
 playable. Phases 1→2→3 are the spine and go in order; 4 and 5 can run in parallel
 once 2 lands; 6 sits on top of 5.
 
-**Progress:** Phases 1–5 have **landed** on `main`; Phase 6 remains.
+**Progress:** all six phases have **landed** on `main`; the redesign is complete.
 
 ---
 
@@ -67,7 +67,7 @@ once 2 lands; 6 sits on top of 5.
 - `components/equipment.py`: aggregate the new bonuses.
 - Tests: equip/aggregate, a Unique, an accessory plus.
 
-## Phase 6 — affix generator (procedural loot) *(needs Phase 5)*
+## Phase 6 — affix generator (procedural loot)  ✅ **landed**  *(needs Phase 5)*
 - New `affixes.py`: **prefix**/**suffix** pools, a **rarity** roll (Plain/Fine/
   Rare), name assembly (`a keen longsword of warding`), full stat line **visible
   on pickup** (no ID).
