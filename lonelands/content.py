@@ -66,12 +66,13 @@ def make_player() -> Actor:
 # not sold in Bree keep Value 0 (not sellable) for now — selling gear you can't
 # rebuy is deferred (issue #31, out of scope).
 def _weapon(name, char, dmg, load, *, attack_bonus=0, pierce=0,
-            bonus_vs="", bonus_vs_damage=0, desc="", value=0) -> Item:
+            bonus_vs="", bonus_vs_damage=0, desc="", value=0, unique=False) -> Item:
     return Item(
         char=char, color=color.weapon_c, name=name, description=desc, value=value,
         equippable=Equippable(
             EquipmentType.WEAPON, load=load, damage=dmg, attack_bonus=attack_bonus,
             pierce=pierce, bonus_vs=bonus_vs, bonus_vs_damage=bonus_vs_damage,
+            unique=unique,
         ),
     )
 
@@ -145,7 +146,7 @@ elven_brooch = Item(
 # ---------------------------------------------------------------------------
 angolar = _weapon(
     "Angolar, the Ford-blade", "/", "2d6", 2, attack_bonus=2, pierce=1,
-    bonus_vs="orc", bonus_vs_damage=2, value=120,
+    bonus_vs="orc", bonus_vs_damage=2, value=120, unique=True,
     desc="A grey Númenórean blade drawn from the Brandywine ford, its edge cold "
          "against the Enemy's brood. Runes name it Angolar.",
 )
@@ -153,14 +154,14 @@ mail_of_the_last_watch = Item(
     char="[", color=(0xB6, 0xBE, 0xC8), name="Mail of the Last Watch", value=110,
     description="A hauberk of star-silver rings borne by the last warden of Amon "
                 "Sûl; blows turn from it as rain from stone.",
-    equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=3),
+    equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=3, unique=True),
 )
 cloak_of_lorien = Item(
     char="(", color=(0x7C, 0xA6, 0x86), name="Grey Mantle of Lórien", value=90,
     description="A leaf-woven cloak out of the Golden Wood; the wearer walks "
                 "unseen and thinks the clearer for it.",
     equippable=Equippable(EquipmentType.ACCESSORY, attributes={"Wits": 1},
-                          stealth_bonus=3, path_synergy="the Hidden Path"),
+                          stealth_bonus=3, path_synergy="the Hidden Path", unique=True),
 )
 
 UNIQUES: List[Item] = [angolar, mail_of_the_last_watch, cloak_of_lorien]

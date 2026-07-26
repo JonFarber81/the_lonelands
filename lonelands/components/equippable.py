@@ -43,6 +43,9 @@ class Equippable(BaseComponent):
         stealth_bonus: int = 0,   # sharpens the (future) stealth/detection layer
         path_synergy: str = "",   # a Path this token favours (flavour + future hooks)
         ability_charges: int = 0, # spare charges lent to Path actives (future hook)
+        # A hand-authored named Unique sits *outside* the Plain/Fine/Rare affix
+        # bands (ADR 0005); the affix generator never enchants it (see affixes.py).
+        unique: bool = False,
     ) -> None:
         self.equipment_type = equipment_type
         self.load = load
@@ -58,6 +61,7 @@ class Equippable(BaseComponent):
         self.stealth_bonus = stealth_bonus
         self.path_synergy = path_synergy
         self.ability_charges = ability_charges
+        self.unique = unique
 
     @property
     def is_weapon(self) -> bool:
