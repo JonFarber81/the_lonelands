@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from typing import List, Tuple
 
-from lonelands import content, overworld, story, tile_types
+from lonelands import affixes, content, overworld, story, tile_types
 from lonelands.config import MAP_HEIGHT, MAP_WIDTH
 from lonelands.dice import rng
 from lonelands.entity import Item
@@ -730,4 +730,7 @@ def _populate_room(gm: GameMap, room: RectRoom, depth: int) -> None:
     for _ in range(n_items):
         spot = free_spot()
         if spot and any(it.x == spot[0] and it.y == spot[1] for it in gm.items) is False:
-            _weighted(i_table).spawn(gm, *spot)
+            dropped = _weighted(i_table).spawn(gm, *spot)
+            # Ordinary gear rolls a rarity and its affixes here (ADR 0005, #40);
+            # consumables and hand-authored Uniques are passed over untouched.
+            affixes.apply_affixes(dropped, depth=depth)

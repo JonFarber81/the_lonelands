@@ -270,7 +270,11 @@ class Fighter(BaseComponent):
                     f"You take {amount} coins from the {foe_name}.", color.gold_c
                 )
             else:  # an Item template to drop on the corpse tile
-                outcome.spawn(engine.game_map, self.parent.x, self.parent.y)
+                from lonelands import affixes
+                dropped = outcome.spawn(engine.game_map, self.parent.x, self.parent.y)
+                # Gear a foe drops rolls its own rarity + affixes (ADR 0005, #40);
+                # coins and trade-goods are passed over untouched.
+                affixes.apply_affixes(dropped)
                 engine.message_log.add_message(
-                    f"The {foe_name} leaves {outcome.name} behind.", color.item_c
+                    f"The {foe_name} leaves {dropped.name} behind.", color.item_c
                 )
