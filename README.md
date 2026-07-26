@@ -1,7 +1,7 @@
 # The Lonelands
 
-A text-and-glyph roguelike in the style of *Brogue* and *Cogmind*, set in
-**Eriador in TA 2965** and powered by mechanics adapted from **The One Ring** TTRPG.
+A Dwarf-Fortress-style CP437 roguelike set in **Eriador in TA 2965** and powered
+by mechanics adapted from **The One Ring** TTRPG.
 
 You play **Tarandir**, a lone **Ranger of the North** whom the Bree-folk call
 **Greycloak** (a single player-hero, TOR's solo **"Strider mode"**), walking out
@@ -16,13 +16,20 @@ python3 -m pip install -r requirements.txt   # tcod + numpy
 python3 main.py
 ```
 
-Rendered with SF Mono (or another system monospace) for crisp, coloured glyphs.
+The map and its creatures are drawn from a **Wanderlust** 16×16 CP437 tilesheet
+(a Dwarf-Fortress-style sheet, kept local — see
+`lonelands/assets/tiles/README.md`); prose, menus, and the dice tray render from
+the bundled **Atkinson Hyperlegible Mono** font via FreeType. If the tilesheet
+is absent the map falls back to the font's own glyphs, so the game always runs.
 
 ## What's in this slice
 
-- **Three connected worlds**: the town hub (safe, with speaking NPCs), the
-  wilderness overworld (river, ford, roaming wolves), and a **3-level barrow**
-  dungeon (rooms-and-corridors, depth-scaled monsters and loot).
+- **A grid of Regions** (see `docs/adr/0002`): **Bree**, the town hub with
+  speaking NPCs and a shop, sits at the centre of a plus, edge-connected to the
+  **Weather Hills** (east, holding the barrow entrance), the **Barrow-downs**
+  (west), the **Chetwood** (north), and the **South Downs** (south). Below the
+  Weather Hills lies a **3-level barrow** dungeon (rooms-and-corridors,
+  depth-scaled monsters and loot).
 - **The One Ring dice**: every deed is a Feat die (d12) + Success dice (d6),
   with the **Gandalf rune** (auto-success), the **Eye of Sauron**, **tengwar**
   great-successes, and the **Weary** condition. See the bottom of the log for
@@ -37,6 +44,8 @@ Rendered with SF Mono (or another system monospace) for crisp, coloured glyphs.
 - **Equipment, inventory, a shop, consumables** (athelas mends wounds), and
   Middle-earth-appropriate creatures (orcs, cave-goblins, great spiders, wargs,
   a barrow-wight in the deep).
+- **A single-slot save**: pause with `Esc` to save-and-continue or save-and-quit,
+  and pick up where you left off from the title screen's **Continue** option.
 
 ## Controls
 
@@ -51,28 +60,39 @@ Rendered with SF Mono (or another system monospace) for crisp, coloured glyphs.
 | `c` | character sheet (`a` = spend XP) |
 | `q` | errands (quests) |
 | `?` | help |
-| `Esc` | menu |
+| `Esc` | pause menu — save & continue, save & quit, or quit |
 
 ## Layout of the code
 
 ```
-main.py              entry point + tcod context / font loading
+main.py              entry point + tcod context / resize loop
 lonelands/
+  config.py          screen/layout constants, font + tileset candidates
+  fonts.py           FreeType TTF auto-fit + CP437 tilesheet loading
+  tile_glyphs.py     map/entity char → tilesheet code-point mapping
   dice.py            The One Ring feat + success dice engine
+  dice_glyphs.py     die-face glyphs for the dice tray
   tor.py             attributes, skills, proficiencies, TN mapping
   content.py         player, creatures, weapons, armour, consumables (templates)
-  story.py           quests, NPCs, and dialog trees
-  procgen.py         town / overworld / barrow generation
-  world.py           the multi-map world + travel between maps
+  story.py           NPCs and dialog trees
+  quests.py          quest definitions + quest log
+  procgen.py         Bree / wilderness / barrow generation
+  world.py           the Region grid + travel between Regions and Levels
+  game_map.py        one map's tiles + entities
+  entity.py          the base entity + actor plumbing
   engine.py          turn loop, FOV, rendering orchestration
+  actions.py         player/actor actions
   input_handlers.py  all game states (main game, dialog, shop, sheet, menus…)
+  setup_game.py      new-game construction
+  savegame.py        single-slot save / load / delete
   components/        fighter, hero, ai, inventory, equipment, consumable, npc
   tile_types.py      numpy tiles with lit / remembered graphics
   render_functions.py the sidebar, banners, bars
+  message_log.py     the scrolling Chronicle
 ```
 
 ## Designed to grow
 
 This is a deliberately small, fully-wired vertical slice. Natural next steps:
 ranged archery, the Journey/Travel minigame, Fellowship-phase downtime, more of
-Eriador (Bree, the Barrow-downs, Rivendell), Shadow & Corruption, and saving.
+Eriador (the wider Barrow-downs, Rivendell), and Shadow & Corruption.

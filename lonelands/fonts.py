@@ -130,7 +130,7 @@ def _die_box(width: int, height: int) -> tuple[int, int, int]:
     """Return (x0, y0, side) of a square die centred in the canvas.
 
     ``width`` here is the *canvas* width — a die spans two cells, so this is
-    twice the tile width, giving the face room for legible pips.
+    twice the tile width, giving the face room for a legible numeral.
     """
     side = min(width - 2, height - 4)
     side = max(6, side)
@@ -149,31 +149,6 @@ def _draw_die_frame(cell: "np.ndarray", width: int, height: int) -> tuple[int, i
     for cx, cy in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
         cell[cy, cx] = 70  # knock back the corners for a rounded feel
     return x0, y0, x1, y1
-
-
-def _pip(cell: "np.ndarray", cx: int, cy: int, r: int) -> None:
-    h, w = cell.shape
-    for yy in range(cy - r, cy + r + 1):
-        for xx in range(cx - r, cx + r + 1):
-            if 0 <= yy < h and 0 <= xx < w and (xx - cx) ** 2 + (yy - cy) ** 2 <= r * r + r:
-                cell[yy, xx] = 255
-
-
-def _draw_pips(cell, box, value, side):
-    x0, y0, x1, y1 = box
-    inset = max(2, side // 5)
-    r = max(1, side // 10)
-    cxl, cxr, cxm = x0 + inset, x1 - inset, (x0 + x1) // 2
-    cyt, cyb, cym = y0 + inset, y1 - inset, (y0 + y1) // 2
-    layouts = {
-        1: [(cxm, cym)],
-        2: [(cxl, cyt), (cxr, cyb)],
-        3: [(cxl, cyt), (cxm, cym), (cxr, cyb)],
-        4: [(cxl, cyt), (cxr, cyt), (cxl, cyb), (cxr, cyb)],
-        5: [(cxl, cyt), (cxr, cyt), (cxm, cym), (cxl, cyb), (cxr, cyb)],
-    }
-    for px, py in layouts[value]:
-        _pip(cell, px, py, r)
 
 
 def _rasterize(face, ch: str, px: int) -> "np.ndarray":
@@ -212,7 +187,8 @@ def _blit_center(cell, art, box) -> None:
         cell[oy : oy + h, ox : ox + w] = np.maximum(cell[oy : oy + h, ox : ox + w], art[:h, :w])
 
 
-def _feat_numeral(width, height, face, value) -> "np.ndarray":
+def _numeral_face(width, height, face, value) -> "np.ndarray":
+    """A die frame carrying its value as a centred numeral (rather than pips)."""
     cell = np.zeros((height, width), dtype=np.uint8)
     box = _draw_die_frame(cell, width, height)
     x0, y0, x1, y1 = box
@@ -276,13 +252,10 @@ def _gandalf(width, height) -> "np.ndarray":
     return cell
 
 
-def _success_art(canvas_w, height, v) -> "np.ndarray":
+def _success_art(canvas_w, height, face, v) -> "np.ndarray":
     if v == 6:
-        return _tengwar(canvas_w, height)
-    cell = np.zeros((height, canvas_w), dtype=np.uint8)
-    box = _draw_die_frame(cell, canvas_w, height)
-    _draw_pips(cell, box, v, _die_box(canvas_w, height)[2])
-    return cell
+        return _tengwar(canvas_w, height)  # the great-success rune, not a "6"
+    return _numeral_face(canvas_w, height, face, v)
 
 
 def _feat_art(canvas_w, height, face, v) -> "np.ndarray":
@@ -290,27 +263,36 @@ def _feat_art(canvas_w, height, face, v) -> "np.ndarray":
         return _eye(canvas_w, height)
     if v == 12:
         return _gandalf(canvas_w, height)
-    return _feat_numeral(canvas_w, height, face, v)
+    return _numeral_face(canvas_w, height, face, v)
 
 
-def _bake_split(tileset, codepoints, art, width) -> None:
-    """Bake a two-cell-wide die: its left half and right half as adjacent tiles."""
-    left_cp, right_cp = codepoints
-    tileset.set_tile(left_cp, np.ascontiguousarray(art[:, :width]))
-    tileset.set_tile(right_cp, np.ascontiguousarray(art[:, width : width * 2]))
+def _bake_block(tileset, codepoints, art, width, height) -> None:
+    """Bake a 2×2 die: split the canvas into four cell tiles (TL, TR, BL, BR)."""
+    tl, tr, bl, br = codepoints
+    quads = {
+        tl: art[:height, :width],
+        tr: art[:height, width : width * 2],
+        bl: art[height : height * 2, :width],
+        br: art[height : height * 2, width : width * 2],
+    }
+    for cp, quad in quads.items():
+        tileset.set_tile(cp, np.ascontiguousarray(quad))
 
 
 def _bake_dice(tileset, face, width, height) -> None:
-    canvas_w = width * dice_glyphs.DIE_CELLS  # each die spans two cells
+    # Each die spans a DIE_COLS×DIE_ROWS block of cells; draw the art on a canvas
+    # that large so the numeral faces read clearly, then split it into cell tiles.
+    canvas_w = width * dice_glyphs.DIE_COLS
+    canvas_h = height * dice_glyphs.DIE_ROWS
     for v in dice_glyphs.SUCCESS_VALUES:
-        _bake_split(
+        _bake_block(
             tileset, dice_glyphs.success_codepoints(v),
-            _success_art(canvas_w, height, v), width,
+            _success_art(canvas_w, canvas_h, face, v), width, height,
         )
     for v in dice_glyphs.FEAT_VALUES:
-        _bake_split(
+        _bake_block(
             tileset, dice_glyphs.feat_codepoints(v),
-            _feat_art(canvas_w, height, face, v), width,
+            _feat_art(canvas_w, canvas_h, face, v), width, height,
         )
 
 

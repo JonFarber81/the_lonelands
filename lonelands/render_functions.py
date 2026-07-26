@@ -103,6 +103,17 @@ def render_dice_tray(console, engine: "Engine") -> None:
         console.print(x=ix, y=TRAY_Y, string="the dice lie still", fg=color.dark_gray)
         return
 
+    # Dice are two cells wide and two cells tall; we print the top row on TRAY_Y
+    # and the bottom row just beneath it. Their internal padding separates
+    # adjacent dice, so no gaps are needed.
+    top_y, bot_y = TRAY_Y, TRAY_Y + 1
+
+    def blit_die(x: int, rows: tuple[str, str], fg) -> int:
+        top, bot = rows
+        console.print(x=x, y=top_y, string=top, fg=fg)
+        console.print(x=x, y=bot_y, string=bot, fg=fg)
+        return x + dice_glyphs.DIE_CELLS
+
     x = ix
     # Feat die.
     if roll.is_gandalf:
@@ -111,9 +122,7 @@ def render_dice_tray(console, engine: "Engine") -> None:
         feat_fg = color.sauron_eye
     else:
         feat_fg = color.light_gray
-    # Dice are two cells wide; their internal padding separates them, so no gaps.
-    console.print(x=x, y=TRAY_Y, string=dice_glyphs.feat_chars(roll.feat_raw), fg=feat_fg)
-    x += dice_glyphs.DIE_CELLS
+    x = blit_die(x, dice_glyphs.feat_rows(roll.feat_raw), feat_fg)
 
     # Success dice.
     for d in roll.success_dice:
@@ -123,18 +132,15 @@ def render_dice_tray(console, engine: "Engine") -> None:
             fg = color.dark_gray  # Weary nullifies 1-3 — draw them spent.
         else:
             fg = color.light_gray
-        console.print(x=x, y=TRAY_Y, string=dice_glyphs.success_chars(d), fg=fg)
-        x += dice_glyphs.DIE_CELLS
+        x = blit_die(x, dice_glyphs.success_rows(d), fg)
     if not roll.success_dice:
-        console.print(x=x, y=TRAY_Y, string="·", fg=color.dark_gray)
+        console.print(x=x, y=bot_y, string="·", fg=color.dark_gray)
         x += 1
 
-    # Total vs TN.
-    tail = f"  = {roll.total}  vs {roll.tn}   "
-    console.print(x=x, y=TRAY_Y, string=tail, fg=color.gray)
-    x += len(tail)
+    # Total vs TN on the top row; the verdict stacked beneath it.
+    x += 2
+    console.print(x=x, y=top_y, string=f"= {roll.total}  vs {roll.tn}", fg=color.gray)
 
-    # Verdict.
     if not roll.is_success:
         word, fg = ("MISS", color.sauron_eye if roll.is_eye else color.gray)
     elif roll.is_extraordinary:
@@ -143,7 +149,7 @@ def render_dice_tray(console, engine: "Engine") -> None:
         word, fg = ("GREAT", color.tengwar)
     else:
         word, fg = ("SUCCESS", color.success_roll)
-    console.print(x=x, y=TRAY_Y, string=word, fg=fg)
+    console.print(x=x, y=bot_y, string=word, fg=fg)
 
 
 def render_sidebar(console, engine: "Engine") -> None:

@@ -15,7 +15,7 @@ context.
 
 Like :mod:`lonelands.dice_glyphs` this module is pure constants so ``tile_types``
 can import it without pulling in FreeType. Its range is kept clear of the dice
-codepoints (0xE000–0xE04D).
+codepoints (0xE000–0xE05B).
 """
 from __future__ import annotations
 
