@@ -6,15 +6,46 @@ Parry-derived TN; a *great* success threatens a Piercing Blow, which forces a
 Protection test against the weapon's Injury rating or inflicts a Wound."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union
 
 from lonelands import color
 from lonelands.components.base_component import BaseComponent
-from lonelands.dice import skill_check
+from lonelands.dice import rng, skill_check
 from lonelands.render_order import RenderOrder
 
 if TYPE_CHECKING:
-    from lonelands.entity import Actor
+    from lonelands.entity import Actor, Item
+
+
+class Coins:
+    """A loot outcome that pays coins straight into the purse: a whole-number
+    range [lo, hi] (inclusive)."""
+
+    __slots__ = ("lo", "hi")
+
+    def __init__(self, lo: int, hi: Optional[int] = None) -> None:
+        self.lo = lo
+        self.hi = lo if hi is None else hi
+
+
+# A single roll is a weighted list of outcomes — each outcome a `Coins` payout,
+# an `Item` template to drop, or `None` (nothing). A loot table is a list of such
+# independent rolls; a kill may resolve several.
+Outcome = Union[Coins, "Item", None]
+Roll = Sequence[Tuple[Outcome, int]]
+LootTable = List[Roll]
+
+
+def resolve_roll(roll: Roll) -> Outcome:
+    """Pick one outcome from a single weighted roll."""
+    total = sum(w for _, w in roll)
+    r = rng.uniform(0, total)
+    upto = 0.0
+    for outcome, weight in roll:
+        upto += weight
+        if r <= upto:
+            return outcome
+    return roll[-1][0]
 
 
 class Fighter(BaseComponent):
@@ -34,6 +65,7 @@ class Fighter(BaseComponent):
         attack_desc: str = "strikes",
         xp_reward: int = 0,
         corpse_char: str = "%",
+        loot: Optional[LootTable] = None,
     ) -> None:
         self.max_endurance = endurance
         self._endurance = endurance
@@ -47,6 +79,7 @@ class Fighter(BaseComponent):
         self.attack_desc = attack_desc
         self.xp_reward = xp_reward
         self.corpse_char = corpse_char
+        self.loot = loot
         self.wounded = False
         self._dead = False
 
@@ -164,6 +197,7 @@ class Fighter(BaseComponent):
                     f"You gain {self.xp_reward} experience.", color.xp_filled
                 )
             engine.quest_log.notify_kill(self.parent.name, engine)
+            self._resolve_loot()
 
         self.parent.char = self.corpse_char
         self.parent.color = (0x7A, 0x30, 0x2A)
@@ -171,3 +205,31 @@ class Fighter(BaseComponent):
         self.parent.ai = None
         self.parent.name = f"remains of {self.parent.name}"
         self.parent.render_order = RenderOrder.CORPSE
+
+    def _resolve_loot(self) -> None:
+        """Resolve this creature's loot table (called while the corpse still
+        carries its living name and position). Coins go straight to the purse;
+        trade-goods spawn onto the corpse tile to be picked up."""
+        if not self.loot:
+            return
+        engine = self.engine
+        hero = engine.player.hero
+        foe_name = self.parent.name
+        for roll in self.loot:
+            outcome = resolve_roll(roll)
+            if outcome is None:
+                continue
+            if isinstance(outcome, Coins):
+                amount = rng.randint(outcome.lo, outcome.hi)
+                if amount <= 0:
+                    continue
+                if hero is not None:
+                    hero.coins += amount
+                engine.message_log.add_message(
+                    f"You take {amount} coins from the {foe_name}.", color.gold_c
+                )
+            else:  # an Item template to drop on the corpse tile
+                outcome.spawn(engine.game_map, self.parent.x, self.parent.y)
+                engine.message_log.add_message(
+                    f"The {foe_name} leaves {outcome.name} behind.", color.item_c
+                )

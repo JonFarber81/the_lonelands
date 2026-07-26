@@ -11,11 +11,24 @@ from lonelands.components import consumable
 from lonelands.components.ai import HostileEnemy, SkittishBeast
 from lonelands.components.equipment import Equipment
 from lonelands.components.equippable import Equippable
-from lonelands.components.fighter import Fighter
+from lonelands.components.fighter import Coins, Fighter
 from lonelands.components.hero import Hero
 from lonelands.components.inventory import Inventory
 from lonelands.entity import Actor, Item
 from lonelands.equipment_types import EquipmentType
+
+# ---------------------------------------------------------------------------
+# Economy: a merchant sells at an item's Value and buys it back at a fraction.
+# ---------------------------------------------------------------------------
+SELL_FRACTION = 0.5
+
+
+def sell_price(item: Item) -> int:
+    """What a merchant pays the hero for `item`: floor(Value × SELL_FRACTION),
+    at least 1 coin. Value 0 (not sellable) yields 0."""
+    if item.value <= 0:
+        return 0
+    return max(1, int(item.value * SELL_FRACTION))
 
 # ---------------------------------------------------------------------------
 # The player: Tarandir, a Ranger of the North whom the Bree-folk call
@@ -56,9 +69,12 @@ def make_player() -> Actor:
 # ---------------------------------------------------------------------------
 # Weapons & gear
 # ---------------------------------------------------------------------------
-def _weapon(name, char, dmg, injury, prof, load, edge=1, desc="") -> Item:
+# Values seed from the current shop prices so buy prices are unchanged; items
+# not sold in Bree keep Value 0 (not sellable) for now — selling gear you can't
+# rebuy is deferred (issue #31, out of scope).
+def _weapon(name, char, dmg, injury, prof, load, edge=1, desc="", value=0) -> Item:
     return Item(
-        char=char, color=color.weapon_c, name=name, description=desc,
+        char=char, color=color.weapon_c, name=name, description=desc, value=value,
         equippable=Equippable(
             EquipmentType.WEAPON, load=load, damage=dmg, edge=edge,
             injury=injury, proficiency=prof,
@@ -70,10 +86,12 @@ dunedain_sword = _weapon(
     "Dúnedain sword", "/", 5, 16, "Swords", 2,
     desc="A long, leaf-bladed sword of the North-kingdom, its make older than any town near.",
 )
-short_sword = _weapon("short sword", "/", 4, 14, "Swords", 1, desc="A plain, serviceable blade.")
-hunting_dagger = _weapon("hunting dagger", "-", 3, 12, "Daggers", 0, edge=2,
+short_sword = _weapon("short sword", "/", 4, 14, "Swords", 1, value=12,
+                      desc="A plain, serviceable blade.")
+hunting_dagger = _weapon("hunting dagger", "-", 3, 12, "Daggers", 0, edge=2, value=7,
                          desc="Keen and quick; it bites deep on a true stroke.")
-war_spear = _weapon("war spear", "|", 4, 16, "Spears", 2, desc="An ash-hafted spear.")
+war_spear = _weapon("war spear", "|", 4, 16, "Spears", 2, value=10,
+                    desc="An ash-hafted spear.")
 
 ranger_bow = Item(
     char="}", color=color.weapon_c, name="Ranger's bow",
@@ -85,7 +103,7 @@ ranger_bow = Item(
 )
 
 leather_gear = Item(
-    char="[", color=color.beast_c, name="Ranger's leathers",
+    char="[", color=color.beast_c, name="Ranger's leathers", value=10,
     description="Weathered leather and a travel-worn cloak of Rangers' grey-green.",
     equippable=Equippable(EquipmentType.ARMOUR, load=1, protection_bonus=1),
 )
@@ -95,12 +113,12 @@ mail_corslet = Item(
     equippable=Equippable(EquipmentType.ARMOUR, load=3, protection_bonus=2),
 )
 buckler = Item(
-    char=")", color=(0x8A, 0x6E, 0x44), name="buckler",
+    char=")", color=(0x8A, 0x6E, 0x44), name="buckler", value=8,
     description="A small round shield, easy to bear.",
     equippable=Equippable(EquipmentType.SHIELD, load=1, defence_bonus=1),
 )
 travellers_hood = Item(
-    char="^", color=color.beast_c, name="reinforced hood",
+    char="^", color=color.beast_c, name="reinforced hood", value=6,
     description="A hood sewn with hidden bands of leather.",
     equippable=Equippable(EquipmentType.HELM, load=0, defence_bonus=1),
 )
@@ -109,22 +127,22 @@ travellers_hood = Item(
 # Consumables
 # ---------------------------------------------------------------------------
 athelas = Item(
-    char="*", color=color.herb_c, name="athelas leaves",
+    char="*", color=color.herb_c, name="athelas leaves", value=6, stackable=True,
     description="Kingsfoil. Of little worth to the unlearned, but of virtue in the hands of a healer.",
     consumable=consumable.RemedyConsumable(amount=8),
 )
 healing_herbs = Item(
-    char="*", color=color.herb_c, name="healing herbs",
+    char="*", color=color.herb_c, name="healing herbs", value=4, stackable=True,
     description="Bundled field herbs to bind a hurt.",
     consumable=consumable.HealingConsumable(amount=6),
 )
 lembas = Item(
-    char="%", color=(0xD8, 0xD0, 0xA0), name="waybread",
+    char="%", color=(0xD8, 0xD0, 0xA0), name="waybread", value=3, stackable=True,
     description="Wrapped in leaves; a small bite lifts the heart on a long road.",
     consumable=consumable.HopeConsumable(amount=3),
 )
 miruvor = Item(
-    char="!", color=color.hope_gain, name="draught of the Dúnedain",
+    char="!", color=color.hope_gain, name="draught of the Dúnedain", stackable=True,
     description="A cordial that kindles new strength in the weary heart.",
     consumable=consumable.HopeConsumable(amount=5),
 )
@@ -137,17 +155,37 @@ star_brooch = Item(
 )
 
 # ---------------------------------------------------------------------------
+# Trade-goods — sold for coin in Bree; their only purpose is their Value.
+# ---------------------------------------------------------------------------
+def _trade_good(name, char, col, value, desc) -> Item:
+    return Item(char=char, color=col, name=name, description=desc,
+                value=value, stackable=True)
+
+
+wolf_pelt = _trade_good("wolf-pelt", "~", color.wolf_c, 6,
+                        "The grey hide of a wolf, worth coin to a Bree furrier.")
+warg_pelt = _trade_good("warg-pelt", "~", color.wolf_c, 10,
+                        "The great pelt of a warg — worth more than a common wolf's.")
+spider_silk = _trade_good("spider-silk", "~", color.beast_c, 8,
+                          "A skein of tough, glistening silk drawn from a great spider.")
+orc_trophy = _trade_good("orc-trophy", "\"", color.orc_c, 5,
+                         "A crude token stripped from a slain orc; proof of the deed.")
+wolf_fang = _trade_good("wolf-fang", "'", color.wolf_c, 4,
+                        "A long curved fang — a curio the folk of Bree will pay a little for.")
+
+
+# ---------------------------------------------------------------------------
 # Creatures of Eriador
 # ---------------------------------------------------------------------------
 def _beast(char, name, col, endurance, defence, prowess, damage, xp,
            injury=13, protection=0, ai=HostileEnemy, desc="mauls", edge=1,
-           attack=12) -> Actor:
+           attack=12, loot=None) -> Actor:
     return Actor(
         char=char, color=col, name=name, ai_cls=ai,
         fighter=Fighter(
             endurance=endurance, defence=defence, prowess=prowess, damage=damage,
             injury=injury, protection=protection, attack_desc=desc, xp_reward=xp,
-            edge=edge, attack=attack,
+            edge=edge, attack=attack, loot=loot,
         ),
         inventory=Inventory(0),
         equipment=Equipment(),
@@ -159,22 +197,37 @@ def _beast(char, name, col, endurance, defence, prowess, damage, xp,
 # `attack` is the TN the player's Parry (Battle) test must meet when the foe
 # strikes: higher = harder to turn aside. Tuned for a "moderate" feel against a
 # starting Battle of 2 — a lone foe is manageable, a pack is deadly.
+# Loot tables: each is a list of independent weighted rolls (see fighter.Coins /
+# resolve_roll). A `None` slice is "nothing"; a kill may resolve several rolls.
+# Danger and reward climb together — warg/orc-packs (Dark/Perilous bands) pay
+# best. Balance anchor: healing herb = 4 coins, short sword = 12.
 cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 1, 3, 0,
-                     desc="claws", attack=12)
+                     desc="claws", attack=12,
+                     loot=[[(None, 60), (Coins(1, 2), 40)]])
 orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 2, 4, 0,
-                     injury=14, protection=1, desc="hacks at", attack=13)
+                     injury=14, protection=1, desc="hacks at", attack=13,
+                     loot=[
+                         [(None, 35), (Coins(2, 4), 60), (Coins(4, 6), 5)],
+                         [(None, 88), (orc_trophy, 12)],
+                     ])
 orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 2, 3, 0,
-                    desc="looses at", attack=12)
+                    desc="looses at", attack=12,
+                    loot=[[(None, 50), (Coins(1, 3), 50)]])
 great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 2, 3, 0,
-                      desc="bites", edge=2, attack=13)
+                      desc="bites", edge=2, attack=13,
+                      loot=[[(None, 45), (spider_silk, 55)]])
 # The barrow-wight is the one foe worth experience: a tough, named undead that
-# only stirs in the deep barrow. Kept modest so quests remain the main path.
+# only stirs in the deep barrow. Kept modest so quests remain the main path. It
+# keeps its XP and additionally drops a grave-hoard of coins.
 wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 3, 5, 10,
-               injury=16, protection=2, desc="chills", attack=15)
+               injury=16, protection=2, desc="chills", attack=15,
+               loot=[[(None, 40), (Coins(5, 10), 60)]])
 
 wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 2, 3, 0, ai=SkittishBeast,
-              desc="snaps at", attack=12)
-warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 0, desc="savages", attack=14)
+              desc="snaps at", attack=12,
+              loot=[[(None, 35), (wolf_pelt, 60), (wolf_fang, 5)]])
+warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 0, desc="savages", attack=14,
+              loot=[[(None, 25), (warg_pelt, 72), (wolf_fang, 3)]])
 
 
 # Depth-weighted spawn tables: (template, weight)

@@ -98,6 +98,33 @@ tray never falls silent. A foe never rolls.
   avoid it.
 - **Wound** — the result of a failed Protection Test. A second Wound is mortal.
 
+## Trade & loot
+
+The Wild pays in goods, not glory: routine foes grant no experience (that is the
+quests' domain), but their remains and purses are worth something to a Ranger who
+hauls them back to Bree. This is the game's material reward loop.
+
+- **Coins** — the single currency, carried in the hero's **purse** (never on the
+  ground as an item). A slain humanoid may yield coins straight into the purse.
+  *Avoid*: gold, silver, money.
+- **Value** — an item's base worth in coins. A merchant **sells** it to the hero
+  at its Value and **buys** it from the hero at a fraction of Value (the **sell
+  fraction**), so he always pays less than he charges. Value `0` means the item
+  cannot be sold.
+- **Trade-good** — an item whose only purpose is to be sold: a **pelt**, a fang,
+  spider-silk, an orc-trophy. Distinct from gear and consumables, which are used
+  but *also* carry a Value and so can be sold. *Avoid*: junk, treasure (treasure
+  is the quest star-brooch, not loot).
+- **Loot** — what a foe may leave on death: zero or more drops resolved from the
+  creature's **loot table**. A **pelt** and kin drop onto the corpse tile to be
+  picked up; coins go straight to the purse.
+- **Loot table** — a creature's drop specification: one or more independent
+  **rolls**, each a weighted table of outcomes that includes a "nothing" slice.
+  A single kill may resolve several rolls (coins *and* a trophy).
+- **Stack** — a single inventory slot holding a count of one fungible item
+  (trade-goods and consumables, which have no per-instance state). Equipment
+  never stacks. *Avoid*: bundle, pile.
+
 ## Presentation
 
 - **Dice tray** — the fixed, single-row panel pinned to the top of the

@@ -146,6 +146,9 @@ class Item(Entity):
         consumable: Optional["Consumable"] = None,
         equippable: Optional["Equippable"] = None,
         description: str = "",
+        value: int = 0,
+        stackable: bool = False,
+        quantity: int = 1,
     ) -> None:
         super().__init__(
             x=x,
@@ -157,6 +160,13 @@ class Item(Entity):
             render_order=RenderOrder.ITEM,
         )
         self.description = description
+        # Base worth in coins; 0 means the item cannot be sold. A merchant sells
+        # at `value` and buys back at a fraction of it (see content.sell_price).
+        self.value = value
+        # Fungible items (trade-goods, consumables) occupy one slot as a counted
+        # stack; equipment never stacks (distinct instances with equipped state).
+        self.stackable = stackable
+        self.quantity = quantity
 
         self.consumable = consumable
         if consumable:
@@ -165,3 +175,11 @@ class Item(Entity):
         self.equippable = equippable
         if equippable:
             equippable.parent = self
+
+    @property
+    def count_label(self) -> str:
+        """The ` ×N` suffix shown wherever a stacked item is listed (empty for a
+        lone item or non-stackable gear)."""
+        if self.stackable and self.quantity > 1:
+            return f" ×{self.quantity}"
+        return ""
