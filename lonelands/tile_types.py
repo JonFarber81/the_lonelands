@@ -39,6 +39,7 @@ KIND_WATER = 4
 KIND_RUIN_ENTRANCE = 5
 # (6 was KIND_TOWN_EXIT — retired: Regions are left by walking off an edge,
 #  not by standing on a gate tile. Enter is now reserved for vertical Levels.)
+KIND_ROAD = 7  # road / bridge / ford — the tile arrival-mirroring snaps onto
 
 
 def new_tile(
@@ -127,12 +128,14 @@ road = new_tile(
     transparent=True,
     dark=(_g("."), color.road_dark, color.black),
     light=(_g("."), color.road_light, (0x22, 0x1E, 0x16)),
+    kind=KIND_ROAD,
 )
 bridge = new_tile(
     walkable=True,
     transparent=True,
     dark=(_g("="), (0x5A, 0x46, 0x30), color.black),
     light=(_g("="), (0x9A, 0x78, 0x4E), (0x22, 0x1E, 0x16)),
+    kind=KIND_ROAD,   # a road that carries over water — snappable like any road
 )
 hill = new_tile(
     walkable=True,

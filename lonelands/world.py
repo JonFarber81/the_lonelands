@@ -172,11 +172,14 @@ class GameWorld:
         gm = region.level(0)
         px, py = self.engine.player.x, self.engine.player.y
         w, h = gm.width, gm.height
-        if sx > 0:      dest = (0, py)          # exit east  -> arrive west edge
-        elif sx < 0:    dest = (w - 1, py)      # exit west  -> arrive east edge
-        elif sy > 0:    dest = (px, 0)          # exit south -> arrive north edge
-        else:           dest = (px, h - 1)      # exit north -> arrive south edge
-        dest = _nearest_walkable(gm, *dest)
+        if sx > 0:      dest, arr = (0, py), "w"        # exit east  -> arrive west edge
+        elif sx < 0:    dest, arr = (w - 1, py), "e"    # exit west  -> arrive east edge
+        elif sy > 0:    dest, arr = (px, 0), "n"        # exit south -> arrive north edge
+        else:           dest, arr = (px, h - 1), "s"    # exit north -> arrive south edge
+        # Crossing a road edge lands the player on the road, so the Great Roads
+        # stay continuous across every cluster seam (issue #14).
+        on_road = procgen.snap_to_road(gm, arr, dest)
+        dest = _nearest_walkable(gm, *(on_road or dest))
 
         self.coord = region.coord
         self.level_index = 0

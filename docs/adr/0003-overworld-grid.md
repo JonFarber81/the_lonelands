@@ -62,3 +62,13 @@ Weather Hills to the Barrow-downs `(-1,0)` with Weathertop `(2,0)` gaining the
 Amon Sûl watch-vaults (the accompanying quest/dialog narrative moved with them).
 Deeps for the plan's other `▼N` cells remain flagged-not-built, a later per-cell
 pass. Supersedes nothing (extends ADR 0002's model to the full map).
+
+**Roads** are now threaded too (issue #14, "Infra C"): `overworld.ROAD_EDGES`
+resolves the traced cell-paths into per-edge road metadata (diagonal steps
+staircase into orthogonal knees), `procgen.thread_road` paints the meandering
+road from each shared edge midpoint through the cell centre (fording any water it
+crosses), and `world.cross_edge` snaps an arriving player onto the road — so the
+Great East Road (Bree→Rivendell) and the Greenway (Fornost→Tharbad) stay
+continuous across every seam. The named landmark river-crossings (Last Bridge,
+Sarn Ford, the Fords of Bruinen) get their rivers when their clusters are
+authored; the ford/bridge mechanism already handles them.

@@ -20,7 +20,7 @@ bordering Region paints the barrier diegetically.
 """
 from __future__ import annotations
 
-from typing import Dict, NamedTuple, Set, Tuple
+from typing import Dict, FrozenSet, List, NamedTuple, Set, Tuple
 
 Coord = Tuple[int, int]
 
@@ -212,3 +212,68 @@ def cell(coord: Coord):
 
 def is_walkable(coord: Coord) -> bool:
     return coord in GRID
+
+
+# ---------------------------------------------------------------------------
+# Road edges — the per-border road model (ADR 0003: "roads are edge metadata").
+# ---------------------------------------------------------------------------
+# The ordered cell-paths above are *decoration-level* — they may step diagonally
+# to trace the journey-map line. Movement is 4-neighbour (ADR 0002), so a road
+# only truly *threads* across a shared N/S/E/W edge. `ROAD_EDGES` resolves each
+# path into that reality: for every road cell, which of its four edges a road
+# crosses. Diagonal hops staircase into an orthogonal knee cell so the line stays
+# unbroken. The tile-painting pass (`procgen.thread_road`) and the arrival-snap
+# (`world.cross_edge`) both read this — it is the single source of road truth.
+# The step (dx, dy) you take to cross each edge (y grows south). One table, so
+# edge<->delta truth lives in a single place the painter, snap, and tests share.
+EDGE_DELTA = {"n": (0, -1), "s": (0, 1), "e": (1, 0), "w": (-1, 0)}
+EDGES = tuple(EDGE_DELTA)
+_OPP = {"n": "s", "s": "n", "e": "w", "w": "e"}
+
+
+def _edge_between(a: Coord, b: Coord):
+    """The edge of `a` that borders orthogonally-adjacent `b` (y grows south),
+    or None if they are not 4-neighbours."""
+    delta = (b[0] - a[0], b[1] - a[1])
+    for edge, step in EDGE_DELTA.items():
+        if step == delta:
+            return edge
+    return None
+
+
+def _orthogonalize(path: List[Coord]) -> List[Coord]:
+    """A 4-neighbour-connected version of `path`: each diagonal step is split
+    into a horizontal-then-vertical knee (falling back to vertical-first if the
+    horizontal knee is off the grid), so every hop crosses one shared edge."""
+    out = [path[0]]
+    for a, b in zip(path, path[1:]):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        if dx and dy:                       # diagonal: insert the knee cell
+            knee = (a[0] + dx, a[1])
+            if knee not in GRID:
+                knee = (a[0], a[1] + dy)
+            out.append(knee)
+        out.append(b)
+    return out
+
+
+def _build_road_edges() -> Dict[Coord, FrozenSet[str]]:
+    acc: Dict[Coord, Set[str]] = {}
+    for path in (EAST_ROAD, GREENWAY, SHIRE_ROAD):
+        ortho = _orthogonalize(path)
+        for a, b in zip(ortho, ortho[1:]):
+            edge = _edge_between(a, b)
+            if edge is None:                # shouldn't happen post-orthogonalize
+                continue
+            acc.setdefault(a, set()).add(edge)
+            acc.setdefault(b, set()).add(_OPP[edge])
+    return {coord: frozenset(edges) for coord, edges in acc.items()}
+
+
+ROAD_EDGES: Dict[Coord, FrozenSet[str]] = _build_road_edges()
+
+
+def road_edges(coord: Coord) -> FrozenSet[str]:
+    """The set of edges (subset of `EDGES`) a road crosses at `coord` — empty if
+    the cell carries no road."""
+    return ROAD_EDGES.get(coord, frozenset())
