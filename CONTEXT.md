@@ -19,7 +19,9 @@ not a spec: it defines *what words mean*, never *how things are built*.
 - **Square** — the town's central plaza only. *Not* a synonym for Region.
 
 The starting grid (a plus around the hub, mirroring the Eriador Journey map;
-see `references/`):
+see `references/`). The full overworld this plus sits inside is planned in
+`notes/overworld-map.md` (a 15×9 Region grid traced from the reference map; see
+ADR 0003):
 
 - **Bree** — the hub Region, the town at the meeting of the roads. Where a
   Ranger of the North is met. *(Replaces the former invented "Talbrún".)*
