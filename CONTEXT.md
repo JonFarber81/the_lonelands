@@ -46,8 +46,13 @@ Landmarks around the Bree hub:
   lie — the main quest. *(Re-homed here from the Weather Hills per ADR 0003.)*
 - **Weathertop** `(2,0)` — **east** along the Great East Road; the ruined
   watchtower of Amon Sûl, with its own deeps (the watch-vaults).
-- **the Chetwood** `(0,-1)` — the **north** Region; wooded placeholder for now.
-- **the South Downs** `(0,1)` — the **south** Region; placeholder for now.
+- **the Chetwood** `(0,-1)` — the **north** Region; close-grown woodland the
+  Greenway climbs through (Cluster 2, issue #17).
+- **the South Downs** `(0,1)` — the **south** Region; low rolling downs south of
+  the Great Road, the Greenway crossing them (Cluster 2, issue #17).
+- **Midgewater** `(1,-1)`, **Sarn Ford** `(-1,1)`, **the Old Forest** `(-2,1)` —
+  the rest of the Bree cluster: the biting fen, the Rangers' Brandywine ford, and
+  the awake, ill-disposed ancient wood (Cluster 2, issue #17).
 
 ## The One Ring dice
 
