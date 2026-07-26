@@ -48,6 +48,7 @@ class Engine:
 
     # --- turns ------------------------------------------------------------
     def handle_enemy_turns(self) -> None:
+        self._tick_bleed()
         for entity in set(self.game_map.actors) - {self.player}:
             if entity.ai:
                 try:
@@ -56,6 +57,24 @@ class Engine:
                     pass
         self.turn_count += 1
         self._passive_regen()
+
+    def _tick_bleed(self) -> None:
+        """Bleed damage-over-time on every living fighter, once per round."""
+        for actor in list(self.game_map.actors):
+            fighter = actor.fighter
+            if fighter is None:
+                continue
+            lost = fighter.tick_bleed()  # a no-op (0) if dead or not bleeding
+            if lost <= 0:
+                continue
+            if actor is self.player:
+                self.message_log.add_message(
+                    f"Your wounds bleed for {lost} endurance.", color.player_die
+                )
+            elif self.game_map.visible[actor.x, actor.y]:
+                self.message_log.add_message(
+                    f"The {actor.name} bleeds for {lost} endurance.", color.enemy_atk
+                )
 
     def _passive_regen(self) -> None:
         # A slow trickle of Hope when out of danger and not miserable.

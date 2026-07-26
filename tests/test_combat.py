@@ -3,16 +3,15 @@
 These drive the real `MeleeAction.perform()` against a real Engine/GameMap
 (both construct fine headless — no display needed) so we exercise the actual
 branch logic, not a re-implementation. Dice are pinned via `set_seed`, and
-where we need a *specific* face we scan for a seed that produces it and re-seed
-before the call (the resolution reproduces the same roll stream).
+where we need a *specific* d20 face we scan for a seed that produces it and
+re-seed before the call (the resolution reproduces the same roll stream).
 """
 from __future__ import annotations
 
-import pytest
-
 from lonelands import content
-from lonelands.actions import MeleeAction
-from lonelands.dice import set_seed, skill_check
+from lonelands.actions import BumpAction, MeleeAction
+from lonelands.components.fighter import BLEED_DAMAGE, CRIT_BLEED
+from lonelands.dice import roll_check, set_seed
 from lonelands.engine import Engine
 from lonelands.game_map import GameMap
 
@@ -35,116 +34,174 @@ def last_message(engine):
     return engine.message_log.messages[-1].plain_text
 
 
-# --- Attack-TN wiring -------------------------------------------------------
+def _seed_where(mod, tn, predicate):
+    """First seed whose `d20 + mod vs tn` roll satisfies `predicate`."""
+    for seed in range(10000):
+        set_seed(seed)
+        if predicate(roll_check(mod, tn)):
+            return seed
+    raise AssertionError("no seed satisfied the predicate")
 
-def test_fighter_exposes_attack_tn():
-    assert content.orc_soldier.fighter.attack == 13
-    assert content.warg.fighter.attack == 14
 
+# --- New combat fields ------------------------------------------------------
 
-def test_wounded_foe_strikes_less_surely():
+def test_foes_expose_the_new_d20_fields():
     f = content.orc_soldier.fighter
-    base = f.attack
-    f.wounded = True
-    assert f.attack == base - 2
-    f.wounded = False
+    assert f.attack_bonus == 4
+    assert f.defence == 12
+    assert f.soak == 1
+    assert f.damage == "1d6"
 
 
-# --- Incoming attacks: the player parries -----------------------------------
-
-def test_player_parries_when_the_roll_succeeds():
-    engine, gm, player = make_world()
-    foe = spawn_foe(gm, content.cave_goblin)
-    foe.fighter.base_attack = 2  # trivial TN -> the parry always succeeds
-    start = player.fighter.endurance
-
-    MeleeAction(foe, 1, 0).perform()  # foe at (1,1) strikes player at (2,1)
-
-    assert player.fighter.endurance == start          # no damage
-    assert "turn the blow aside" in last_message(engine)
-    # A parry is the player's own roll, so it feeds the dice tray.
-    assert engine.last_roll is not None
+def test_heavy_foes_are_flagged_to_bleed_on_hit():
+    assert content.warg.fighter.bleed_on_hit == 1
+    assert content.cave_goblin.fighter.bleed_on_hit == 0
 
 
-def test_failed_parry_takes_the_foes_damage():
-    engine, gm, player = make_world()
-    foe = spawn_foe(gm, content.cave_goblin)
-    foe.fighter.base_attack = 99  # unreachable TN -> the parry fails
+# --- Attack resolution: the attacker rolls ----------------------------------
 
-    # Find a seed whose parry roll fails outright (not the Gandalf auto-success).
-    seed = _seed_where(99, lambda r: not r.is_success and not r.is_eye)
-    set_seed(seed)
-    start = player.fighter.endurance
-
-    MeleeAction(foe, 1, 0).perform()
-
-    assert player.fighter.endurance == start - foe.fighter.damage
-    assert f"for {foe.fighter.damage} endurance" in last_message(engine)
-    assert not player.fighter.wounded  # a plain failure does not wound
-
-
-def test_eye_on_a_failed_parry_inflicts_a_wound():
-    engine, gm, player = make_world()
-    foe = spawn_foe(gm, content.cave_goblin)
-    foe.fighter.base_attack = 99
-
-    # Seed where the parry rolls the Eye (fumble) AND the follow-up protection
-    # test also fails, so a wound lands. Player protection is 0.
-    injury = foe.fighter.injury
-
-    def ok(seed):
-        set_seed(seed)
-        parry = skill_check(99, player.hero.skills["Battle"])
-        if not parry.is_eye:
-            return False
-        prot = skill_check(injury, player.fighter.protection)
-        return not prot.is_success
-
-    seed = next(s for s in range(10000) if ok(s))
-    set_seed(seed)
-
-    assert not player.fighter.wounded
-    MeleeAction(foe, 1, 0).perform()
-
-    assert player.fighter.wounded
-    assert "wounds you" in last_message(engine)
-
-
-def test_second_wound_is_mortal():
-    engine, gm, player = make_world()
-    foe = spawn_foe(gm, content.cave_goblin)
-    foe.fighter.base_attack = 99
-    player.fighter.wounded = True  # already carrying one wound
-
-    injury = foe.fighter.injury
-
-    def ok(seed):
-        set_seed(seed)
-        parry = skill_check(99, player.hero.skills["Battle"])
-        if not parry.is_eye:
-            return False
-        prot = skill_check(injury, player.fighter.protection)
-        return not prot.is_success
-
-    seed = next(s for s in range(10000) if ok(s))
-    set_seed(seed)
-
-    MeleeAction(foe, 1, 0).perform()
-    assert player.fighter.endurance == 0  # struck down
-
-
-# --- Outgoing attacks: the player still rolls to hit (regression) -----------
-
-def test_player_attacking_a_foe_uses_the_attacker_roll_path():
+def test_a_hit_deals_damage_reduced_by_soak():
     engine, gm, player = make_world()
     foe = content.cave_goblin.spawn(gm, 3, 1)  # to the player's right
-    foe.fighter.base_defence = 2  # trivial TN -> the player always hits
+    foe.fighter.base_defence = 2  # trivial Defence -> the player always hits
     start = foe.fighter.endurance
 
-    set_seed(1)
-    MeleeAction(player, 1, 0).perform()  # player at (2,1) strikes foe at (3,1)
+    # A plain hit (not a crit): the player's d20 clears the TN without a 20.
+    seed = _seed_where(player.fighter.attack_bonus, 2,
+                       lambda r: r.is_success and not r.is_crit)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
 
-    assert foe.fighter.endurance < start  # the foe took the hit
+    assert foe.fighter.endurance < start
+    assert "endurance" in last_message(engine)
+
+
+def test_a_miss_deals_no_damage():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.base_defence = 99  # unreachable Defence -> a plain miss
+    start = foe.fighter.endurance
+
+    seed = _seed_where(player.fighter.attack_bonus, 99,
+                       lambda r: not r.is_success and not r.is_fumble)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+
+    assert foe.fighter.endurance == start
+    assert "but miss" in last_message(engine)
+
+
+def test_a_players_attack_feeds_the_dice_tray_with_its_damage():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.base_defence = 2
+    start = foe.fighter.endurance
+
+    seed = _seed_where(player.fighter.attack_bonus, 2, lambda r: r.is_success)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+
+    assert engine.last_roll is not None
+    # The tray reports the blow's damage (issue #35: the d20 line shows damage).
+    assert engine.last_roll.damage == start - foe.fighter.endurance
+
+
+def test_a_missed_attack_shows_no_damage_in_the_tray():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.base_defence = 99
+    seed = _seed_where(player.fighter.attack_bonus, 99,
+                       lambda r: not r.is_success and not r.is_fumble)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+    assert engine.last_roll.damage is None
+
+
+def test_soak_floors_a_clean_hit_at_one():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.base_defence = 2
+    foe.fighter.base_soak = 99  # soak swallows the whole damage roll
+    start = foe.fighter.endurance
+
+    seed = _seed_where(player.fighter.attack_bonus, 2,
+                       lambda r: r.is_success and not r.is_crit)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+
+    assert foe.fighter.endurance == start - 1  # a landed blow always stings for 1
+
+
+# --- Criticals --------------------------------------------------------------
+
+def test_a_crit_hits_through_high_defence_and_opens_a_bleed():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.base_defence = 99  # only a natural 20 gets through
+    start = foe.fighter.endurance
+
+    seed = _seed_where(player.fighter.attack_bonus, 99, lambda r: r.is_crit)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+
+    assert foe.fighter.endurance < start  # the crit landed despite the Defence
+    assert foe.fighter.bleed == CRIT_BLEED
+    assert "CRITICAL" in engine.message_log.messages[-2].plain_text \
+        or "CRITICAL" in last_message(engine)
+
+
+# --- Incoming attacks: the foe rolls ----------------------------------------
+
+def test_a_foe_hits_the_player_for_its_damage():
+    engine, gm, player = make_world()
+    foe = spawn_foe(gm, content.cave_goblin)
+    foe.fighter.base_defence = 0
+    start = player.fighter.endurance
+
+    # Make the foe's attack land without a crit against the player's Defence.
+    seed = _seed_where(foe.fighter.attack_bonus, player.fighter.defence,
+                       lambda r: r.is_success and not r.is_crit)
+    set_seed(seed)
+    MeleeAction(foe, 1, 0).perform()  # foe at (1,1) strikes player at (2,1)
+
+    assert player.fighter.endurance < start
+    assert "endurance" in last_message(engine)
+
+
+def test_a_heavy_foe_leaves_the_player_bleeding_on_a_hit():
+    engine, gm, player = make_world()
+    foe = spawn_foe(gm, content.warg)  # bleed_on_hit = 1
+
+    seed = _seed_where(foe.fighter.attack_bonus, player.fighter.defence,
+                       lambda r: r.is_success and not r.is_crit)
+    set_seed(seed)
+    MeleeAction(foe, 1, 0).perform()
+
+    assert player.fighter.bleed == foe.fighter.bleed_on_hit
+
+
+# --- Bleed status -----------------------------------------------------------
+
+def test_bleed_ticks_down_and_drains_endurance():
+    engine, gm, player = make_world()
+    player.fighter.apply_bleed(2)
+    start = player.fighter.endurance
+
+    engine.handle_enemy_turns()  # one round: one bleed tick
+
+    assert player.fighter.bleed == 1
+    assert player.fighter.endurance == start - BLEED_DAMAGE
+    assert "bleed" in last_message(engine).lower()
+
+
+def test_bleed_stops_when_stacks_run_out():
+    engine, gm, player = make_world()
+    player.fighter.apply_bleed(1)
+    engine.handle_enemy_turns()
+    assert player.fighter.bleed == 0
+    resting = player.fighter.endurance
+    engine.handle_enemy_turns()  # no stacks left -> no further drain
+    assert player.fighter.endurance == resting
 
 
 # --- Enemy AI actually reaches the player (regression) ----------------------
@@ -155,24 +212,12 @@ def test_adjacent_foe_ai_strikes_the_player():
     Regression: BumpAction gated melee on the target having an .ai, which the
     player never has, so enemy attacks were silently swallowed as Impossible.
     """
-    from lonelands.actions import BumpAction
-
     engine, gm, player = make_world()
     foe = spawn_foe(gm, content.cave_goblin)  # adjacent at (1,1)
-    foe.fighter.base_attack = 99  # unreachable parry TN -> the blow lands
+    foe.fighter.base_attack_bonus = 99  # unreachable -> the blow always lands
     start = player.fighter.endurance
 
     BumpAction(foe, 1, 0).perform()  # foe at (1,1) bumps player at (2,1)
 
     assert player.fighter.endurance < start  # the player took the hit
     assert "for" in last_message(engine)
-
-
-# --- helpers ---------------------------------------------------------------
-
-def _seed_where(tn, predicate, rank=2):
-    for seed in range(10000):
-        set_seed(seed)
-        if predicate(skill_check(tn, rank)):
-            return seed
-    raise AssertionError("no seed satisfied the predicate")

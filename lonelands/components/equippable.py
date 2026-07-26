@@ -25,8 +25,8 @@ class Equippable(BaseComponent):
         proficiency: str = "",  # which weapon proficiency governs its use
         ranged: bool = False,
         # Defence:
-        defence_bonus: int = 0,     # adds to the wielder's TN-to-be-hit (Parry)
-        protection_bonus: int = 0,  # extra Protection (armour) success dice
+        defence_bonus: int = 0,  # light gear/shields: adds to Defence (harder to hit)
+        soak_bonus: int = 0,     # heavy armour: adds to Soak (subtracts from damage)
     ) -> None:
         self.equipment_type = equipment_type
         self.load = load
@@ -36,4 +36,4 @@ class Equippable(BaseComponent):
         self.proficiency = proficiency
         self.ranged = ranged
         self.defence_bonus = defence_bonus
-        self.protection_bonus = protection_bonus
+        self.soak_bonus = soak_bonus

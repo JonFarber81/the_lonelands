@@ -2,11 +2,11 @@
 Hope, and the derived Weary state — plus the XP/advancement bookkeeping."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict
 
 from lonelands import tor
 from lonelands.components.base_component import BaseComponent
-from lonelands.dice import RollResult, skill_check
+from lonelands.dice import RollResult, roll_check
 
 if TYPE_CHECKING:
     from lonelands.entity import Actor
@@ -100,28 +100,13 @@ class Hero(BaseComponent):
     def skill_tn(self, skill: str) -> int:
         return self.attr_tn(tor.SKILL_TO_ATTR[skill])
 
-    def test_skill(
-        self,
-        skill: str,
-        tn: Optional[int] = None,
-        favoured: int = 0,
-        modifier: int = 0,
-        weary: Optional[bool] = None,
-    ) -> RollResult:
-        rank = self.skills.get(skill, 0)
-        target = tn if tn is not None else self.skill_tn(skill)
-        if weary is None:
-            weary = self.is_weary
-        result = skill_check(target, rank, favoured=favoured, weary=weary, modifier=modifier)
-        self.engine.note_roll(result, self.parent)  # feeds the dice tray
-        return result
+    def check(self, mod: int, tn: int, advantage: int = 0) -> RollResult:
+        """Make a d20 Check: ``d20 + mod vs tn`` (advantage/disadvantage = +1/-1).
 
-    def test_attribute(
-        self, attribute: str, tn: Optional[int] = None, favoured: int = 0, modifier: int = 0
-    ) -> RollResult:
-        target = tn if tn is not None else self.attr_tn(attribute)
-        # Bare attribute test: feat die + no success dice.
-        result = skill_check(target, 0, favoured=favoured, weary=self.is_weary, modifier=modifier)
+        The single test primitive that replaced the old skill/attribute tests —
+        callers supply the assembled modifier and TN. The roll feeds the dice
+        tray when the player made it."""
+        result = roll_check(mod, tn, advantage=advantage)
         self.engine.note_roll(result, self.parent)  # feeds the dice tray
         return result
 

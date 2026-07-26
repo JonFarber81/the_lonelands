@@ -55,9 +55,11 @@ def make_player() -> Actor:
         color=color.player_c,
         name="Greycloak",
         ai_cls=None,
+        # Phase 1: a temporary flat attack bonus stands in until the attribute-
+        # and perk-derived to-hit of Phase 2 lands.
         fighter=Fighter(
-            endurance=26, defence=14, prowess=0, damage=1,
-            injury=14, protection=0, attack_desc="strikes",
+            endurance=26, defence=14, attack_bonus=4, damage=1,
+            soak=0, attack_desc="strikes",
         ),
         hero=hero,
         inventory=Inventory(capacity=26),
@@ -105,12 +107,12 @@ ranger_bow = Item(
 leather_gear = Item(
     char="[", color=color.beast_c, name="Ranger's leathers", value=10,
     description="Weathered leather and a travel-worn cloak of Rangers' grey-green.",
-    equippable=Equippable(EquipmentType.ARMOUR, load=1, protection_bonus=1),
+    equippable=Equippable(EquipmentType.ARMOUR, load=1, soak_bonus=1),
 )
 mail_corslet = Item(
     char="[", color=(0x9A, 0x9E, 0xA6), name="corslet of mail",
     description="A shirt of riveted rings, heavy but stalwart.",
-    equippable=Equippable(EquipmentType.ARMOUR, load=3, protection_bonus=2),
+    equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=2),
 )
 buckler = Item(
     char=")", color=(0x8A, 0x6E, 0x44), name="buckler", value=8,
@@ -177,56 +179,56 @@ wolf_fang = _trade_good("wolf-fang", "'", color.wolf_c, 4,
 # ---------------------------------------------------------------------------
 # Creatures of Eriador
 # ---------------------------------------------------------------------------
-def _beast(char, name, col, endurance, defence, prowess, damage, xp,
-           injury=13, protection=0, ai=HostileEnemy, desc="mauls", edge=1,
-           attack=12, loot=None) -> Actor:
+def _beast(char, name, col, endurance, defence, attack_bonus, damage, xp,
+           soak=0, bleed_on_hit=0, ai=HostileEnemy, desc="mauls", loot=None) -> Actor:
     return Actor(
         char=char, color=col, name=name, ai_cls=ai,
         fighter=Fighter(
-            endurance=endurance, defence=defence, prowess=prowess, damage=damage,
-            injury=injury, protection=protection, attack_desc=desc, xp_reward=xp,
-            edge=edge, attack=attack, loot=loot,
+            endurance=endurance, defence=defence, attack_bonus=attack_bonus,
+            damage=damage, soak=soak, bleed_on_hit=bleed_on_hit,
+            attack_desc=desc, xp_reward=xp, loot=loot,
         ),
         inventory=Inventory(0),
         equipment=Equipment(),
     )
 
 
-# Routine foes grant no experience: advancement is meant to come from quests
-# (and the rare, formidable foe below), not from clearing rank-and-file mobs.
-# `attack` is the TN the player's Parry (Battle) test must meet when the foe
-# strikes: higher = harder to turn aside. Tuned for a "moderate" feel against a
-# starting Battle of 2 — a lone foe is manageable, a pack is deadly.
+# Combat is the d20 core: a foe rolls `d20 + attack_bonus` against the hero's
+# Defence, and the hero rolls the same against the foe's `defence`. `damage` is a
+# dice spec, rolled and then reduced by the target's `soak`. `bleed_on_hit` marks
+# a heavy/venomous foe that opens a Bleed on any landed blow.
+# Tuned for a "moderate" feel — a lone foe is manageable, a pack is deadly.
 # Loot tables: each is a list of independent weighted rolls (see fighter.Coins /
 # resolve_roll). A `None` slice is "nothing"; a kill may resolve several rolls.
 # Danger and reward climb together — warg/orc-packs (Dark/Perilous bands) pay
 # best. Balance anchor: healing herb = 4 coins, short sword = 12.
-cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 1, 3, 0,
-                     desc="claws", attack=12,
+cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 3, "1d4", 0,
+                     desc="claws",
                      loot=[[(None, 60), (Coins(1, 2), 40)]])
-orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 2, 4, 0,
-                     injury=14, protection=1, desc="hacks at", attack=13,
+orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 4, "1d6", 0,
+                     soak=1, desc="hacks at",
                      loot=[
                          [(None, 35), (Coins(2, 4), 60), (Coins(4, 6), 5)],
                          [(None, 88), (orc_trophy, 12)],
                      ])
-orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 2, 3, 0,
-                    desc="looses at", attack=12,
+orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 4, "1d4", 0,
+                    desc="looses at",
                     loot=[[(None, 50), (Coins(1, 3), 50)]])
-great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 2, 3, 0,
-                      desc="bites", edge=2, attack=13,
+great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 4, "1d6", 0,
+                      bleed_on_hit=1, desc="bites",
                       loot=[[(None, 45), (spider_silk, 55)]])
 # The barrow-wight is the one foe worth experience: a tough, named undead that
 # only stirs in the deep barrow. Kept modest so quests remain the main path. It
 # keeps its XP and additionally drops a grave-hoard of coins.
-wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 3, 5, 10,
-               injury=16, protection=2, desc="chills", attack=15,
+wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 6, "1d8+1", 10,
+               soak=2, bleed_on_hit=1, desc="chills",
                loot=[[(None, 40), (Coins(5, 10), 60)]])
 
-wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 2, 3, 0, ai=SkittishBeast,
-              desc="snaps at", attack=12,
+wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 4, "1d4", 0, ai=SkittishBeast,
+              desc="snaps at",
               loot=[[(None, 35), (wolf_pelt, 60), (wolf_fang, 5)]])
-warg = _beast("W", "warg", color.wolf_c, 16, 13, 3, 4, 0, desc="savages", attack=14,
+warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 0, bleed_on_hit=1,
+              desc="savages",
               loot=[[(None, 25), (warg_pelt, 72), (wolf_fang, 3)]])
 
 

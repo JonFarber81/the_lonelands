@@ -1,145 +1,135 @@
-"""Tests for the One Ring dice engine.
+"""Tests for the d20 resolution core.
 
 Two styles here:
   * `RollResult` outcome logic is pure, so we construct results directly and
     assert on the derived properties (no RNG needed).
-  * `skill_check` is exercised through the seedable `rng`, asserting invariants
-    and determinism rather than specific faces.
+  * `roll_check` / `roll_damage` are exercised through the seedable `rng`,
+    asserting invariants and determinism rather than specific faces.
 """
 from __future__ import annotations
 
+import pytest
+
 from lonelands import dice
-from lonelands.dice import EYE, GANDALF, RollResult, set_seed, skill_check
+from lonelands.dice import RollResult, roll_check, roll_damage, set_seed
 
 
 # --- RollResult outcome logic (pure) ---------------------------------------
 
-def test_plain_success_when_total_meets_tn():
-    r = RollResult(total=14, tn=14, feat=8, feat_raw=8, success_dice=[6])
-    # tengwar defaults to 0 here, so this is a plain success, not great
+def test_total_is_die_plus_modifier():
+    r = RollResult(die=12, mod=4, tn=14)
+    assert r.total == 16
+
+
+def test_success_when_total_meets_tn():
+    r = RollResult(die=10, mod=4, tn=14)
     assert r.is_success
-    assert r.quality == "success"
+    assert not r.is_crit and not r.is_fumble
 
 
 def test_failure_when_total_below_tn():
-    r = RollResult(total=9, tn=14, feat=9, feat_raw=9)
+    r = RollResult(die=8, mod=1, tn=14)
     assert not r.is_success
-    assert not r.is_great
-    assert r.quality == "failure"
 
 
-def test_gandalf_rune_always_succeeds_regardless_of_tn():
-    r = RollResult(total=0, tn=18, feat=0, feat_raw=GANDALF, is_gandalf=True)
+def test_natural_twenty_is_a_crit_and_always_succeeds():
+    # A modest modifier that would miss a high TN on the number, but a 20 crits.
+    r = RollResult(die=20, mod=0, tn=99)
+    assert r.is_crit
     assert r.is_success
-    assert r.is_great          # the Gandalf rune counts as a great success
-    assert r.quality == "great"
 
 
-def test_eye_counts_as_zero_and_can_fail():
-    r = RollResult(total=3, tn=14, feat=0, feat_raw=EYE, is_eye=True,
-                   success_dice=[3])
+def test_natural_one_is_a_fumble_and_always_fails():
+    # A big modifier that would clear the TN on the number, but a 1 fumbles.
+    r = RollResult(die=1, mod=50, tn=5)
+    assert r.is_fumble
     assert not r.is_success
-    assert r.quality == "failure"
-
-
-def test_great_success_needs_a_tengwar():
-    r = RollResult(total=16, tn=14, feat=10, feat_raw=10,
-                   success_dice=[6], tengwar=1)
-    assert r.is_great
-    assert not r.is_extraordinary
-    assert r.quality == "great"
-
-
-def test_extraordinary_success_needs_two_tengwar():
-    r = RollResult(total=20, tn=14, feat=8, feat_raw=8,
-                   success_dice=[6, 6], tengwar=2)
-    assert r.is_extraordinary
-    assert r.quality == "extraordinary"
-
-
-def test_tengwar_on_a_failed_roll_is_not_a_great_success():
-    # A 6 was rolled (tengwar) but the total still misses the TN.
-    r = RollResult(total=8, tn=14, feat=2, feat_raw=2,
-                   success_dice=[6], tengwar=1)
-    assert not r.is_success
-    assert not r.is_great
-    assert r.quality == "failure"
 
 
 def test_describe_marks_special_faces():
-    assert "G" in RollResult(0, 14, 0, GANDALF, is_gandalf=True).describe()
-    assert "Eye" in RollResult(0, 14, 0, EYE, is_eye=True).describe()
-    assert "7" in RollResult(7, 14, 7, 7).describe()
+    assert "CRIT" in RollResult(die=20, mod=0, tn=14).describe()
+    assert "FUMBLE" in RollResult(die=1, mod=0, tn=14).describe()
+    assert "hit" in RollResult(die=12, mod=4, tn=14).describe()
+    assert "miss" in RollResult(die=3, mod=0, tn=14).describe()
 
 
-# --- skill_check invariants & determinism ----------------------------------
+# --- roll_check invariants & determinism -----------------------------------
 
-def test_skill_check_rolls_one_success_die_per_rank():
+def test_roll_check_single_die_in_range():
     set_seed(1234)
-    r = skill_check(tn=14, rank=3)
-    assert len(r.success_dice) == 3
-    assert all(1 <= d <= 6 for d in r.success_dice)
+    r = roll_check(mod=4, tn=14)
+    assert len(r.dice) == 1
+    assert 1 <= r.die <= 20
+    assert r.total == r.die + 4
 
 
-def test_skill_check_rank_zero_rolls_no_success_dice():
-    set_seed(1)
-    r = skill_check(tn=14, rank=0)
-    assert r.success_dice == []
-
-
-def test_skill_check_is_deterministic_under_a_seed():
+def test_roll_check_is_deterministic_under_a_seed():
     set_seed(42)
-    a = skill_check(tn=15, rank=4)
+    a = roll_check(mod=3, tn=15)
     set_seed(42)
-    b = skill_check(tn=15, rank=4)
-    assert (a.feat_raw, a.success_dice, a.total) == (b.feat_raw, b.success_dice, b.total)
+    b = roll_check(mod=3, tn=15)
+    assert (a.die, a.dice, a.total) == (b.die, b.dice, b.total)
 
 
-def test_weary_zeroes_success_dice_of_three_or_less():
-    # Find a seed whose success dice include a 1-3, then compare weary vs not.
-    for seed in range(200):
-        set_seed(seed)
-        normal = skill_check(tn=14, rank=5, weary=False)
-        if any(d <= 3 for d in normal.success_dice):
-            set_seed(seed)
-            weary = skill_check(tn=14, rank=5, weary=True)
-            assert weary.total < normal.total
-            assert weary.weary is True
-            return
-    raise AssertionError("no seed produced a low success die to test weariness")
-
-
-def test_modifier_is_added_to_total():
+def test_advantage_rolls_two_dice_and_keeps_the_higher():
     set_seed(7)
-    base = skill_check(tn=14, rank=2, modifier=0)
+    r = roll_check(mod=0, tn=10, advantage=1)
+    assert len(r.dice) == 2
+    assert r.die == max(r.dice)
+
+
+def test_disadvantage_keeps_the_lower():
     set_seed(7)
-    bumped = skill_check(tn=14, rank=2, modifier=5)
-    assert bumped.total == base.total + 5
+    r = roll_check(mod=0, tn=10, advantage=-1)
+    assert len(r.dice) == 2
+    assert r.die == min(r.dice)
 
 
-def test_tengwar_count_matches_number_of_sixes():
-    set_seed(99)
-    r = skill_check(tn=14, rank=6)
-    assert r.tengwar == r.success_dice.count(6)
-
-
-def test_special_feat_faces_appear_over_many_rolls():
-    set_seed(2024)
-    saw_eye = saw_gandalf = False
-    for _ in range(2000):
-        r = skill_check(tn=14, rank=1)
-        saw_eye |= r.is_eye
-        saw_gandalf |= r.is_gandalf
-    assert saw_eye and saw_gandalf
-
-
-def test_favoured_keeps_the_higher_of_two_feat_dice():
-    # Averaged over many rolls, favoured feat values beat ill-favoured ones.
-    def mean_feat(favoured):
+def test_advantage_beats_disadvantage_on_average():
+    def mean_die(adv):
         set_seed(500)
-        return sum(skill_check(14, 0, favoured=favoured).feat_raw
-                   for _ in range(1000))
-    assert mean_feat(1) > mean_feat(0) > mean_feat(-1)
+        return sum(roll_check(0, 10, advantage=adv).die for _ in range(1000))
+    assert mean_die(1) > mean_die(0) > mean_die(-1)
+
+
+def test_crit_and_fumble_appear_over_many_rolls():
+    set_seed(2024)
+    saw_crit = saw_fumble = False
+    for _ in range(2000):
+        r = roll_check(mod=0, tn=14)
+        saw_crit |= r.is_crit
+        saw_fumble |= r.is_fumble
+    assert saw_crit and saw_fumble
+
+
+# --- roll_damage -----------------------------------------------------------
+
+def test_roll_damage_flat_int_passthrough():
+    assert roll_damage(5) == 5
+    assert roll_damage(0) == 0
+
+
+def test_roll_damage_negative_int_floors_at_zero():
+    assert roll_damage(-3) == 0
+
+
+def test_roll_damage_dice_notation_within_bounds():
+    set_seed(3)
+    for _ in range(200):
+        v = roll_damage("2d6")
+        assert 2 <= v <= 12
+
+
+def test_roll_damage_dice_with_bonus():
+    set_seed(11)
+    for _ in range(200):
+        v = roll_damage("1d8+1")
+        assert 2 <= v <= 9
+
+
+def test_roll_damage_rejects_garbage():
+    with pytest.raises(ValueError):
+        roll_damage("not-dice")
 
 
 def test_roll_dice_sum_is_within_bounds():

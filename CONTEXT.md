@@ -54,55 +54,71 @@ Landmarks around the Bree hub:
   the rest of the Bree cluster: the biting fen, the Rangers' Brandywine ford, and
   the awake, ill-disposed ancient wood (Cluster 2, issue #17).
 
-## The One Ring dice
+## The d20 core
 
-- **Test** — a single roll resolving an action: one Feat die plus zero or more
-  Success dice, summed and compared to a Target Number.
-- **Feat die** — the d12 rolled on every Test. Two faces are magic:
-  - **Eye of Sauron** — the 11 face. Counts as 0 and invites ill fortune.
-  - **Gandalf rune** — the 12 face. An automatic success regardless of TN.
-- **Success die** — a d6. A Test rolls one per point of skill/proficiency
-  **rank**. Its 6 face is special:
-  - **Tengwar** — the rune on a Success die's 6 face; a great-success marker.
-    "Tengwar count" is how many 6s a Test rolled.
-- **Target Number (TN)** — the value a Test's total must reach to succeed.
-- **Rank** — the number of Success dice a Test rolls.
+Our own system (de-coupled from The One Ring — see ADR 0005). Every action
+resolves the same way; combat is that same primitive.
 
-## Test outcomes
+- **Check** — a single roll resolving an action: `d20 + attribute (+ perk/gear)`
+  compared to a **Target Number**. *(Replaces the former "Test".)*
+- **Target Number (TN)** — the value a Check's total must **meet or beat** to
+  succeed.
+- **Critical** — a **natural 20** on the d20: an automatic success/hit, and in
+  combat extra damage. *(Replaces the Gandalf rune.)*
+- **Fumble** — a **natural 1** on the d20: an automatic failure/miss. *(Replaces
+  the Eye of Sauron.)*
+- **Advantage / Disadvantage** — roll two d20 and keep the **higher / lower**.
+  *(Replaces favoured / ill-favoured.)*
 
-- **Success / failure** — total meets the TN (or the Gandalf rune shows).
-- **Great success** — a success carrying at least one Tengwar (or the Gandalf
-  rune).
-- **Extraordinary success** — a success carrying two or more Tengwar.
+## Character
 
-## Conditions on a Test
+The hero is a single **Ranger of the North** (flavour identity, not a stat).
 
-- **Favoured / ill-favoured** — roll two Feat dice, keep the higher / lower.
-- **Weary** — Success dice showing 1–3 count as 0.
+- **Attribute** — one of three small modifiers added to the d20: **Brawn**
+  (melee hit/damage, HP, athletics) · **Wits** (ranged, Defence, stealth,
+  senses) · **Will** (morale, social, healing, Path abilities). *(Replaces the
+  TOR Strength/Heart/Wits attributes; there are no skills or weapon
+  proficiencies — specialisation lives in perks.)*
+- **Level** — rises **often** from XP (see Trade & loot). Each level grants an
+  automatic **+HP** and, periodically, **+to-hit**; every few levels it also
+  grants a **perk point**.
+- **Perk** — a bought, permanent upgrade: a passive bonus or an active ability
+  (actives run on **charges** or **cooldowns**; there is no spendable resource
+  pool). *(Replaces buying skill/proficiency ranks.)*
+- **Path** — one of five themed trees a perk belongs to, each a *style* of
+  Ranger with its own feel: **the Long Watch** (endure/protect), **the Swift
+  Wrath** (melee offence), **the Far Shot** (marksman), **the Hidden Path**
+  (stealth/ambush), **the Kindled Heart** (spirit/defiance). A Ranger **blends
+  freely** across Paths; a **capstone** (a Path's deepest perk) needs real
+  investment in that Path.
+- **Perk point** — the currency spent to buy a perk. Deeper perks in a Path
+  require prior perks *in that Path*.
 
 ## Combat
 
-The hero rolls *every* die in a fight — on offence and on defence — so the dice
-tray never falls silent. A foe never rolls.
+`d20 + attack bonus vs Defence` to hit; on a hit, `weapon damage − soak`. The
+hero rolls; a foe never rolls (the dice tray stays the player's).
 
-- **Attack roll** — when the hero strikes, a proficiency Test against the foe's
-  Defence. On a hit, the weapon deals damage.
-- **Attack TN** — a foe's rating for how hard its blow is to turn aside; it is
-  the Target Number of the hero's Parry, not a roll the foe makes.
-- **Parry** — when a foe strikes the hero, the hero rolls a **Battle** Test
-  against the foe's Attack TN (shield and helm add to the total). Success turns
-  the blow aside for no harm; failure lets it land for the foe's damage.
-- **Piercing Blow** — a wound threat. On the hero's *great* attack it is forced
-  on the foe; on a **fumbled Parry** (the Eye) it is forced on the hero. The
-  defender rolls a **Protection** Test against the weapon's **Injury** rating to
-  avoid it.
-- **Wound** — the result of a failed Protection Test. A second Wound is mortal.
+- **Attack bonus** — what the hero adds to the attack d20 (attribute + level +
+  perks + weapon).
+- **Defence** — the TN an attacker's roll must meet to hit. Raised by **light
+  armour and shields** (dodge/parry), by Wits, and by level.
+- **Damage** — rolled from the weapon (e.g. `2d6+2`) on a hit; a **Critical**
+  adds bonus damage.
+- **Soak** — damage subtracted by **heavy armour** when a hit lands (mitigation,
+  as opposed to Defence's avoidance).
+- **Bleed** — a status a Critical or a heavy foe may inflict: damage over time /
+  a penalty. *(The only remnant of the old Wound mechanic; there is no second
+  death track.)*
+- **Endurance** — the single HP pool; grows with level. **0 Endurance = death.**
 
 ## Trade & loot
 
-The Wild pays in goods, not glory: routine foes grant no experience (that is the
-quests' domain), but their remains and purses are worth something to a Ranger who
-hauls them back to Bree. This is the game's material reward loop.
+The Wild pays in **both** glory and goods. A slain foe grants **XP** (quests
+grant larger chunks) *and* may leave loot — its remains and purse worth
+something to a Ranger who hauls them back to Bree. XP feeds **Level**s; the loot
+below is the parallel **material** reward loop. *(Kill-XP reverses ADR 0004's
+no-XP rule per ADR 0005; the economy below is otherwise unchanged.)*
 
 - **Coins** — the single currency, carried in the hero's **purse** (never on the
   ground as an item). A slain humanoid may yield coins straight into the purse.
@@ -125,11 +141,31 @@ hauls them back to Bree. This is the game's material reward loop.
   (trade-goods and consumables, which have no per-instance state). Equipment
   never stacks. *Avoid*: bundle, pile.
 
+## Equipment
+
+Gear shows its full stat line on pickup — there is **no identification**.
+
+- **Base item** — a gear template (a longsword, mail, a cloak) carrying its
+  intrinsic line (damage dice, soak/Defence, load, slot).
+- **Affix** — a generated modifier attached to a base item. A **prefix** reads
+  as an adjective before the name (a *keen* longsword); a **suffix** reads as
+  "**of ...**" after it (a longsword *of warding*).
+- **Rarity** — how many affixes an item rolled: **Plain** (base only) · **Fine**
+  (one affix) · **Rare** (a prefix *and* a suffix). Higher rarity = rarer drop.
+- **Unique** — a hand-authored named item with fixed, characterful stats (e.g.
+  *Angolar, the Ford-blade*), outside the Plain/Fine/Rare bands.
+- **Property** — a weapon's special line beyond +hit/damage: e.g. **pierce**
+  (ignore some soak) or **bonus-vs-type** (extra damage vs orcs, beasts…).
+- **Accessory** — a non-weapon, non-armour slot (cloak/ring/token) whose pluses
+  touch *non-combat* stats: +attribute, +stealth, a Path synergy, ability
+  charges. The lever for "pluses to different things".
+
 ## Presentation
 
 - **Dice tray** — the fixed, single-row panel pinned to the top of the
-  bottom-left (log) pane. It shows the player's **latest** Test rendered as
-  die-face glyphs: the Feat die, each Success die, the total vs the TN, and the
-  outcome. It only ever reflects the *player's* rolls, never an enemy's. The
-  scrolling **message log** beneath it carries pure narrative prose with no dice
-  math — the tray is the sole home for the numbers.
+  bottom-left (log) pane. It shows the player's **latest** Check: the d20, the
+  bonus added, the total vs the TN (for combat, the damage roll), and the
+  outcome — flagging a **Critical** or **Fumble**. It only ever reflects the
+  *player's* rolls, never an enemy's. The scrolling **message log** beneath it
+  carries pure narrative prose with no dice math — the tray is the sole home for
+  the numbers.

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Tuple
 
 import tcod
 
-from lonelands import color, dice_glyphs, tor
+from lonelands import color, tor
 from lonelands.config import (
     LOG_HEIGHT,
     LOG_Y,
@@ -86,11 +86,12 @@ def render_location_banner(console, engine: "Engine") -> None:
 
 
 def render_dice_tray(console, engine: "Engine") -> None:
-    """The player's latest Test, rendered as die-face glyphs above the log.
+    """The player's latest Check, rendered as a d20 line above the log.
 
     Reads ``engine.last_roll`` (set only for the player's rolls). Reflects
-    nothing until the first roll of the game. The numeric total is printed too,
-    so the tray stays readable even where the small pip faces are impressionistic.
+    nothing until the first roll of the game. The line reads
+    ``d20  N +mod = total  vs TN`` with the verdict (CRIT/FUMBLE/HIT/MISS)
+    stacked beneath.
     """
     ix = 2
     inner_w = MAP_WIDTH - 4
@@ -100,56 +101,36 @@ def render_dice_tray(console, engine: "Engine") -> None:
 
     roll: "RollResult | None" = getattr(engine, "last_roll", None)
     if roll is None:
-        console.print(x=ix, y=TRAY_Y, string="the dice lie still", fg=color.dark_gray)
+        console.print(x=ix, y=TRAY_Y, string="the die lies still", fg=color.dark_gray)
         return
 
-    # Dice are two cells wide and two cells tall; we print the top row on TRAY_Y
-    # and the bottom row just beneath it. Their internal padding separates
-    # adjacent dice, so no gaps are needed.
     top_y, bot_y = TRAY_Y, TRAY_Y + 1
 
-    def blit_die(x: int, rows: tuple[str, str], fg) -> int:
-        top, bot = rows
-        console.print(x=x, y=top_y, string=top, fg=fg)
-        console.print(x=x, y=bot_y, string=bot, fg=fg)
-        return x + dice_glyphs.DIE_CELLS
-
-    x = ix
-    # Feat die.
-    if roll.is_gandalf:
-        feat_fg = color.gandalf_rune
-    elif roll.is_eye:
-        feat_fg = color.sauron_eye
+    # The kept d20 face, coloured by its fortune.
+    if roll.is_crit:
+        die_fg = color.gandalf_rune
+    elif roll.is_fumble:
+        die_fg = color.sauron_eye
     else:
-        feat_fg = color.light_gray
-    x = blit_die(x, dice_glyphs.feat_rows(roll.feat_raw), feat_fg)
+        die_fg = color.light_gray
+    console.print(x=ix, y=top_y, string="d20", fg=color.dark_gray)
+    x = ix + 4
+    console.print(x=x, y=top_y, string=f"[{roll.die:>2}]", fg=die_fg)
+    x += 5
+    line = f"{roll.mod:+d} = {roll.total}   vs {roll.tn}"
+    if roll.damage is not None:
+        line += f"   {roll.damage} dmg"
+    console.print(x=x, y=top_y, string=line, fg=color.gray)
 
-    # Success dice.
-    for d in roll.success_dice:
-        if d == 6:
-            fg = color.tengwar
-        elif roll.weary and d <= 3:
-            fg = color.dark_gray  # Weary nullifies 1-3 — draw them spent.
-        else:
-            fg = color.light_gray
-        x = blit_die(x, dice_glyphs.success_rows(d), fg)
-    if not roll.success_dice:
-        console.print(x=x, y=bot_y, string="·", fg=color.dark_gray)
-        x += 1
-
-    # Total vs TN on the top row; the verdict stacked beneath it.
-    x += 2
-    console.print(x=x, y=top_y, string=f"= {roll.total}  vs {roll.tn}", fg=color.gray)
-
-    if not roll.is_success:
-        word, fg = ("MISS", color.sauron_eye if roll.is_eye else color.gray)
-    elif roll.is_extraordinary:
-        word, fg = ("EXTRAORDINARY", color.gandalf_rune)
-    elif roll.is_great:
-        word, fg = ("GREAT", color.tengwar)
+    if roll.is_crit:
+        word, fg = ("CRITICAL", color.gandalf_rune)
+    elif roll.is_fumble:
+        word, fg = ("FUMBLE", color.sauron_eye)
+    elif roll.is_success:
+        word, fg = ("HIT", color.success_roll)
     else:
-        word, fg = ("SUCCESS", color.success_roll)
-    console.print(x=x, y=bot_y, string=word, fg=fg)
+        word, fg = ("MISS", color.gray)
+    console.print(x=ix + 4, y=bot_y, string=word, fg=fg)
 
 
 def render_sidebar(console, engine: "Engine") -> None:
@@ -190,8 +171,8 @@ def render_sidebar(console, engine: "Engine") -> None:
     conds = []
     if hero.is_weary:
         conds.append(("Weary", color.enemy_atk))
-    if f.wounded:
-        conds.append(("Wounded", color.player_die))
+    if f.bleed > 0:
+        conds.append((f"Bleeding ({f.bleed})", color.player_die))
     if hero.is_miserable:
         conds.append(("Miserable", color.sauron_eye))
     if not conds:
@@ -235,7 +216,7 @@ def render_sidebar(console, engine: "Engine") -> None:
     y += 1
     console.print(x=ix, y=y, string=f.weapon_name[: w], fg=color.weapon_c)
     y += 1
-    console.print(x=ix, y=y, string=f"Def TN {f.defence}  Prot {f.protection}d  Load {hero.load}",
+    console.print(x=ix, y=y, string=f"Def {f.defence}  Atk +{f.attack_bonus}  Soak {f.soak}  Load {hero.load}",
                   fg=color.menu_text)
     y += 2
 

@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING, Optional, Tuple
 
 from lonelands import color
 from lonelands import tile_types
-from lonelands.dice import skill_check
+from lonelands.components.fighter import CRIT_BLEED
+from lonelands.dice import roll_check, roll_damage
 from lonelands.exceptions import Impossible
 
 if TYPE_CHECKING:
@@ -78,116 +79,58 @@ class MeleeAction(ActionWithDirection):
         target = self.target_actor
         if target is None or target.fighter is None:
             raise Impossible("There is nothing there to strike.")
+        return self._resolve_attack(target)
 
-        # Incoming blows on the player are resolved by the *player's* own roll:
-        # a Parry test. Every die on screen stays the hero's. (The attacker
-        # never rolls in this case.)
-        if target is self.engine.player and target.hero is not None:
-            return self._resolve_incoming(target)
-        return self._resolve_strike(target)
-
-    def _resolve_strike(self, target: "Actor") -> None:
+    def _resolve_attack(self, target: "Actor") -> None:
+        """One d20 attack, whoever swings: ``d20 + attack bonus vs Defence``. On
+        a hit, roll damage and subtract the target's Soak. A natural 20 auto-hits
+        for bonus damage and opens a Bleed; a natural 1 auto-misses. The dice
+        tray only reflects the player's own rolls (``note_roll`` gates on that)."""
         attacker = self.entity
         af = attacker.fighter
+        tf = target.fighter
         engine = self.engine
         is_player = attacker is engine.player
 
-        weary = attacker.hero.is_weary if attacker.hero else False
-        tn = target.fighter.defence
-        result = skill_check(tn, af.prowess, weary=weary)
+        result = roll_check(af.attack_bonus, tf.defence)
         engine.note_roll(result, attacker)  # feeds the dice tray (player rolls only)
 
         who = "You" if is_player else f"The {attacker.name}"
         target_name = "you" if target is engine.player else f"the {target.name}"
         atk_color = color.player_atk if is_player else color.enemy_atk
 
-        if result.is_eye:
-            engine.message_log.add_message(
-                f"{who} strike wildly — the Shadow stirs.",
-                color.sauron_eye,
-            )
-
         if not result.is_success:
+            verb = "swing wildly" if result.is_fumble else "miss"
             engine.message_log.add_message(
-                f"{who} {af.attack_desc} at {target_name} but miss.",
-                color.gray,
+                f"{who} {af.attack_desc} at {target_name} but {verb}.",
+                color.sauron_eye if result.is_fumble else color.gray,
             )
             return
 
-        dmg = af.damage + result.tengwar * af.edge
-        target.fighter.take_damage(dmg)
-        flavour = ""
-        if result.tengwar:
-            flavour = f" A tengwar flares — {result.tengwar} extra!"
+        # A hit: roll damage, subtract Soak (a clean blow always stings for 1+).
+        raw = roll_damage(af.damage)
+        dmg = max(1, raw - tf.soak)
+        crit = result.is_crit
+        if crit:
+            dmg += roll_damage(af.damage)  # the Critical carries a second roll
+        result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
+        tf.take_damage(dmg)
+
+        flavour = " A CRITICAL blow!" if crit else ""
         engine.message_log.add_message(
             f"{who} {af.attack_desc} {target_name} for {dmg} endurance.{flavour}",
             atk_color,
         )
 
-        # A great success threatens a Piercing Blow.
-        if result.is_great and target.fighter.endurance > 0:
-            if not target.fighter.protection_test(af.injury):
-                mortal = target.fighter.inflict_wound()
-                if mortal:
-                    engine.message_log.add_message(
-                        f"A mortal blow! {target_name.capitalize()} is struck down.",
-                        color.player_die if target is engine.player else color.enemy_die,
-                    )
-                    target.fighter.endurance = 0
-                else:
-                    engine.message_log.add_message(
-                        f"A piercing blow wounds {target_name}!",
-                        color.enemy_atk if is_player else color.player_die,
-                    )
-
-    def _resolve_incoming(self, player: "Actor") -> None:
-        """A foe strikes the player: the player rolls a Parry test (Battle,
-        plus any shield/helm bonus) against the attacker's Attack TN. Turn it
-        aside on a success; take the blow on a failure. A fumbled parry (the
-        Eye) leaves the hero open to a wounding Piercing Blow."""
-        attacker = self.entity
-        af = attacker.fighter
-        engine = self.engine
-        hero = player.hero
-
-        defence_bonus = player.equipment.defence_bonus if player.equipment else 0
-        result = hero.test_skill("Battle", tn=af.attack, modifier=defence_bonus)
-        # test_skill already feeds the dice tray (a player roll).
-
-        foe = f"The {attacker.name}"
-        if result.is_success:
+        # Crits (and heavy foes) leave the target bleeding.
+        stacks = (CRIT_BLEED if crit else 0) + af.bleed_on_hit
+        if stacks and tf.endurance > 0:
+            tf.apply_bleed(stacks)
             engine.message_log.add_message(
-                f"{foe} {af.attack_desc} you, but you turn the blow aside.",
-                color.gray,
+                f"{target_name.capitalize()} {'are' if target is engine.player else 'is'} "
+                f"left bleeding!",
+                color.player_die if target is engine.player else color.enemy_atk,
             )
-            return
-
-        dmg = af.damage
-        player.fighter.take_damage(dmg)
-        engine.message_log.add_message(
-            f"{foe} {af.attack_desc} you for {dmg} endurance.",
-            color.enemy_atk,
-        )
-        if player.fighter.endurance <= 0:
-            return  # die() already fired from the endurance setter
-
-        # A fumbled parry (Eye of Sauron) leaves you exposed to a Piercing Blow.
-        if result.is_eye:
-            engine.message_log.add_message(
-                "You are thrown off-guard — the Shadow presses the attack!",
-                color.sauron_eye,
-            )
-            if not player.fighter.protection_test(af.injury):
-                mortal = player.fighter.inflict_wound()
-                if mortal:
-                    engine.message_log.add_message(
-                        "A mortal wound! You are struck down.", color.player_die
-                    )
-                    player.fighter.endurance = 0
-                else:
-                    engine.message_log.add_message(
-                        "A piercing blow wounds you!", color.player_die
-                    )
 
 
 class BumpAction(ActionWithDirection):

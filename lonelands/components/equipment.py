@@ -61,8 +61,8 @@ class Equipment(BaseComponent):
         return self._sum("defence_bonus")
 
     @property
-    def protection_bonus(self) -> int:
-        return self._sum("protection_bonus")
+    def soak_bonus(self) -> int:
+        return self._sum("soak_bonus")
 
     def item_is_equipped(self, item: "Item") -> bool:
         return item in self.slots.values()
