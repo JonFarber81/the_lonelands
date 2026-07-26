@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from lonelands import color
+from lonelands import color, overworld
 from lonelands.components import consumable
 from lonelands.components.ai import HostileEnemy, SkittishBeast
 from lonelands.components.equipment import Equipment
@@ -203,3 +203,19 @@ def items_for_depth(depth: int) -> List[Tuple[Item, int]]:
 
 
 WILD_BEASTS = [(wolf, 3), (great_spider, 1)]
+
+
+# ---------------------------------------------------------------------------
+# Band → wandering-beast model (ADR 0003)
+# ---------------------------------------------------------------------------
+# Every Surface seeds wandering beasts from its Region's **band**, regardless of
+# terrain: a (count_range, weighted-table) pair. "Level" is expressed as *which*
+# creatures roam — Free lands see a lone wolf at worst; Perilous lands crawl with
+# wargs, spiders, and the Enemy's orcs. Tune the counts/weights here, in one
+# place. Keyed by the band constants in `overworld` so the names can't drift.
+BAND_BEASTS = {
+    overworld.FREE:     ((0, 1), [(wolf, 1)]),
+    overworld.WILD:     ((2, 4), WILD_BEASTS),
+    overworld.DARK:     ((3, 5), [(wolf, 2), (warg, 2), (orc_soldier, 2), (great_spider, 1)]),
+    overworld.PERILOUS: ((4, 6), [(warg, 2), (great_spider, 3), (orc_soldier, 2), (orc_archer, 1)]),
+}

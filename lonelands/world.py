@@ -14,13 +14,30 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
 
-from lonelands import procgen, tile_types
+from lonelands import game_map, overworld, procgen, tile_types
 from lonelands.game_map import GameMap
 
 if TYPE_CHECKING:
     from lonelands.engine import Engine
 
 Coord = Tuple[int, int]
+
+# Cells with a hand-authored Surface; everything else uses the generic
+# placeholder built from its plan Cell.
+_AUTHORED_SURFACES: Dict[Coord, Callable[["Engine"], GameMap]] = {
+    (0, 0): procgen.generate_bree,
+    (2, 0): procgen.generate_weathertop,       # Amon Sûl watchtower
+    (-1, 0): procgen.generate_barrow_downs,     # Tyrn Gorthad — the main quest barrow
+}
+
+# Cells whose deeps are authored this pass (ADR 0003 re-home): the barrow-wight
+# deeps beneath Tyrn Gorthad hold the star-brooch; Amon Sûl's watch-vaults do not.
+_AUTHORED_DEEPS: Dict[Coord, Callable[["Engine", int], GameMap]] = {
+    (-1, 0): lambda e, depth: procgen.generate_ruin(
+        e, depth, name="The Barrows of Tyrn Gorthad", max_depth=4, treasure=True),
+    (2, 0): lambda e, depth: procgen.generate_ruin(
+        e, depth, name="The Watch-vaults of Amon Sûl", max_depth=3, treasure=False),
+}
 
 
 class Region:
@@ -81,33 +98,28 @@ class GameWorld:
 
     # --- the world grid ---------------------------------------------------
     def _region_defs(self) -> Dict[Coord, Callable[[], Region]]:
-        """The starting plus-grid, mirroring the Eriador Journey map: Bree at
-        the centre, four neighbours around it. Each entry is a factory so a
-        Region is only generated when first visited."""
+        """A factory per walkable cell of the overworld plan (`overworld.GRID`,
+        ADR 0003): all 116 cells, keyed by coord. Impassable coords are simply
+        absent, so their edges report as uncrossable (ADR 0002). Each entry is a
+        factory so a Region is only generated when first visited.
+
+        A handful of cells have **authored** Surfaces; every other cell falls
+        back to `generate_placeholder_surface`, built from its plan `Cell` so it
+        is walkable before its cluster refines it. Deeps are wired only for the
+        cells whose dungeons are authored (`_AUTHORED_DEEPS`); the rest carry a
+        `▼N` marker in the plan but are dug region-by-region in a later pass."""
         e = self.engine
-        return {
-            (0, 0): lambda: Region(
-                (0, 0), "Bree, at the meeting of the roads",
-                lambda: procgen.generate_bree(e),
-            ),
-            (1, 0): lambda: Region(
-                (1, 0), "The Weather Hills, east of Bree",
-                lambda: procgen.generate_weather_hills(e),
-                lambda depth: procgen.generate_ruin(e, depth),
-            ),
-            (-1, 0): lambda: Region(
-                (-1, 0), "The Barrow-downs",
-                lambda: procgen.generate_barrow_downs(e),
-            ),
-            (0, -1): lambda: Region(
-                (0, -1), "The Chetwood",
-                lambda: procgen.generate_chetwood(e),
-            ),
-            (0, 1): lambda: Region(
-                (0, 1), "The South Downs",
-                lambda: procgen.generate_south_downs(e),
-            ),
-        }
+
+        def make(cell: "overworld.Cell") -> Callable[[], Region]:
+            surface = _AUTHORED_SURFACES.get(cell.coord)
+            deep = _AUTHORED_DEEPS.get(cell.coord)
+            build_surface = (lambda s=surface: s(e)) if surface \
+                else (lambda c=cell: procgen.generate_placeholder_surface(e, c))
+            build_deep = (lambda depth, d=deep: d(e, depth)) if deep else None
+            return lambda c=cell: Region(
+                c.coord, c.region_name, build_surface, build_deep)
+
+        return {coord: make(cell) for coord, cell in overworld.GRID.items()}
 
     def region(self, coord: Coord) -> Optional[Region]:
         if coord not in self._defs:
@@ -218,24 +230,9 @@ class GameWorld:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-def _nearest_walkable(gm: GameMap, x: int, y: int) -> Coord:
-    """The tile itself if walkable and unblocked, else the closest one that is
-    (expanding-ring search). Keeps arrivals out of walls, water, and trees."""
-    def ok(tx: int, ty: int) -> bool:
-        return (
-            gm.in_bounds(tx, ty)
-            and bool(gm.tiles["walkable"][tx, ty])
-            and gm.get_blocking_entity_at(tx, ty) is None
-        )
-
-    if ok(x, y):
-        return (x, y)
-    for radius in range(1, max(gm.width, gm.height)):
-        for tx in range(x - radius, x + radius + 1):
-            for ty in range(y - radius, y + radius + 1):
-                if max(abs(tx - x), abs(ty - y)) == radius and ok(tx, ty):
-                    return (tx, ty)
-    return (x, y)  # nothing walkable at all — should never happen
+# The expanding-ring search lives on `game_map` (it operates purely on a
+# GameMap); kept here under its old name for the callers/tests that import it.
+_nearest_walkable = game_map.nearest_walkable
 
 
 def _ordinal(n: int) -> str:

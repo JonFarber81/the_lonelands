@@ -83,3 +83,25 @@ class GameMap:
                     x=entity.x, y=entity.y,
                     string=graphic_char(entity.char), fg=entity.color,
                 )
+
+
+def nearest_walkable(gm: "GameMap", x: int, y: int) -> "tuple[int, int]":
+    """The tile itself if walkable and unblocked, else the closest one that is
+    (expanding-ring search). Keeps arrivals out of walls, water, and trees — used
+    both when carrying the player across a Region edge and when landing them on a
+    freshly-generated Surface whose centre may be painted over."""
+    def ok(tx: int, ty: int) -> bool:
+        return (
+            gm.in_bounds(tx, ty)
+            and bool(gm.tiles["walkable"][tx, ty])
+            and gm.get_blocking_entity_at(tx, ty) is None
+        )
+
+    if ok(x, y):
+        return (x, y)
+    for radius in range(1, max(gm.width, gm.height)):
+        for tx in range(x - radius, x + radius + 1):
+            for ty in range(y - radius, y + radius + 1):
+                if max(abs(tx - x), abs(ty - y)) == radius and ok(tx, ty):
+                    return (tx, ty)
+    return (x, y)  # nothing walkable at all — should never happen

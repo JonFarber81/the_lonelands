@@ -12,24 +12,32 @@ not a spec: it defines *what words mean*, never *how things are built*.
   Never interchangeably called a "zone" or "square".
 - **Level** — one horizontal layer of a Region, stacked vertically. **Enter** on
   a stair or entrance moves the player up or down between a Region's Levels. The
-  barrow's "deeps" are the lower Levels of the barrow-downs Region.
+  barrow's "deeps" are the lower Levels of the Barrow-downs Region (Tyrn Gorthad).
 - **Surface** — a Region's topmost Level: the one the player arrives on when
   walking in from a neighbour. *Only the Surface edge-connects to neighbouring
   Regions*; deeper Levels are reached only by Enter, from within their Region.
 - **Square** — the town's central plaza only. *Not* a synonym for Region.
 
-The starting grid (a plus around the hub, mirroring the Eriador Journey map;
-see `references/`). The full overworld this plus sits inside is planned in
-`notes/overworld-map.md` (a 15×9 Region grid traced from the reference map; see
-ADR 0003):
+The whole **15×9 overworld grid** is live: all 116 walkable cells exist and are
+enterable, built lazily from `lonelands/overworld.py` (the plan-as-data twin of
+`notes/overworld-map.md`, traced from the Eriador Journey Map — see `references/`
+and ADR 0003). Impassable Sea/Mountain cells are simply *absent* from the grid,
+so their edges are uncrossable. A few cells are hand-authored; the rest are
+generic **placeholder surfaces** built from their plan `Cell` (band-tinted
+terrain + band-driven wandering beasts + a diegetic Sea/Mountain border where a
+neighbour is missing), to be refined cluster-by-cluster later.
 
-- **Bree** — the hub Region, the town at the meeting of the roads. Where a
-  Ranger of the North is met. *(Replaces the former invented "Talbrún".)*
-- **the Weather Hills** — the **east** Region, along the Great East Road toward
-  Weathertop; holds the barrow entrance down to the deeps (the old ruin).
-- **the Barrow-downs** — the **west** Region (Tyrn Gorthad); near-empty for now.
-- **the Chetwood** — the **north** Region; near-empty for now.
-- **the South Downs** — the **south** Region; near-empty for now.
+Landmarks around the Bree hub:
+
+- **Bree** `(0,0)` — the hub Region, the town at the meeting of the roads. Where
+  a Ranger of the North is met. *(Replaces the former invented "Talbrún".)*
+- **the Barrow-downs** `(-1,0)` — the **west** Region (Tyrn Gorthad); holds the
+  barrow entrance down to the deeps where the barrow-wights and the star-brooch
+  lie — the main quest. *(Re-homed here from the Weather Hills per ADR 0003.)*
+- **Weathertop** `(2,0)` — **east** along the Great East Road; the ruined
+  watchtower of Amon Sûl, with its own deeps (the watch-vaults).
+- **the Chetwood** `(0,-1)` — the **north** Region; wooded placeholder for now.
+- **the South Downs** `(0,1)` — the **south** Region; placeholder for now.
 
 ## The One Ring dice
 

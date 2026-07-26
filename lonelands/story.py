@@ -1,5 +1,7 @@
 """Quests, speaking characters, and dialog trees for the starting Region:
-the town of Bree, and the barrow-ruin east of it in the Weather Hills.
+the town of Bree, and the barrow-wight mounds of Tyrn Gorthad in the
+Barrow-downs west of it (the ruined watchtower of Amon Sûl on Weathertop, east
+along the Road, is its own ruin — see ADR 0003).
 
 Setting: TA 2965. Bree is peopled accurately for that year — the Prancing Pony
 is kept by a Butterbur (an ancestor of the Barliman of later days), and Rangers
@@ -54,9 +56,9 @@ def build_quests(engine) -> None:
 
     main = Quest(
         "main_barrow",
-        "The Star of Amon Gûl",
-        "Old Dírhael speaks of a fell chill rising from the barrow beneath the ruined "
-        "watchtower, and of a star-brooch of Arnor lost in its depths.",
+        "The Star of the Barrow",
+        "Old Dírhael speaks of a fell chill rising from the barrow-mounds of Tyrn "
+        "Gorthad, west of Bree, and of a star-brooch of Arnor lost among the wights.",
         objective="recover the star-brooch from the deep barrow",
         target_count=1,
         on_complete=finish_main,
@@ -79,7 +81,7 @@ def build_quests(engine) -> None:
     orcs = Quest(
         "orcs",
         "The Crawling Dark",
-        "Orcs of the mountains have crept into the old ruin. Halbarad would see their number thinned.",
+        "Orcs of the mountains have crept into the old mounds. Halbarad would see their number thinned.",
         objective="slay orc soldiers in the barrow",
         target_count=4,
         xp_reward=24,
@@ -112,7 +114,7 @@ def make_elder() -> Actor:
                     "darkening days, kinsman. Sit, and tell me — or ask what you will.\"",
             "options": [
                 opt("What shadow lies on this place?", goto="trouble"),
-                opt("Tell me of the ruin on the hill.", goto="ruins_lore"),
+                opt("Tell me of the barrow-downs.", goto="ruins_lore"),
                 opt("I will go into the barrow. What must I find?",
                     goto="quest_given",
                     do=lambda e: q(e).start("main_barrow"),
@@ -125,24 +127,24 @@ def make_elder() -> Actor:
             ],
         },
         "trouble": {
-            "text": "\"A cold has come out of an old barrow east of here, under the "
-                    "Weather Hills. The dead do not lie quiet, and orcs have crept down "
-                    "from the Ettenmoors to nest in the ruin. The Bree-folk bar their "
-                    "doors after dark.\"",
+            "text": "\"A cold has come out of the old barrow-downs west of here — Tyrn "
+                    "Gorthad, the green mounds where the last men of Cardolan were laid. "
+                    "The dead do not lie quiet, and fell things have crept into the "
+                    "mounds. The Bree-folk bar their doors after dark.\"",
             "options": [
                 opt("And you would have me go down there.", goto="quest_given",
                     do=lambda e: q(e).start("main_barrow"),
                     show=lambda e: q(e).get("main_barrow").state.name == "UNSTARTED"),
-                opt("Tell me more of the ruin.", goto="ruins_lore"),
+                opt("Tell me more of the mounds.", goto="ruins_lore"),
                 opt("(step back)", goto="root"),
             ],
         },
         "ruins_lore": {
-            "text": "\"In the days of Arnor a watchtower stood upon Amon Gûl, and beneath "
-                    "it the barrows of its captains. When the North-kingdom fell, the "
-                    "Witch-king's malice crept into those mounds. Somewhere in the deep "
-                    "dark lies a star-brooch — the token of the tower's last warden. "
-                    "Recover it, and perhaps the chill will lift.\"",
+            "text": "\"In the last days of Cardolan its princes were laid in the barrows "
+                    "of Tyrn Gorthad. When that realm failed, the Witch-king sent evil "
+                    "spirits — barrow-wights — into the mounds, and they have haunted them "
+                    "ever since. Deepest of all lies a star-brooch, the token of the last "
+                    "prince. Recover it, and perhaps the chill will lift.\"",
             "options": [
                 opt("I will find it.", goto="quest_given",
                     do=lambda e: q(e).start("main_barrow"),
@@ -151,10 +153,10 @@ def make_elder() -> Actor:
             ],
         },
         "quest_given": {
-            "text": "\"Walk east out of Bree into the Weather Hills, beyond the ford — "
-                    "you'll find a broken arch in the hillside. Go carefully, and go with "
-                    "hope. The star-brooch will be deepest of all, where the cold is "
-                    "thickest.\"",
+            "text": "\"Walk west out of Bree, past the eaves of the Old Forest, into the "
+                    "Barrow-downs — you'll find a broken barrow-arch among the mounds. Go "
+                    "carefully, and go with hope. The star-brooch will be deepest of all, "
+                    "where the cold is thickest.\"",
             "options": [opt("I will not fail.", goto=None)],
         },
         "quest_done": {
@@ -305,23 +307,24 @@ def make_innkeeper() -> Actor:
             ],
         },
         "roads": {
-            "text": "\"Bree sits where the roads cross, see. Walk east on the Great East "
-                    "Road and you're into the Weather Hills — that's where your barrow "
-                    "is, if you're set on it. West is the old Barrow-downs, north the "
-                    "Chetwood, south the downs along the Greenway. Just walk out and keep "
-                    "going; you'll pass into whichever land you're headed.\"",
+            "text": "\"Bree sits where the roads cross, see. Walk west and you come to the "
+                    "old Barrow-downs — that's where your barrow is, if you're set on it. "
+                    "East on the Great East Road climbs to Weathertop and the Weather "
+                    "Hills, north lies the Chetwood, south the downs along the Greenway. "
+                    "Just walk out and keep going; you'll pass into whichever land you're "
+                    "headed.\"",
             "options": [opt("(step back)", goto="root")],
         },
         "rumour": {
-            "text": "\"Wolves bolder than they ought to be, and a chill out of that old "
-                    "barrow east of here. Rangers come and go — grey folk, quiet folk. "
-                    "Old Dírhael's one, and he's got that far-off look tonight.\"",
+            "text": "\"Wolves bolder than they ought to be, and a chill out of those old "
+                    "barrow-downs west of here. Rangers come and go — grey folk, quiet "
+                    "folk. Old Dírhael's one, and he's got that far-off look tonight.\"",
             "options": [opt("(step back)", goto="root")],
         },
         "hint": {
             "text": "\"Mistress Rushlight has herbs by her cot, and that Ranger Halbarad "
-                    "keeps gear for Wild-walkers. Speak with old Dírhael before you go "
-                    "east — he knows the deep history of that barrow.\"",
+                    "keeps gear for Wild-walkers. Speak with old Dírhael before you go — "
+                    "he knows the deep history of those mounds.\"",
             "options": [opt("(step back)", goto="root")],
         },
     }

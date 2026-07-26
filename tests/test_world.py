@@ -39,14 +39,22 @@ def test_new_game_starts_in_bree_on_the_surface(game):
 
 # --- the adjacency graph ----------------------------------------------------
 
-def test_the_four_neighbours_exist_and_corners_do_not(game):
+def test_the_grid_is_populated_and_named(game):
     engine, gw, player = game
-    assert gw.region((1, 0)).name.startswith("The Weather Hills")
-    assert gw.region((-1, 0)).name == "The Barrow-downs"
-    assert gw.region((0, -1)).name.startswith("The Chetwood")
-    assert gw.region((0, 1)).name == "The South Downs"
-    assert gw.region((1, 1)) is None      # no corner Region
-    assert gw.region((2, 0)) is None      # nothing beyond the plus
+    # Bree's four neighbours, on the full 15x9 grid (ADR 0003).
+    assert gw.region((-1, 0)).name == "Barrow-downs"     # Tyrn Gorthad, west
+    assert gw.region((0, -1)).name == "Chetwood"         # north
+    assert gw.region((0, 1)).name == "South Downs"       # south
+    assert gw.region((2, 0)).name == "Weathertop"        # Amon Sûl, east along the Road
+    assert gw.region((1, 0)) is not None                 # wilderness filler now exists
+
+
+def test_impassable_cells_are_absent(game):
+    engine, gw, player = game
+    # The Sea/Mountain frame is the *absence* of a Region (ADR 0002/0003).
+    assert gw.region((-7, 2)) is None     # the Gulf of Lune
+    assert gw.region((7, 2)) is None       # the Misty Mountains wall
+    assert gw.region((-99, 0)) is None     # far off the grid entirely
 
 
 @pytest.mark.parametrize("dx,dy,coord", [
@@ -76,9 +84,9 @@ def test_arrival_mirrors_the_crossing_row(game):
 
 def test_no_neighbour_blocks_the_crossing(game):
     engine, gw, player = game
-    place_on_surface(engine, gw, (1, 0), 61, 22)  # Weather Hills' far east edge
-    assert gw.cross_edge(1, 0) is False           # nothing at (2, 0)
-    assert gw.coord == (1, 0)                      # stayed put
+    place_on_surface(engine, gw, (6, 1), 61, 22)  # against the Misty Mountains wall
+    assert gw.cross_edge(1, 0) is False           # nothing at (7, 1) — impassable
+    assert gw.coord == (6, 1)                      # stayed put
 
 
 def test_diagonal_corner_move_does_not_cross(game):
@@ -90,7 +98,7 @@ def test_diagonal_corner_move_does_not_cross(game):
 def test_only_the_surface_edge_connects(game):
     engine, gw, player = game
     # Descend into the barrow first, then try to walk off its edge.
-    surface = place_on_surface(engine, gw, (1, 0), 0, 0)
+    surface = place_on_surface(engine, gw, (-1, 0), 0, 0)
     player.x, player.y = surface.ruin_entrance_xy
     gw.use_tile()
     assert gw.level_index == -1
@@ -101,7 +109,7 @@ def test_only_the_surface_edge_connects(game):
 
 def test_enter_descends_and_ascends_the_barrow(game):
     engine, gw, player = game
-    surface = place_on_surface(engine, gw, (1, 0), 0, 0)
+    surface = place_on_surface(engine, gw, (-1, 0), 0, 0)
     ex, ey = surface.ruin_entrance_xy
     player.x, player.y = ex, ey
 
@@ -111,7 +119,7 @@ def test_enter_descends_and_ascends_the_barrow(game):
     player.x, player.y = engine.game_map.entry_xy  # the up-stair
     gw.use_tile()
     assert gw.level_index == 0                      # back on the Surface
-    assert engine.game_map.name.startswith("The Weather Hills")
+    assert engine.game_map.name.startswith("The Barrow-downs")
 
 
 def test_enter_does_nothing_on_plain_ground(game):

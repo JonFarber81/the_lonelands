@@ -25,7 +25,7 @@ def saved(tmp_path):
     engine.quest_log.start("wolves")
     engine.quest_log.get("wolves").advance()
     engine.flags["herbwife_gift"] = True
-    engine.game_world.cross_edge(1, 0)            # travel east into the Weather Hills
+    engine.game_world.cross_edge(-1, 0)           # travel west into the Barrow-downs
     engine.game_world.current_region.level(-1)    # build a barrow deep too
 
     path = tmp_path / "game.sav"
