@@ -58,6 +58,38 @@ def test_heavy_foes_are_flagged_to_bleed_on_hit():
     assert content.cave_goblin.fighter.bleed_on_hit == 0
 
 
+# --- Difficulty: scales only the damage the player takes --------------------
+
+def test_difficulty_scales_only_the_players_incoming_damage():
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+
+    # A foe on Grim takes damage untouched (scaling is player-only)...
+    engine.difficulty = "grim"
+    before = foe.fighter.endurance
+    foe.fighter.take_damage(4)
+    assert foe.fighter.endurance == before - 4
+
+    # ...while the player's incoming damage is multiplied by the tier.
+    engine.difficulty = "merciful"  # 0.6×
+    start = player.fighter.endurance
+    player.fighter.take_damage(10)
+    assert player.fighter.endurance == start - 6  # round(10 * 0.6)
+
+    engine.difficulty = "grim"  # 1.4×
+    start = player.fighter.endurance
+    player.fighter.take_damage(10)
+    assert player.fighter.endurance == start - 14
+
+
+def test_a_landed_blow_never_softens_below_one():
+    engine, gm, player = make_world()
+    engine.difficulty = "merciful"  # 0.6× would round a 1-damage hit to 1
+    start = player.fighter.endurance
+    player.fighter.take_damage(1)
+    assert player.fighter.endurance == start - 1
+
+
 # --- Attack resolution: the attacker rolls ----------------------------------
 
 def test_a_hit_deals_damage_reduced_by_soak():

@@ -77,6 +77,29 @@ TILE_HEIGHT = 20
 
 WINDOW_TITLE = "The Lonelands — Eriador, TA 2965"
 
+# --- Difficulty -----------------------------------------------------------
+# A run's difficulty scales only the damage the player takes; foes' Endurance
+# and aim are untouched. The chosen key is stored on the Engine (and so rides
+# along in the save). Each tier is (key, name, incoming-damage multiplier,
+# blurb). Wayfarer is the intended balance (1.0×).
+DIFFICULTIES = [
+    ("merciful", "Merciful", 0.6,
+     "The road is kinder; the blows that land bite softly."),
+    ("wayfarer", "Wayfarer", 1.0,
+     "The North as it is — the intended measure of peril."),
+    ("grim", "Grim", 1.4,
+     "Death walks close beside you; every wound cuts deep."),
+]
+DEFAULT_DIFFICULTY = "wayfarer"
+
+
+def difficulty_multiplier(key: str) -> float:
+    """The incoming-damage multiplier for a difficulty key (1.0 if unknown)."""
+    for k, _name, mult, _blurb in DIFFICULTIES:
+        if k == key:
+            return mult
+    return 1.0
+
 
 def find_font() -> str | None:
     for path in FONT_CANDIDATES:

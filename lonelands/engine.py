@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict
 import tcod
 from tcod import libtcodpy
 
-from lonelands import color, render_functions
+from lonelands import color, config, render_functions
 from lonelands.config import LOG_TEXT_HEIGHT, LOG_TEXT_Y, MAP_WIDTH
 from lonelands.exceptions import Impossible
 from lonelands.message_log import MessageLog
@@ -31,6 +31,9 @@ class Engine:
         self.mouse_location = (0, 0)
         self.flags: Dict[str, Any] = {}
         self.turn_count = 0
+        # Difficulty scales only the damage the player takes (see config and
+        # Fighter.take_damage); setup_game.new_game overrides it per run.
+        self.difficulty = config.DEFAULT_DIFFICULTY
         from lonelands import input_handlers
         self.event_handler = input_handlers.MainGameEventHandler(self)
 

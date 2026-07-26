@@ -112,7 +112,24 @@ class Fighter(BaseComponent):
         return self._endurance - before
 
     def take_damage(self, amount: int) -> None:
-        self.endurance -= amount
+        self.endurance -= self._scale_incoming(amount)
+
+    def _scale_incoming(self, amount: int) -> int:
+        """Apply the run's difficulty to damage the *player* takes (foes are
+        never scaled). A real blow never softens below 1; the result is a whole
+        number of Endurance."""
+        if amount <= 0:
+            return amount
+        gm = getattr(self.parent, "gamemap", None)
+        engine = getattr(gm, "engine", None)
+        if engine is None or engine.player is not self.parent:
+            return amount
+        from lonelands import config
+        key = getattr(engine, "difficulty", config.DEFAULT_DIFFICULTY)
+        mult = config.difficulty_multiplier(key)
+        if mult == 1.0:
+            return amount
+        return max(1, round(amount * mult))
 
     # --- Derived combat stats --------------------------------------------
     @property
