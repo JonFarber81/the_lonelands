@@ -111,6 +111,12 @@ hero rolls; a foe never rolls (the dice tray stays the player's).
   a penalty. *(The only remnant of the old Wound mechanic; there is no second
   death track.)*
 - **Endurance** — the single HP pool; grows with level. **0 Endurance = death.**
+- **Difficulty** — a per-run tier chosen on the title screen (**Merciful**,
+  **Wayfarer**, **Grim**) that scales **only the damage the player takes** —
+  foes' Endurance and aim are untouched. Wayfarer (×1.0) is the intended
+  balance; a landed blow never softens below 1. Stored on the Engine, so it
+  rides along in the save. *(Defined in `config.DIFFICULTIES`; applied at the
+  single seam `Fighter.take_damage`.)*
 
 ## Ranged combat
 

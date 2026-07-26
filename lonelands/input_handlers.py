@@ -962,6 +962,40 @@ class MainMenuHandler(BaseEventHandler):
                 return PopupMessage(self, f"Failed to load save:\n{exc}")
             return MainGameEventHandler(engine)
         if event.sym in (KeySym.n, KeySym.RETURN, KeySym.KP_ENTER):
-            engine = setup_game.new_game()
+            return DifficultySelectHandler()
+        return None
+
+
+class DifficultySelectHandler(BaseEventHandler):
+    """Chosen before a new game begins: the peril of the road ahead. The pick
+    only scales the damage the player takes (see config.DIFFICULTIES)."""
+
+    def on_render(self, console: tcod.console.Console) -> None:
+        from lonelands import config
+        console.rgb["bg"] = color.near_black
+        cx = SCREEN_WIDTH // 2
+        console.print(cx, 8, "How hard is the road?", fg=color.menu_title,
+                      alignment=tcod.constants.CENTER)
+        row = 14
+        for i, (_key, name, _mult, blurb) in enumerate(config.DIFFICULTIES):
+            fg = color.selected if _key == config.DEFAULT_DIFFICULTY else color.menu_text
+            console.print(cx, row, f"[{i + 1}]  {name}", fg=fg,
+                          alignment=tcod.constants.CENTER)
+            console.print(cx, row + 1, blurb, fg=color.gray,
+                          alignment=tcod.constants.CENTER)
+            row += 3
+        console.print(cx, SCREEN_HEIGHT - 3,
+                      "Press 1–3 to set out · [Esc] back",
+                      fg=color.gray, alignment=tcod.constants.CENTER)
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        from lonelands import config, setup_game
+        if event.sym == KeySym.ESCAPE:
+            return MainMenuHandler()
+        choice = {KeySym.N1: 0, KeySym.KP_1: 0, KeySym.N2: 1, KeySym.KP_2: 1,
+                  KeySym.N3: 2, KeySym.KP_3: 2}.get(event.sym)
+        if choice is not None and choice < len(config.DIFFICULTIES):
+            key = config.DIFFICULTIES[choice][0]
+            engine = setup_game.new_game(difficulty=key)
             return MainGameEventHandler(engine)
         return None

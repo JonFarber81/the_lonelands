@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 
-from lonelands import color, content, story
+from lonelands import color, config, content, story
 from lonelands.engine import Engine
 from lonelands.world import GameWorld
 
@@ -18,9 +18,10 @@ def _grant(player, template, equip: bool = False):
     return item
 
 
-def new_game() -> Engine:
+def new_game(difficulty: str = config.DEFAULT_DIFFICULTY) -> Engine:
     player = content.make_player()
     engine = Engine(player)
+    engine.difficulty = difficulty  # scales the damage the player takes
     engine.game_world = GameWorld(engine)
 
     story.build_quests(engine)
