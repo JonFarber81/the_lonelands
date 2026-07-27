@@ -16,7 +16,8 @@ from lonelands import color, content
 from lonelands.barks import BarkField, BarkSource
 from lonelands.entity import Actor
 from lonelands.quests import Quest
-from lonelands.story._helpers import make_npc, opt
+from lonelands.story._helpers import make_npc, make_signpost, opt
+from lonelands.story.patrons import make_patrons  # re-exported for procgen
 
 
 # ---------------------------------------------------------------------------
@@ -354,42 +355,143 @@ def make_town_npcs() -> List[Actor]:
 
 
 # ---------------------------------------------------------------------------
+# Harry Goatleaf — the West-gate keeper (greeting & wayfinding)
+# ---------------------------------------------------------------------------
+def make_gatekeeper() -> Actor:
+    tree = {
+        "root": {
+            "text": "A stout man in a mud-coloured cloak leans from the gate-lodge, "
+                    "peering at you before he lifts the bar.\n\"Harry Goatleaf, keeper "
+                    "of the West-gate. We're careful who we let in these nights. "
+                    "Business in Bree, is it?\"",
+            "options": [
+                opt("Which roads meet here?", goto="roads"),
+                opt("Careful of what?", goto="wary"),
+                opt("Only passing through.", goto=None),
+            ],
+        },
+        "roads": {
+            "text": "\"This gate opens on the West Road — the Shire's away that way, and "
+                    "the old Barrow-downs nearer, though none go there willing. North the "
+                    "Greenway climbs to the Chetwood; south it runs down to the Downs. And "
+                    "east the road lifts over the Hill and off to the Bree-land and the "
+                    "wild lands beyond. The Pony's your first stop, whichever way you came.\"",
+            "options": [opt("(step back)", goto="root")],
+        },
+        "wary": {
+            "text": "\"Queer folk on the roads of late — and a cold out of the west mounds "
+                    "that puts the wind up honest men. I keep the bar down after dark, and "
+                    "I'd not walk the Downs for a pocket of silver.\"",
+            "options": [opt("(step back)", goto="root")],
+        },
+    }
+    return make_npc("@", (0x9E, 0x8A, 0x66), "Harry Goatleaf", "Keeper of the West-gate", tree)
+
+
+# ---------------------------------------------------------------------------
+# Bill Ferny — a shifty Bree-man loitering by his house (pure colour, TA 2965)
+# ---------------------------------------------------------------------------
+def make_ferny() -> Actor:
+    tree = {
+        "root": {
+            "text": "A lean, sallow man lounges against his gatepost, picking his teeth. "
+                    "His eyes go over you the way a fence prices a stolen horse.\n"
+                    "\"Ferny. Bill Ferny. New in Bree, and armed. What's your trade, "
+                    "stranger — and what's it worth to a man who knows the roads?\"",
+            "options": [
+                opt("Nothing that concerns you.", goto="rebuff"),
+                opt("You know the roads?", goto="roads"),
+                opt("(leave him to it)", goto=None),
+            ],
+        },
+        "rebuff": {
+            "text": "\"Suit yourself.\" He smiles without warmth. \"Only, a man alone on "
+                    "these roads does well to have friends. Cheap friends. Remember old "
+                    "Ferny when the dark comes down.\"",
+            "options": [opt("(leave him to it)", goto=None)],
+        },
+        "roads": {
+            "text": "\"I know 'em. Who's coming, who's going, who's paying. Word's worth "
+                    "coin, and I don't give coin away.\" He looks past you, already bored. "
+                    "\"Off with you. I've watching to do.\"",
+            "options": [opt("(leave him to it)", goto=None)],
+        },
+    }
+    return make_npc("@", (0x8E, 0x7A, 0x5A), "Bill Ferny", "a shifty Bree-man", tree)
+
+
+# ---------------------------------------------------------------------------
+# Signposts naming the quarters of the town (examinable flavor props)
+# ---------------------------------------------------------------------------
+def make_signposts() -> List[Actor]:
+    return [
+        make_signpost(
+            "Bree-hill signpost",
+            "A weathered board points up the rising ground.\n\"BREE-HILL — the "
+            "Men's houses climb the slope; the smials of the hobbits are dug "
+            "above. Mind the road; it lifts over the Hill and east to the "
+            "Bree-land.\"",
+        ),
+        make_signpost(
+            "Hobbit-holes signpost",
+            "A low, round-lettered post stands where the green doors begin.\n"
+            "\"THE HOBBIT-HOLES. Kindly folk, small doors. Knock, don't stoop "
+            "in uninvited — and never near supper.\"",
+        ),
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Ambient barks — the town's idle life overheard as the player crosses it (#54).
-# Coordinates track procgen.generate_bree: the market square at the crossing
-# ~(22,22), the Prancing Pony's yard ~(15,17), and the hobbit-holes dug into
-# Bree-hill's western face along x≈47.
+# Coordinates track the redrawn procgen.generate_bree (ADR 0008): the Prancing
+# Pony common room ~(10,10) and its inn-yard ~(11,17), the crossing of the roads
+# ~(22,22), and the hobbit-holes dug into the rise to the NE ~(35,10).
 # ---------------------------------------------------------------------------
 def make_barks() -> BarkField:
     return BarkField([
-        BarkSource(  # the market square at the meeting of the roads
-            22, 22, radius=9, cadence=14,
+        BarkSource(  # the Prancing Pony's common room — the heart of the town
+            10, 10, radius=8, cadence=10,
             lines=[
-                "A hawker cries stockfish and small-beer across the market.",
-                "Cartwheels rumble over the market cobbles.",
-                "A dog barks from under a market stall and is shooed off.",
-                "Two Bree-men argue prices by the well, unhurried.",
+                "Laughter and a snatch of song roll out of the Pony's common room.",
+                "Mugs thump on board and a cheer goes up somewhere in the throng.",
+                "A fiddle scrapes into a jig; boots take up the beat on the boards.",
+                "Butterbur's voice carries over the din — \"Coming, coming!\"",
+                "The great hearth spits and roars; someone calls for more ale.",
             ],
         ),
-        BarkSource(  # the Prancing Pony
-            15, 17, radius=7, cadence=14,
+        BarkSource(  # the inn-yard and stables
+            11, 17, radius=6, cadence=13,
             lines=[
-                "Laughter and a snatch of song spill out of the Prancing Pony.",
-                "A pony stamps and blows in the Pony's coach-yard.",
+                "A pony stamps and blows in the Pony's inn-yard.",
                 "The Pony's door bangs; a serving-lad hurries across the yard.",
+                "Harness jingles in the stable-shadow as an ostler works.",
             ],
         ),
-        BarkSource(  # the hobbit-holes in the west face of Bree-hill
-            47, 22, radius=9, cadence=16,
+        BarkSource(  # the crossing of the roads, just outside the Pony
+            22, 22, radius=8, cadence=15,
             lines=[
-                "Smoke curls from a round door in the face of Bree-hill.",
-                "Somewhere up the hill a hobbit calls the children in to supper.",
-                "The smell of new bread drifts down from the smials.",
+                "A cart creaks past the crossing, its driver nodding to no one.",
+                "Two Bree-men stop at the roadside to argue, unhurried.",
+                "A dog trots the road on some errand of its own.",
+            ],
+        ),
+        BarkSource(  # the hobbit-holes in the rise to the north-east
+            35, 10, radius=8, cadence=16,
+            lines=[
+                "Smoke curls from a round green door up the rise.",
+                "Somewhere among the smials a hobbit calls the children in to supper.",
+                "The smell of new bread drifts down from the hobbit-holes.",
             ],
         ),
     ])
 
 
 # The aggregate seam every location module exposes (see story/__init__.py):
-# every speaking NPC in this location, used for savegame tree rehydration.
+# every *authored* speaking NPC in this location, used for savegame tree
+# rehydration by name. Wandering Bystanders (patrons) are deliberately absent —
+# they are generated, keep their own lambda-free tree across a save, and so need
+# no rehydration (CONTEXT.md, story/patrons.py).
 def make_npcs() -> List[Actor]:
-    return make_town_npcs()
+    return (make_town_npcs()
+            + [make_gatekeeper(), make_ferny()]
+            + make_signposts())

@@ -108,6 +108,22 @@ def test_a_hit_deals_damage_reduced_by_soak():
     assert "endurance" in last_message(engine)
 
 
+def test_player_melee_message_reads_in_the_second_person():
+    # Regression: the player is "You strike", never "You strikes" — the foe's
+    # third-person attack verb is conjugated for the player (subject "You").
+    engine, gm, player = make_world()
+    foe = content.cave_goblin.spawn(gm, 3, 1)
+    foe.fighter.base_defence = 2  # trivial Defence -> the player always hits
+    seed = _seed_where(player.fighter.attack_bonus, 2,
+                       lambda r: r.is_success and not r.is_crit)
+    set_seed(seed)
+    MeleeAction(player, 1, 0).perform()
+
+    msg = last_message(engine)
+    assert msg.startswith("You strike "), msg
+    assert "You strikes" not in msg
+
+
 def test_a_miss_deals_no_damage():
     engine, gm, player = make_world()
     foe = content.cave_goblin.spawn(gm, 3, 1)

@@ -69,6 +69,22 @@ def building(gm: GameMap, x0: int, y0: int, x1: int, y1: int, door) -> None:
     gm.tiles[door] = tile_types.door
 
 
+def _free_tile(gm: GameMap, rects):
+    """A random walkable, unoccupied tile within one of the given
+    ``(x0, x1, y0, y1)`` rectangles (inclusive) — for scattering NPCs through a
+    room without stacking them. Returns None if every candidate is taken."""
+    occupied = {(e.x, e.y) for e in gm.entities}
+    spots = [
+        (x, y)
+        for x0, x1, y0, y1 in rects
+        for x in range(x0, x1 + 1)
+        for y in range(y0, y1 + 1)
+        if gm.in_bounds(x, y) and bool(gm.tiles["walkable"][x, y])
+        and (x, y) not in occupied
+    ]
+    return rng.choice(spots) if spots else None
+
+
 def _line(x1, y1, x2, y2):
     """Yield an L-shaped path of coordinates from (x1,y1) to (x2,y2)."""
     if rng.random() < 0.5:
@@ -94,135 +110,179 @@ def _line(x1, y1, x2, y2):
 # Bree — the hub Region (TA 2965)
 # ---------------------------------------------------------------------------
 def generate_bree(engine) -> GameMap:
-    """Bree at the meeting of the roads. The Great East Road (E–W) and the
-    Greenway (N–S) cross at a little market square; a green dike-and-hedge rings
-    the town, pierced by four gates; the Prancing Pony stands at the crossing
-    with its stable-yard, and Bree-hill rises to the east, hobbit-holes dug into
-    its western face. The four roads run out to the map edges, so the player
-    leaves for a neighbouring Region simply by walking off an edge."""
-    w, h = MAP_WIDTH, MAP_HEIGHT
-    gm = GameMap(engine, w, h, name="Bree, at the meeting of the roads", outdoors=True)
+    """Bree, redrawn to the Bree-land map (CONTEXT.md, ADR 0008). A dike-and-
+    hedge crescent, open on the east where **Bree-hill** rises to close the town,
+    with **three** gates — North, West, South. The **Great East Road** runs W–E
+    (out west to the Shire road, and east up over Bree-hill to the Bree-land) and
+    the **Greenway** N–S; they cross just east of the **Prancing Pony**, the great
+    inn that is the heart of the town. **Hobbit-holes** are dug into a rise to the
+    NE; the **Men's houses** climb Bree-hill in the SE; **Ferny's house** and the
+    gatekeepers' lodges sit by the gates. Roads still leave all four edges, so the
+    player crosses into a neighbouring Region by walking off an edge."""
+    w, h = MAP_WIDTH, MAP_HEIGHT                # 62 x 44
+    gm = GameMap(engine, w, h,
+                 name="Bree, under the Hill at the meeting of the roads",
+                 outdoors=True)
     T = tile_types
 
-    # --- the ground: meadow, with Bree-hill heaped up in the east ---------
+    ROAD_Y = 22                                 # Great East Road band (rows 21-23)
+    GREEN_X = 22                                # Greenway band (cols 21-23)
+    RY0, RY1 = ROAD_Y - 1, ROAD_Y + 1
+    GX0, GX1 = GREEN_X - 1, GREEN_X + 1
+    HILL_X = 44                                 # Bree-hill rises east of here
+    cx, cy = GREEN_X, ROAD_Y                    # the crossing of the roads
+
+    # --- ground: meadow, with Bree-hill heaped along the east and SE ------
     gm.tiles[:] = T.grass
     for x in range(w):
         for y in range(h):
-            if rng.random() < 0.09:
+            if rng.random() < 0.08:
                 gm.tiles[x, y] = T.grass_low
-    for x in range(46, w):
+    # Bree-hill: climbs toward the eastern skyline (denser eastward), thickening
+    # into trees — the living east wall of the town.
+    for x in range(HILL_X, w):
         for y in range(h):
-            # the hill climbs steeper (denser) toward the eastern skyline
-            if rng.random() < 0.30 + 0.5 * (x - 46) / (w - 46):
+            climb = (x - HILL_X) / (w - HILL_X)
+            if rng.random() < 0.28 + 0.55 * climb:
                 gm.tiles[x, y] = T.hill
             elif rng.random() < 0.12:
                 gm.tiles[x, y] = T.tree
+    # a south-east shoulder of the hill, under the Men's houses
+    for x in range(30, HILL_X):
+        for y in range(28, h):
+            rise = ((x - 30) / (HILL_X - 30)) * ((y - 28) / (h - 28))
+            if rng.random() < 0.55 * rise:
+                gm.tiles[x, y] = T.hill
 
-    RX0, RY0, RX1, RY1 = 21, 21, 23, 23    # the 3-wide road bands (the crossing)
-    cx, cy = 22, 22                        # the heart of the market square
-
-    # --- the dike-and-hedge, an octagon rather than a fort ----------------
-    ex0, ey0, ex1, ey1 = 3, 3, 45, 40
-    c = 4                                  # chamfer: rounds off the corners
+    # --- the dike-and-hedge crescent (open east; the hill closes it) ------
+    ex0, ey0, ey1 = 3, 3, 40
     def hedge(x, y):
-        if gm.in_bounds(x, y):
+        if gm.in_bounds(x, y) and int(gm.tiles["kind"][x, y]) == 0:
             gm.tiles[x, y] = T.tree
-    for x in range(ex0 + c, ex1 - c + 1):
+    # west wall, bowed outward at the waist so the town reads as a crescent
+    for y in range(ey0, ey1 + 1):
+        bow = int(round(2 * math.sin(math.pi * (y - ey0) / (ey1 - ey0))))
+        hedge(ex0 - bow, y)
+    # north & south hedges, running east until the hill takes over
+    for x in range(ex0, HILL_X):
         hedge(x, ey0); hedge(x, ey1)
-    for y in range(ey0 + c, ey1 - c + 1):
-        hedge(ex0, y); hedge(ex1, y)
-    for i in range(c + 1):                 # the four chamfered corners
-        hedge(ex0 + c - i, ey0 + i); hedge(ex1 - c + i, ey0 + i)
-        hedge(ex0 + c - i, ey1 - i); hedge(ex1 - c + i, ey1 - i)
-    # a shallow dike (worn low grass) hugging the hedge on the outside
-    for x in range(ex0 - 1, ex1 + 2):
-        for y in range(ey0 - 1, ey1 + 2):
-            if gm.in_bounds(x, y) and int(gm.tiles["kind"][x, y]) == 0 \
-                    and gm.tiles[x, y] == T.grass \
-                    and not (ex0 < x < ex1 and ey0 < y < ey1):
+    # a shallow dike (worn low grass) hugging the hedge on the meadow side
+    for x in range(ex0 - 2, HILL_X):
+        for y in (ey0 - 1, ey1 + 1):
+            if gm.in_bounds(x, y) and gm.tiles[x, y] == T.grass:
                 gm.tiles[x, y] = T.grass_low
 
-    # --- streets: the two roads, side lanes, and the market square --------
-    gm.tiles[ex0 + 1:ex1, RY0:RY1 + 1] = T.cobble       # Great East Road (inside)
-    gm.tiles[RX0:RX1 + 1, ey0 + 1:ey1] = T.cobble       # the Greenway (inside)
-    gm.tiles[18:28, 18:28] = T.cobble                    # the market square
-    gm.tiles[8:20, 12] = T.cobble                        # a north-side lane
-    gm.tiles[8:41, 33] = T.cobble                        # a south-side lane
-    gm.tiles[34, 7:34] = T.cobble                        # an east cross-lane
+    # --- the roads: the Great East Road and the Greenway ------------------
+    gm.tiles[0:HILL_X, RY0:RY1 + 1] = T.cobble          # East Road through town
+    gm.tiles[GX0:GX1 + 1, ey0:ey1 + 1] = T.cobble       # the Greenway through town
+    gm.tiles[0:ex0 + 1, RY0:RY1 + 1] = T.road           # W, out to the Shire road
+    gm.tiles[GX0:GX1 + 1, 0:ey0 + 1] = T.road           # N, the Greenway
+    gm.tiles[GX0:GX1 + 1, ey1:h] = T.road               # S, the Greenway
+    gm.tiles[HILL_X:w, RY0:RY1 + 1] = T.road            # E, the pass over Bree-hill
 
-    # --- The Prancing Pony: an inn hall with a walled stable-yard ---------
-    building(gm, 11, 9, 20, 20, door=(15, 20))   # outer walls; archway on the Road
-    gm.tiles[12:20, 15:20] = T.cobble            # the coach-yard (open, cobbled)
-    gm.tiles[15, 14] = T.door                    # hall door, yard -> common-room
-    gm.tiles[15, 20] = T.door                    # the great archway onto the street
-
-    # --- the moot-hall and the houses of the Bree-folk --------------------
-    building(gm, 28, 6, 38, 13, door=(33, 13))   # the moot-hall (civic, large)
-    houses = [
-        (5, 6, 9, 10, (7, 10)),                  # north-west cottages
-        (5, 14, 9, 18, (7, 18)),
-        (24, 6, 27, 10, (25, 10)),
-        (40, 7, 44, 12, (42, 12)),
-        (30, 16, 35, 20, (32, 20)),
-        (39, 15, 44, 20, (41, 20)),
-        (14, 25, 19, 30, (16, 30)),              # south-side homes
-        (6, 34, 11, 38, (8, 34)),
-        (15, 33, 20, 37, (17, 33)),
-        (27, 26, 32, 31, (29, 31)),
-        (36, 25, 41, 30, (38, 30)),
-        (30, 34, 36, 38, (33, 34)),
-        (24, 34, 28, 38, (26, 34)),
-        (39, 33, 43, 37, (41, 33)),
-    ]
-    for x0, y0, x1, y1, door in houses:
-        building(gm, x0, y0, x1, y1, door)
-
-    # the herb-wife's cot, with a physic-garden beside it
-    building(gm, 6, 27, 11, 31, door=(11, 29))
-    for gx in range(12, 15):
-        for gy in range(27, 32):
-            if rng.random() < 0.6:
-                gm.tiles[gx, gy] = T.grass_low
-    gm.tiles[13, 28] = T.tree
-
-    # --- the four gates: gaps in the hedge, flanked by stone posts --------
+    # --- the three gates: gaps in the hedge, flanked by stone posts -------
     def gate(gap, posts):
         for x, y in gap:
-            gm.tiles[x, y] = T.road
+            if gm.in_bounds(x, y):
+                gm.tiles[x, y] = T.road
         for x, y in posts:
             if gm.in_bounds(x, y):
                 gm.tiles[x, y] = T.building_wall
-    gate([(ex0, y) for y in (RY0, cy, RY1)], [(ex0, RY0 - 1), (ex0, RY1 + 1)])   # West-gate
-    gate([(ex1, y) for y in (RY0, cy, RY1)], [(ex1, RY0 - 1), (ex1, RY1 + 1)])   # East-gate
-    gate([(x, ey1) for x in (RX0, cx, RX1)], [(RX0 - 1, ey1), (RX1 + 1, ey1)])   # South-gate
-    gate([(x, ey0) for x in (RX0, cx, RX1)], [(RX0 - 1, ey0), (RX1 + 1, ey0)])   # North-gate
+    gate([(ex0, y) for y in (RY0, cy, RY1)],
+         [(ex0, RY0 - 1), (ex0, RY1 + 1)])                    # West-gate
+    gate([(x, ey0) for x in (GX0, cx, GX1)],
+         [(GX0 - 1, ey0), (GX1 + 1, ey0)])                    # North-gate
+    gate([(x, ey1) for x in (GX0, cx, GX1)],
+         [(GX0 - 1, ey1), (GX1 + 1, ey1)])                    # South-gate
 
-    # roads run on out to the map edges (and east, up over Bree-hill)
-    gm.tiles[0:ex0 + 1, RY0:RY1 + 1] = T.road
-    gm.tiles[ex1:w, RY0:RY1 + 1] = T.road
-    gm.tiles[RX0:RX1 + 1, 0:ey0 + 1] = T.road
-    gm.tiles[RX0:RX1 + 1, ey1:h] = T.road
+    # --- The Prancing Pony: the great inn, west of the crossing -----------
+    # Outer shell, a grand common room over a cobbled inn-yard, with the great
+    # archway onto the East Road, a stable-block and a kitchen off the yard.
+    PX0, PY0, PX1, PY1 = 6, 5, 19, 20
+    ARCH_X = 13
+    building(gm, PX0, PY0, PX1, PY1, door=(PX0, 12))     # shell; a side door west
+    for x in range(PX0 + 1, PX1):                        # common room | inn-yard
+        gm.tiles[x, 14] = T.building_wall
+    gm.tiles[ARCH_X, 14] = T.door                        # hall <-> yard
+    gm.tiles[PX0 + 1:PX1, 15:PY1] = T.cobble             # the open inn-yard
+    gm.tiles[ARCH_X, PY1] = T.door                       # great archway onto the Road
+    for y in range(15, PY1):                             # stable-block, east of yard
+        gm.tiles[15, y] = T.building_wall
+    gm.tiles[15, 17] = T.door
+    gm.tiles[16:PX1, 15:PY1] = T.floor
+    for y in range(PY0 + 1, 10):                         # kitchen, NE of the hall
+        gm.tiles[15, y] = T.building_wall
+    for x in range(15, PX1):
+        gm.tiles[x, 9] = T.building_wall
+    gm.tiles[15, 8] = T.door
+    gm.tiles[8, 7] = T.building_wall                     # the great hearth's chimney
 
-    # --- market props and hobbit-holes ------------------------------------
-    gm.tiles[25, 19] = T.water                   # the town well
-    gm.tiles[19, 25] = T.tree                    # the market oak
-    for hy in (8, 13, 27, 32, 37):               # smials in the west face of the hill
-        gm.tiles[47, hy] = T.door
-        gm.tiles[48, hy] = T.floor
+    # --- Mistress Rushlight's cot and physic-garden (SW) ------------------
+    building(gm, 5, 30, 10, 35, door=(10, 33))
+    for gx in range(11, 14):
+        for gy in range(31, 35):
+            if rng.random() < 0.6:
+                gm.tiles[gx, gy] = T.grass_low
+    gm.tiles[12, 32] = T.tree
+
+    # --- a Bree-man cottage, Ferny's house, the gatekeepers' lodges -------
+    for x0, y0, x1, y1, door in [
+        (4, 25, 7, 28, (7, 26)),                 # West-gate keeper's lodge
+        (14, 26, 18, 30, (16, 30)),              # a Bree-man's cottage
+        (26, 35, 30, 39, (28, 35)),              # South-gate keeper's lodge
+    ]:
+        building(gm, x0, y0, x1, y1, door)
+    building(gm, 13, 34, 18, 39, door=(15, 34))  # Ferny's house, by the South-gate
+
+    # --- the Men's houses, climbing Bree-hill in the SE -------------------
+    for x0, y0, x1, y1, door in [
+        (31, 27, 35, 31, (33, 31)),
+        (37, 26, 41, 30, (39, 30)),
+        (33, 33, 37, 37, (35, 33)),
+        (39, 32, 43, 36, (41, 32)),
+    ]:
+        building(gm, x0, y0, x1, y1, door)
+
+    # --- the Hobbit-holes: round doors dug into a rise to the NE ----------
+    for x in range(28, HILL_X):
+        for y in range(6, 17):
+            if rng.random() < 0.10:
+                gm.tiles[x, y] = T.grass_low
+    for hx, hy in [(30, 8), (33, 7), (36, 8), (39, 9), (42, 10),
+                   (32, 12), (35, 13), (38, 12), (41, 13)]:
+        gm.tiles[hx, hy] = T.door                # the round green door
+        gm.tiles[hx + 1, hy] = T.floor           # the smial behind it
+
+    # --- signposts naming the quarters ------------------------------------
+    hill_post, holes_post = story.bree.make_signposts()
+    hill_post.spawn(gm, 30, 30)      # at the foot of the Men's houses
+    holes_post.spawn(gm, 27, 10)     # at the edge of the Hobbit-holes
 
     # --- the folk of Bree -------------------------------------------------
     elder, healer, halbarad, innkeeper, fletcher = story.make_town_npcs()
-    innkeeper.spawn(gm, 15, 17)     # Butterbur, in the Pony's coach-yard
-    elder.spawn(gm, 17, 17)         # Dírhael, lodging at the Pony
-    halbarad.spawn(gm, 6, 20)       # Halbarad, keeping watch by the West-gate
-    healer.spawn(gm, 12, 29)        # Mistress Rushlight, in her physic-garden
-    fletcher.spawn(gm, 22, 22)      # Cob, at his stall by the market square
+    innkeeper.spawn(gm, 10, 11)     # Butterbur, tending the common-room bar
+    elder.spawn(gm, 8, 8)           # Dírhael, lodging by the hearth
+    halbarad.spawn(gm, 12, 8)       # Halbarad, with his gear along the hall wall
+    fletcher.spawn(gm, 9, 12)       # Cob, at his fletcher's bench in the hall
+    healer.spawn(gm, 11, 32)        # Mistress Rushlight, in her physic-garden
+
+    gatekeeper = story.bree.make_gatekeeper()
+    gatekeeper.spawn(gm, 5, ROAD_Y)  # Harry Goatleaf, at the West-gate
+    ferny = story.bree.make_ferny()
+    ferny.spawn(gm, 15, 33)          # Bill Ferny, loitering outside his house
+
+    # the hubbub: ~10 wandering Bystanders, seeded through the common room and
+    # inn-yard, free to drift out into the streets (CONTEXT.md).
+    for patron in story.bree.make_patrons(10):
+        spot = _free_tile(gm, [(7, 14, 6, 13), (7, 14, 15, 19)])
+        if spot is not None:
+            patron.spawn(gm, *spot)
 
     # ambient barks: the town's idle life overheard as you cross it (#54)
     gm.barks = story.bree.make_barks()
 
-    gm.entry_xy = (cx, cy)          # fallback landing = the market square
-    gm.start_xy = (cx, cy)          # a new game begins at the crossing
+    gm.entry_xy = (2, ROAD_Y)            # arrivals land on the road at the West-gate
+    gm.start_xy = (ARCH_X, ROAD_Y)       # a new game opens at the Pony's archway
     return gm
 
 

@@ -6,6 +6,7 @@ import numpy as np
 import tcod
 
 from lonelands.actions import Action, BumpAction, MovementAction, WaitAction
+from lonelands.exceptions import Impossible
 
 if TYPE_CHECKING:
     from lonelands.entity import Actor
@@ -54,6 +55,26 @@ class HostileEnemy(BaseAI):
             ).perform()
 
         return WaitAction(self.entity).perform()
+
+
+class IdleWanderer(BaseAI):
+    """A peaceful townsperson — a *wandering Bystander* (CONTEXT.md). Never
+    fights and never seeks the player; it just drifts, standing most turns and
+    now and then stepping onto an open neighbour, so a crowd of them gently
+    mills. Bumping it opens talk, not a blow (BumpAction gates on `npc`), so it
+    reads as a friendly obstacle in the throng."""
+
+    def perform(self) -> None:
+        from lonelands import dice
+
+        # Idle most turns: the crowd should drift, not twitch every step.
+        if dice.rng.random() < 0.6:
+            return WaitAction(self.entity).perform()
+        ddx, ddy = dice.rng.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
+        try:
+            return MovementAction(self.entity, ddx, ddy).perform()
+        except Impossible:
+            return WaitAction(self.entity).perform()
 
 
 class SkittishBeast(BaseAI):

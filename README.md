@@ -43,6 +43,12 @@ map falls back to the font's own glyphs, so the game always runs.
   knock of a tankard from the Forsaken Inn, birdsong at the Chetwood eaves. Each
   source is data (a point, a radius, a pool of lines, a **cadence**) authored
   next to a region's content and throttled per-map so the log stays sparse.
+- **Errands with varied objectives**: quests run a small state machine
+  (unstarted → active → ready-to-report → done) and advance off game events, not
+  just combat. Beyond **slay-N** and **fetch/trigger** goals, the log tracks
+  **courier** deliveries (carry a named item to an NPC), **talk-to** goals (seek
+  someone out and speak with them), and **travel-to** goals (reach a named
+  Region) — each begun and turned in through the same dialog flow.
 - **A d20 resolution core** (see `docs/adr/0005`): every action is a **Check** —
   `d20 + attribute (+ perk/gear)` vs a **Target Number**. A natural 20 is a
   **Critical** (auto-hit + bonus damage), a natural 1 a **Fumble** (auto-miss);
@@ -66,6 +72,14 @@ map falls back to the font's own glyphs, so the game always runs.
   three rarities — **Plain**, **Fine**, **Rare** — alongside hand-authored named
   **Uniques**; nothing needs identifying. Haul goods back to Halbarad's shop and
   toggle to the **Sell** view (`Tab`) to turn them into coin.
+- **A shared chrome visual language** (see `CONTEXT.md` → *The chrome visual
+  language*): every panel — the sidebar, character sheet, dialog, menus, and the
+  shop — speaks one vocabulary, so highlighting means the same thing everywhere:
+  three **luminance tiers** (dim label · normal body · bright glowing value), a
+  **filled bar** for the single "this is the thing" emphasis, **header-and-rule**
+  section breaks, **stateful colour** used only where hue drives a decision
+  (Endurance green→amber→red, spendable perk points in gold), and a **scrim**
+  that dims the world behind any open popup.
 - **A title-screen difficulty selector**: pick **Merciful**, **Wayfarer**
   (intended balance), or **Grim** — it scales *only the damage the player takes*,
   never enemy Endurance or aim, and rides along in the save.
