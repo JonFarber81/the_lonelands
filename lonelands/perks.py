@@ -225,7 +225,10 @@ PATHS: List[Path] = [
         "Endure and protect — the Ranger who holds the line.",
         {"warden": "Warden", "reaver": "Reaver"},
         [
-            # --- trunk ---
+            # --- trunk (survival + sustain) -----------------------------------
+            # Steady Endurance is the shared branching root; the sustain
+            # deeds/passives are childless trunk roots that stack as a stem above
+            # it, and it forks into the two branches below (#76).
             Node("lw_endure", "long_watch", "trunk", "Steady Endurance",
                  "Long years in the wild have hardened you. +4 max Endurance per rank.",
                  cost=1, tier=1, max_rank=3, max_endurance_bonus=4),
@@ -233,7 +236,17 @@ PATHS: List[Path] = [
                  "Draw on hidden reserves: restore 2d6 Endurance.",
                  cost=1, tier=1,
                  active=ActiveSpec("Second Wind", "heal", cooldown=6, magnitude="2d6")),
-            # --- Warden branch (defence) ---
+            Node("lw_rally", "long_watch", "trunk", "Rally",
+                 "Cornered and grim, you fight all the harder: +2 to-hit while at "
+                 "or below half Endurance.",
+                 cost=1, tier=1, rally_threshold=0.5, rally_atk_bonus=2),
+            Node("lw_athelas", "long_watch", "trunk", "Athelas",
+                 "Crush kingsfoil into a healing draught: cleanse your Bleed and "
+                 "knit 1d4 Endurance a round for 3 rounds.",
+                 cost=1, tier=1,
+                 active=ActiveSpec("Athelas", "athelas", cooldown=8,
+                                   magnitude="1d4", duration=3)),
+            # --- Warden branch (defence) --------------------------------------
             Node("lw_soak", "long_watch", "warden", "Iron Skin",
                  "You shrug off blows that would fell lesser folk. +1 Soak per rank.",
                  cost=1, tier=2, max_rank=3, parent="lw_endure", soak_bonus=1),
@@ -242,10 +255,24 @@ PATHS: List[Path] = [
                  cost=1, tier=2, parent="lw_soak", defence_bonus=1),
             Node("lw_hold", "long_watch", "warden", "Hold the Line",
                  "Set your feet and weather the storm: +4 Soak for 3 rounds.",
-                 cost=2, tier=3, capstone=True, parent="lw_guard",
+                 cost=1, tier=2, parent="lw_guard",
                  active=ActiveSpec("Hold the Line", "stance",
                                    cooldown=6, soak=4, duration=3)),
-            # --- Reaver branch (melee offence) ---
+            Node("lw_thorn", "long_watch", "warden", "Thornguard",
+                 "Your bristling guard bites back: a foe takes 2 damage for every "
+                 "melee blow it lands on you.",
+                 cost=1, tier=3, parent="lw_hold", thorns_damage=2),
+            Node("lw_immovable", "long_watch", "warden", "Immovable",
+                 "Rooted like an old oak: you cannot be held fast or driven back, "
+                 "and stand +1 Defence for it.",
+                 cost=1, tier=3, parent="lw_thorn",
+                 root_immune=True, defence_bonus=1),
+            Node("lw_unbroken", "long_watch", "warden", "Unbroken",
+                 "Nothing moves you. +2 Soak, +2 Defence, and you can never be "
+                 "held fast.",
+                 cost=2, tier=3, capstone=True, parent="lw_immovable",
+                 soak_bonus=2, defence_bonus=2, root_immune=True),
+            # --- Reaver branch (melee offence) --------------------------------
             Node("lw_hone", "long_watch", "reaver", "Honed Edge",
                  "Your strokes find the gap. +1 to-hit in melee per rank.",
                  cost=1, tier=2, max_rank=3, parent="lw_endure", atk_bonus=1),
@@ -256,10 +283,25 @@ PATHS: List[Path] = [
                  "Loose your fury: your next hit deals +2d6 damage.",
                  cost=1, tier=2, parent="lw_hone",
                  active=ActiveSpec("Wrath", "wrath", cooldown=4, magnitude="2d6")),
+            Node("lw_charge", "long_watch", "reaver", "Charge",
+                 "Close the gap in a heartbeat: rush a foe and strike for +1d6 "
+                 "damage.",
+                 cost=1, tier=3, parent="lw_might",
+                 active=ActiveSpec("Charge", "charge", cooldown=5, reach=5,
+                                   magnitude="1d6")),
+            Node("lw_sweep", "long_watch", "reaver", "Sweeping Blow",
+                 "One great arc: strike every foe pressed around you at once.",
+                 cost=1, tier=3, parent="lw_charge",
+                 active=ActiveSpec("Sweeping Blow", "sweep", cooldown=4)),
+            Node("lw_execute", "long_watch", "reaver", "Executioner",
+                 "You know a killing chance when you see one: +4 melee damage to a "
+                 "foe under a third of its Endurance.",
+                 cost=1, tier=3, parent="lw_sweep",
+                 execute_threshold=1 / 3, execute_damage=4),
             Node("lw_reaver", "long_watch", "reaver", "Reaver's Instinct",
                  "You feel the killing stroke before it lands: melee crits on a "
                  "natural 19 or 20, and every kill readies your active deeds anew.",
-                 cost=2, tier=3, capstone=True, parent="lw_might", crit_range=1,
+                 cost=2, tier=3, capstone=True, parent="lw_execute", crit_range=1,
                  readies_actives_on_kill=True),
         ],
     ),

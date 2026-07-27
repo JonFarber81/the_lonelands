@@ -446,13 +446,15 @@ def test_stance_lasts_its_full_duration_after_the_activation_turn():
 # On-kill hook: Reaver's Instinct readies the hero's deeds on a slaying
 # ---------------------------------------------------------------------------
 def _full_reaver(hero):
-    """Walk the Reaver branch to its capstone (Reaver's Instinct)."""
-    _buy_all(hero, "lw_endure", "lw_endure", "lw_hone", "lw_might",
-             "lw_wrath", "lw_reaver")
+    """Walk the Reaver branch to its capstone (Reaver's Instinct), owning Wrath
+    along the way. Charge/Sweeping Blow/Executioner sit between Killing Might and
+    the capstone (#76), so the walk is longer than the placeholder tree's."""
+    _buy_all(hero, "lw_endure", "lw_endure", "lw_hone", "lw_wrath", "lw_might",
+             "lw_charge", "lw_sweep", "lw_execute", "lw_reaver")
 
 
 def test_on_kill_readies_deeds_only_with_reavers_instinct():
-    with_reaver = _hero_actor(path_points=9, path="long_watch").hero
+    with_reaver = _hero_actor(path_points=10, path="long_watch").hero
     _full_reaver(with_reaver)
     with_reaver._node_cooldowns["lw_wrath"] = 3         # Wrath spent, cooling down
     with_reaver.on_kill()
@@ -469,7 +471,7 @@ def test_on_kill_readies_deeds_only_with_reavers_instinct():
 
 def test_slaying_a_foe_triggers_the_on_kill_hook():
     engine, gm, player = make_world()
-    player.hero.path_points = 9
+    player.hero.path_points = 10
     player.hero.commit_path("long_watch")
     _full_reaver(player.hero)
     player.hero._node_cooldowns["lw_wrath"] = 3         # on cooldown before the kill
@@ -489,7 +491,7 @@ def test_slaying_a_foe_triggers_the_on_kill_hook():
 # ---------------------------------------------------------------------------
 def test_reavers_instinct_natural_19_reads_as_a_crit_in_the_tray():
     engine, gm, player = make_world()
-    player.hero.path_points = 9
+    player.hero.path_points = 10
     player.hero.commit_path("long_watch")
     _full_reaver(player.hero)                           # Reaver's Instinct: crit on 19+
     assert player.fighter.crit_face == 19

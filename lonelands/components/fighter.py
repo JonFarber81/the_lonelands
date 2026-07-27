@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, List, Optional, Sequence, Tuple, Union
 
 from lonelands import color
 from lonelands.components.base_component import BaseComponent
-from lonelands.dice import rng
+from lonelands.dice import rng, roll_damage
 from lonelands.render_order import RenderOrder
 
 # Bleed: each remaining stack ticks this much Endurance at the start of the
@@ -87,6 +87,8 @@ class Fighter(BaseComponent):
         self.bleed = 0  # remaining Bleed stacks
         self.rooted = 0  # rounds held fast in place (Hidden Path Snare/Pinning)
         self.marked = False  # Far Shot's Hunter's Mark — bonus damage vs this foe
+        self.regen_rounds = 0  # rounds of Athelas heal-over-time remaining
+        self.regen_dice = "0"  # Endurance knit back each of those rounds
         self._dead = False
 
     # --- Vitals -----------------------------------------------------------
@@ -313,16 +315,40 @@ class Fighter(BaseComponent):
         round, though it may still strike an adjacent foe."""
         return self.rooted > 0 and not self._dead
 
+    @property
+    def root_immune(self) -> bool:
+        """Whether this fighter cannot be held fast or driven back (the Long
+        Watch's Immovable / Unbroken). Only a hero carries such a node."""
+        hero = getattr(self.parent, "hero", None)
+        return bool(hero is not None and any(
+            n.root_immune for n in hero.owned_nodes()))
+
     def apply_root(self, rounds: int) -> None:
         """Root this fighter for ``rounds`` rounds (taking the longer of any
-        current and the new hold). Ticked down once per round by the Engine."""
-        if rounds > 0:
+        current and the new hold). Ticked down once per round by the Engine. An
+        Immovable hero shrugs the hold off entirely."""
+        if rounds > 0 and not self.root_immune:
             self.rooted = max(self.rooted, rounds)
 
     def tick_root(self) -> None:
         """Wear a root down by one round (called once per round by the Engine)."""
         if self.rooted > 0:
             self.rooted -= 1
+
+    def apply_regen(self, dice: str, rounds: int) -> None:
+        """Grant an Athelas heal-over-time: knit ``dice`` Endurance each round for
+        ``rounds`` rounds (taking the longer of any current and the new draught)."""
+        if rounds > 0:
+            self.regen_rounds = max(self.regen_rounds, rounds)
+            self.regen_dice = dice
+
+    def tick_regen(self) -> int:
+        """Heal one round of Athelas regen and decay a round. Returns the
+        Endurance restored (0 if none pending or already at full/slain)."""
+        if self.regen_rounds <= 0 or self._dead:
+            return 0
+        self.regen_rounds -= 1
+        return self.heal(max(0, roll_damage(self.regen_dice)))
 
     def die(self) -> None:
         engine = self.engine

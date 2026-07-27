@@ -257,6 +257,16 @@ class Hero(BaseComponent):
             self._node_cooldowns[node_id] = spec.cooldown
             self._timers_touched_this_turn = True
             return f"You set your feet — {spec.name}! (+{spec.soak} Soak)"
+        if spec.kind == "athelas":
+            # Kingsfoil: cleanse the hero's Bleed at once and set a heal-over-time
+            # that the Engine ticks each round for the draught's duration.
+            fighter = getattr(self.parent, "fighter", None)
+            if fighter is not None:
+                fighter.bleed = 0
+                fighter.apply_regen(spec.magnitude, spec.duration)
+            self._node_cooldowns[node_id] = spec.cooldown
+            self._timers_touched_this_turn = True
+            return "You crush kingsfoil into a draught — its healing steals through you."
         if spec.kind == "aim":
             # Aimed Shot: steady the shaft — the next Shot lands a sure Critical.
             # The cooldown starts now (spent whether or not you loose).

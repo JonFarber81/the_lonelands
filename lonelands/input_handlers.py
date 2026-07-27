@@ -217,7 +217,7 @@ class MainGameEventHandler(EventHandler):
         # untargeted ones fire at once.
         if node.active.targeted:
             return begin_active(self.engine, node)
-        return ActivateAbilityAction(self.engine.player, node.id)
+        return fire_untargeted(self.engine, node)
 
     def _begin_ranged(self) -> Optional[BaseEventHandler]:
         """Enter lock-on firing mode (ADR 0006). Refuses with no bow readied or
@@ -513,13 +513,23 @@ class ActiveFoeTargetHandler(LockOnHandler):
         return MainGameEventHandler(self.engine)
 
 
-# node active kind -> the Action its lock-on fires (Charge is wired in #76).
+# node active kind -> the Action its lock-on fires.
 _FOE_DEED_ACTIONS = {
     "arc_shot": actions.MultishotAction,
     "line_shot": actions.PiercingShotAction,
     "harry": actions.HarryingShotAction,
     "mark": actions.HuntersMarkAction,
+    "charge": actions.ChargeAction,
 }
+
+
+def fire_untargeted(engine: "Engine", node) -> Action:
+    """The Action for a ready untargeted deed. Most resolve in the Hero
+    (ActivateAbilityAction), but a map-bound one (Sweeping Blow strikes the tiles
+    around you) needs an Action of its own."""
+    if node.active.kind == "sweep":
+        return actions.SweepAction(engine.player, node.id)
+    return ActivateAbilityAction(engine.player, node.id)
 
 
 def begin_active(engine: "Engine", node) -> Optional[BaseEventHandler]:
@@ -1195,7 +1205,7 @@ class AbilitiesHandler(AskUserHandler):
             # Hand off to the targeting handler (which falls back to the main
             # handler itself when there is nothing in reach to target).
             return begin_active(self.engine, pk)
-        self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
+        self.handle_action(fire_untargeted(self.engine, pk))
         return MainGameEventHandler(self.engine)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:

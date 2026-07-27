@@ -52,6 +52,7 @@ class Engine:
     # --- turns ------------------------------------------------------------
     def handle_enemy_turns(self) -> None:
         self._tick_bleed()
+        self._tick_regen()
         for entity in set(self.game_map.actors) - {self.player}:
             if entity.ai:
                 try:
@@ -68,6 +69,18 @@ class Engine:
         for actor in list(self.game_map.actors):
             if actor.fighter is not None:
                 actor.fighter.tick_root()
+
+    def _tick_regen(self) -> None:
+        """Athelas heal-over-time on every fighter carrying it, once per round
+        (only a hero ever does — the Long Watch's kingsfoil draught)."""
+        for actor in list(self.game_map.actors):
+            fighter = actor.fighter
+            if fighter is None:
+                continue
+            healed = fighter.tick_regen()  # 0 unless an Athelas draught is active
+            if healed > 0 and actor is self.player:
+                self.message_log.add_message(
+                    f"Athelas knits {healed} endurance back.", color.hope_gain)
 
     def _tick_bleed(self) -> None:
         """Bleed damage-over-time on every living fighter, once per round."""

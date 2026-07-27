@@ -221,6 +221,18 @@ hero rolls; a foe never rolls (the dice tray stays the player's).
 - **Snare** — a **trap tile** laid by the Hidden Path's Trapper. The first foe
   to step onto it is hurt and **Rooted**, then the snare is spent; the Ranger and
   townsfolk pass over it harmlessly. *(The **place-tile** primitive — ADR 0011.)*
+- **Mark** — a status the Far Shot's **Hunter's Mark** lays on a single foe: while
+  marked it takes bonus damage from the Ranger's every shot and stroke. Only one
+  foe is marked at a time. *(The **status + context-conditional** primitive.)*
+- **Athelas** — the Long Watch's kingsfoil draught: cleanses the Ranger's **Bleed**
+  and grants a **heal-over-time** (Endurance knit back each round for a few rounds).
+  The inverse of Bleed. *(The **status** primitive — a regen.)*
+- **Multi-target** — a deed that resolves against several tiles/foes at once: an
+  **arc** (Far Shot's Multishot / Arrow Storm), a **line** (Piercing Shot), or the
+  **adjacent** ring (the Long Watch's Sweeping Blow). *(ADR 0011 primitive.)*
+- **Dash** — a deed that moves the Ranger as part of its effect: a **blink** to a
+  tile (the Hidden Path's Shadowstep/Disengage), a **backstep** after a shot (Far
+  Shot's Harrying Shot), or a **charge** into a foe (the Long Watch's Charge).
 - **Endurance** — the single HP pool; grows with level. **0 Endurance = death.**
 - **Difficulty** — a per-run tier chosen on the title screen (**Merciful**,
   **Wayfarer**, **Grim**) that scales **only the damage the player takes** —

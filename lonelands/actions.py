@@ -163,6 +163,12 @@ class MovementAction(ActionWithDirection):
 
 
 class MeleeAction(ActionWithDirection):
+    def __init__(self, entity: "Actor", dx: int, dy: int, *, bonus_damage: int = 0):
+        super().__init__(entity, dx, dy)
+        # Extra damage the strike carries beyond the usual roll (the Long Watch's
+        # Charge lends its rush to the blow it lands).
+        self.bonus_damage = bonus_damage
+
     def perform(self) -> None:
         target = self.target_actor
         if target is None or target.fighter is None:
@@ -221,6 +227,8 @@ class MeleeAction(ActionWithDirection):
         if ambush:
             dmg += ambush_dmg
         dmg += marked_bonus(hero, tf)     # Hunter's Mark: bonus vs the marked foe
+        dmg += execute_bonus(hero, tf)    # Executioner: bonus vs a near-dead foe
+        dmg += self.bonus_damage          # Charge: the rush behind the blow
         if hero is not None:
             dmg += hero.consume_primed()  # Swift Wrath: spend a primed next-hit
             hero.consume_ambush_prime()   # Shadowstep/Vanish: the unseen strike lands
@@ -245,6 +253,19 @@ class MeleeAction(ActionWithDirection):
                 f"left bleeding!",
                 color.player_die if target is engine.player else color.enemy_atk,
             )
+
+        # Thornguard (Long Watch Warden): a foe that lands a blow on the hero
+        # takes bite-back damage. Only a hero's guard bristles, and only a foe
+        # (not the hero themselves) is pricked by it.
+        if target is engine.player and not is_player:
+            hero_t = getattr(target, "hero", None)
+            thorns = hero_t.node_bonus("thorns_damage") if hero_t is not None else 0
+            if thorns and not af.dead:
+                af.take_damage(thorns)
+                if not af.dead and engine.game_map.visible[attacker.x, attacker.y]:
+                    engine.message_log.add_message(
+                        f"The {attacker.name} is pricked by your guard for "
+                        f"{thorns} endurance.", color.enemy_atk)
 
 
 # --- Ranged: arrows & the Shot (ADR 0006, issue #46) ----------------------
@@ -330,6 +351,20 @@ def marked_bonus(hero, target_fighter) -> int:
     if hero is None or target_fighter is None or not target_fighter.marked:
         return 0
     return hero.node_bonus("marked_damage")
+
+
+def execute_bonus(hero, target_fighter) -> int:
+    """Extra melee damage the Long Watch's Executioner deals to a foe at or below
+    a third of its Endurance (a context-conditional). 0 without the node, for a
+    healthy foe, or for a foe attacker."""
+    if hero is None or target_fighter is None or target_fighter.max_endurance <= 0:
+        return 0
+    frac = target_fighter.endurance / target_fighter.max_endurance
+    total = 0
+    for n in hero.owned_nodes():
+        if n.execute_threshold > 0 and frac <= n.execute_threshold:
+            total += n.execute_damage * hero.nodes.get(n.id, 0)
+    return total
 
 
 def resolve_shot(engine: "Engine", attacker: "Actor", target: "Actor", *,
@@ -582,6 +617,81 @@ class HuntersMarkAction(Action):
         hero.begin_cooldown(self.node_id)
         engine.message_log.add_message(
             f"You mark the {target.name} as your quarry!", color.hope_gain)
+
+
+# --- Long Watch Reaver deeds (ADR 0011, #76) ------------------------------
+# Charge (rush a foe and strike with bonus damage — a dash reused from the
+# Hidden Path's blink) and Sweeping Blow (one melee attack against every foe
+# pressed around you). Both count as the player's turn.
+class ChargeAction(Action):
+    """Rush to a chosen foe within reach and strike it with bonus damage. Picked
+    with a lock-on; resolves the dash here, then a real melee blow (so every
+    passive — crit range, Executioner, on-hit Bleed — folds in as usual)."""
+
+    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target = target
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        engine = self.engine
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to charge.")
+        me = self.entity
+        reach = node.active.reach
+        if _chebyshev(me, target) > reach:
+            raise Impossible("That foe is too far to charge.")
+        gm = engine.game_map
+        # Trace the rush toward the foe *without* moving, tile by tile, until we
+        # stand adjacent (or a wall/creature bars the lane) — so a blocked charge
+        # fails cleanly, without stranding the hero mid-lane and eating the turn.
+        cx, cy, steps = me.x, me.y, 0
+        while king_dist(cx, cy, target.x, target.y) > 1 and steps < reach:
+            nx, ny = cx + _sign(target.x - cx), cy + _sign(target.y - cy)
+            if (not gm.in_bounds(nx, ny) or not gm.tiles["walkable"][nx, ny]
+                    or gm.get_blocking_entity_at(nx, ny) is not None):
+                break
+            cx, cy, steps = nx, ny, steps + 1
+        if king_dist(cx, cy, target.x, target.y) > 1:
+            raise Impossible("Something bars your charge.")
+        me.x, me.y = cx, cy
+        if steps:
+            engine.message_log.add_message("You charge in!", color.player_atk)
+        hero.begin_cooldown(self.node_id)
+        bonus = max(0, roll_damage(node.active.magnitude))
+        MeleeAction(me, _sign(target.x - me.x), _sign(target.y - me.y),
+                    bonus_damage=bonus).perform()
+
+
+class SweepAction(Action):
+    """One great arc: a melee attack against every foe adjacent to the hero
+    (Sweeping Blow). Untargeted, but map-bound — so it resolves in an Action
+    rather than :meth:`Hero.activate_ability`."""
+
+    def __init__(self, entity: "Actor", node_id: str):
+        super().__init__(entity)
+        self.node_id = node_id
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        engine = self.engine
+        me = self.entity
+        gm = engine.game_map
+        dirs = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
+                if (dx or dy) and (a := gm.get_actor_at(me.x + dx, me.y + dy)) is not None
+                and is_hostile_actor(a)]
+        if not dirs:
+            raise Impossible("There is no one pressed close to sweep.")
+        engine.message_log.add_message(
+            "You sweep your blade in a wide arc!", color.player_atk)
+        hero.begin_cooldown(self.node_id)
+        for dx, dy in dirs:
+            try:
+                MeleeAction(me, dx, dy).perform()
+            except Impossible:
+                pass  # a foe felled mid-sweep by an earlier strike is simply gone
 
 
 class BumpAction(ActionWithDirection):
