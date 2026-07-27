@@ -132,9 +132,9 @@ def test_tree_cursor_walks_and_buys():
     hero.path_points += 3
     hero.commit_path("long_watch")
     ph = ih.PathsHandler(engine)
-    assert ph.cursor_id == "lw_endure"         # first trunk node
-    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.DOWN, mod=0))
-    assert ph.cursor_id == "lw_wind"           # walked down the trunk
+    assert ph.cursor_id == "lw_endure"         # the branching trunk root
+    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.UP, mod=0))
+    assert ph.cursor_id == "lw_wind"           # up the stem to the other trunk root
     ph.cursor_id = "lw_endure"
     ph.ev_keydown(events.KeyDown(sym=ih.KeySym.RETURN, mod=0))
     assert hero.has_node("lw_endure")          # bought at the cursor

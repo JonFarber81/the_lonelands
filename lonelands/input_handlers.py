@@ -5,7 +5,8 @@ import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 
-from lonelands import actions, character, color, events, overworld_map, path_tree, perks
+from lonelands import (actions, character, color, events, overworld_map,
+                       path_icons, path_tree, perks)
 from lonelands.events import CENTER, KeySym, Modifier
 from lonelands.tile_glyphs import graphic_char
 from lonelands.render_functions import endurance_color
@@ -873,22 +874,55 @@ class PathsHandler(AskUserHandler):
         placements = path_tree.layout(path)
         rows = max((p.row for p in placements), default=0) + 1
         rowstep = max(1, (bottom - top) // max(1, rows))
-        box_w = int(inner.w / 3 * 0.84)
-        box_h = min(rowstep - ui.pad // 3, int(ui.line * 3.2))
+
+        # Card width is uniform. Cards are centred at ``inner.x + box_w/2 +
+        # x*usable`` where ``usable = inner.w - box_w``, so the pixel gap between
+        # the tightest same-row pair (Ambush's forked children, ``dx`` apart) is
+        # ``dx*usable``. Size the card to leave a fixed gutter inside that:
+        #   box_w = dx*(inner.w - box_w) - gutter  ->  solve for box_w.
+        by_row: dict = {}
+        for p in placements:
+            by_row.setdefault(p.row, []).append(p.x)
+        dx = min((b - a for xs in by_row.values() if len(xs) > 1
+                  for a, b in zip(sorted(xs), sorted(xs)[1:])), default=1.0)
+        gutter = ui.pad
+        box_w = int((dx * inner.w - gutter) / (1 + dx))
+        box_w = max(int(inner.w * 0.14), min(box_w, int(inner.w * 0.32)))
+        box_h = min(rowstep - ui.pad // 3, int(ui.line * 4.6))
+        usable = inner.w - box_w
 
         def centre(p):
-            cx = inner.x + int((p.col + 0.5) * inner.w / 3)
+            cx = inner.x + box_w // 2 + int(p.x * usable)
             cy = top + p.row * rowstep + rowstep // 2
             return cx, cy
 
         at = {p.node.id: p for p in placements}
-        # Prereq edges first, so the boxes sit on top of them.
+        # Orthogonal prereq connectors, drawn first so cards sit on top. Each
+        # parent drops a stem to a bus between the rows, the bus spans its
+        # children, and a riser drops to each child — no diagonals, ever.
+        kids_of: dict = {}
         for p in placements:
-            parent = at.get(p.node.parent)
-            if parent is not None:
-                x1, y1 = centre(parent)
-                x2, y2 = centre(p)
-                ui.connector(x1, y1 + box_h // 2, x2, y2 - box_h // 2, color.rule)
+            if p.node.parent in at:
+                kids_of.setdefault(p.node.parent, []).append(p)
+        for pid, kids in kids_of.items():
+            px, py = centre(at[pid])
+            child_xy = [centre(k) for k in kids]
+            child_top = min(cy for _, cy in child_xy) - box_h // 2
+            bus_y = (py + box_h // 2 + child_top) // 2
+            ui.connector(px, py + box_h // 2, px, bus_y, color.rule)
+            xs = [px] + [cx for cx, _ in child_xy]
+            ui.connector(min(xs), bus_y, max(xs), bus_y, color.rule)
+            for cx, _ in child_xy:
+                ui.connector(cx, bus_y, cx, child_top, color.rule)
+        # A trunk stem joins consecutive parentless roots (the Long Watch's two
+        # trunk deeds), so the shared stem reads as one column, not floating boxes.
+        stem = sorted((p for p in placements if p.node.parent is None),
+                      key=lambda p: p.row)
+        for a, b in zip(stem, stem[1:]):
+            if b.row - a.row == 1 and abs(a.x - b.x) < 1e-6:
+                ax, ay = centre(a)
+                bx, by = centre(b)
+                ui.connector(ax, ay + box_h // 2, bx, by - box_h // 2, color.rule)
         for p in placements:
             cx, cy = centre(p)
             self._draw_node(ui, p.node, cx - box_w // 2, cy - box_h // 2,
@@ -903,27 +937,28 @@ class PathsHandler(AskUserHandler):
         if maxed:
             # A one-and-done active reads "learned"; a maxed passive shows its cap.
             badge = "learned" if node.active else f"rank {rank}/{node.max_rank}"
-            border, name_col, badge_col = (
-                color.ranger_green, color.ranger_green, color.ranger_green)
+            border, name_col, badge_col, icon_col = (
+                color.ranger_green,) * 4
         elif buyable:
             # Affordable now — the gold "highlighted" state, whether a first buy
             # or a rank-up on a node already owned.
             verb = "rank up" if rank > 0 else "buy"
-            border, name_col, badge, badge_col = (
+            border, name_col, badge, badge_col, icon_col = (
                 color.section_head, color.tier_value,
-                f"{verb} · {node.cost}pp", color.hope_gain)
+                f"{verb} · {node.cost}pp", color.hope_gain, color.section_head)
         elif rank > 0:
             # Owned but not rankable right now (capped elsewhere or unaffordable).
-            border, name_col, badge, badge_col = (
+            border, name_col, badge, badge_col, icon_col = (
                 color.ranger_green, color.ranger_green,
-                f"rank {rank}/{node.max_rank}", color.ranger_green)
+                f"rank {rank}/{node.max_rank}", color.ranger_green, color.ranger_green)
         elif self._chooser():
-            border, name_col, badge, badge_col = (
-                color.frame_bright, color.tier_body, f"{node.cost}pp", color.tier_label)
+            border, name_col, badge, badge_col, icon_col = (
+                color.frame_bright, color.tier_body, f"{node.cost}pp",
+                color.tier_label, color.frame_bright)
         else:
-            border, name_col, badge, badge_col = (
+            border, name_col, badge, badge_col, icon_col = (
                 color.rule, color.tier_label, self._locked_reason(hero, node),
-                color.tier_label)
+                color.tier_label, color.tier_label)
 
         fill = (*color.bar_accent, 120) if selected else None
         if selected:
@@ -931,17 +966,28 @@ class PathsHandler(AskUserHandler):
         ui.outline(x, y, w, h, border, fill=fill, width=3 if selected else 2)
 
         cx = x + w // 2
-        name = ("* " if node.capstone else "") + node.name
-        ui.text_center(cx, y + ui.pad // 4, ui.truncate(name, w - ui.pad, ui.small),
-                       name_col, ui.small)
+        # Text rows first (name / optional pips / badge), then the icon crowns the
+        # card in whatever height is left — so a rankable node's three rows always
+        # fit inside the border rather than the icon crowding the badge out.
+        rows = [(("* " if node.capstone else "") + node.name, name_col)]
         pips = self._pips(node, rank).strip()
-        yy = y + ui.pad // 4 + ui.small.get_linesize()
         if pips:
-            ui.text_center(cx, yy, pips,
-                           color.ranger_green if rank else color.tier_label, ui.small)
-            yy += ui.small.get_linesize()
-        ui.text_center(cx, y + h - ui.small.get_linesize() - ui.pad // 5,
-                       ui.truncate(badge, w - ui.pad, ui.small), badge_col, ui.small)
+            rows.append((pips, color.ranger_green if rank else color.tier_label))
+        rows.append((badge, badge_col))
+        ls = ui.small.get_linesize()
+        top_pad = ui.pad // 4
+        text_h = len(rows) * ls
+        icon_size = int(max(ui.line, min(w * 0.36, h * 0.42,
+                                         h - text_h - top_pad - ui.pad // 5)))
+        path_icons.draw(ui.screen, node, cx, y + top_pad + icon_size // 2,
+                        icon_size, icon_col)
+        text_top = y + top_pad + icon_size
+        text_bot = y + h - ui.pad // 5
+        gap = max(0, (text_bot - text_top - text_h) // max(1, len(rows) - 1))
+        ry = text_top
+        for text, col in rows:
+            ui.text_center(cx, ry, ui.truncate(text, w - ui.pad, ui.small), col, ui.small)
+            ry += ls + gap
 
     # --- input ------------------------------------------------------------
     def _buy_cursor(self) -> None:

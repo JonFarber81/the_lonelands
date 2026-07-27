@@ -1,0 +1,248 @@
+"""Vector node icons for the Path tree (#77 follow-up).
+
+Every node on the tree screen wears a little icon so the tree can be *read* at a
+glance — mobility deed, control deed, rankable trait, capstone. The icons are
+drawn from :mod:`pygame` primitives (no art assets) into a square on the card and
+**tinted by the node's state colour** (owned green / buyable gold / locked dim),
+so the glyph reinforces the border.
+
+The vocabulary is *hybrid* (see the #77 design grill): a small set of **semantic
+archetypes** keyed off the node's data — an active's :class:`~perks.ActiveSpec`
+kind, or a passive's dominant stat bonus — plus a **bespoke detail** for the ten
+Hidden Path nodes, dispatched by id in :data:`_BY_ID`. Capstones wrap their base
+glyph in a ring with a spark, so "the payoff" reads even before you know the art.
+
+Each drawer takes ``(screen, cx, cy, s, col, w)`` — the icon centre, the half-box
+``s``, the tint ``col`` and a stroke width ``w`` — and paints within the box
+``[cx-s, cx+s] x [cy-s, cy+s]``. :func:`draw` is the only entry point.
+"""
+from __future__ import annotations
+
+import math
+from typing import Callable, Optional, Tuple
+
+import pygame
+
+Color = Tuple[int, ...]
+
+
+# --- tiny primitives in a centred, normalised frame -----------------------
+def _pts(cx, cy, s, coords):
+    """Map ``[-1, 1]`` fractional ``coords`` to pixels within the icon box."""
+    return [(round(cx + fx * s), round(cy + fy * s)) for fx, fy in coords]
+
+
+def _lines(screen, col, w, cx, cy, s, coords, closed=False):
+    pygame.draw.lines(screen, col, closed, _pts(cx, cy, s, coords), w)
+
+
+def _poly(screen, col, cx, cy, s, coords, w=0):
+    pygame.draw.polygon(screen, col, _pts(cx, cy, s, coords), w)
+
+
+def _dot(screen, col, cx, cy, s, fx, fy, r):
+    pygame.draw.circle(screen, col, (round(cx + fx * s), round(cy + fy * s)), max(1, round(r)))
+
+
+def _ring(screen, col, cx, cy, s, r, w):
+    pygame.draw.circle(screen, col, (round(cx), round(cy)), round(r * s), w)
+
+
+def _arc(screen, col, w, cx, cy, s, hw, hh, a0, a1):
+    rect = pygame.Rect(round(cx - hw * s), round(cy - hh * s), round(2 * hw * s), round(2 * hh * s))
+    pygame.draw.arc(screen, col, rect, a0, a1, w)
+
+
+# --- archetype glyphs ------------------------------------------------------
+def _footprint(screen, cx, cy, s, col, w):
+    """Silent Tread — a footprint stealing forward, with motion dashes behind."""
+    sole = pygame.Rect(round(cx - 0.32 * s), round(cy - 0.42 * s), round(0.64 * s), round(1.0 * s))
+    pygame.draw.ellipse(screen, col, sole, w)
+    for fx in (-0.26, -0.08, 0.1, 0.28):                # toe pads above the sole
+        _dot(screen, col, cx, cy, s, fx, -0.64, 0.075 * s)
+    for fy in (-0.2, 0.28):                             # motion dashes trailing behind
+        _lines(screen, col, w, cx, cy, s, [(-0.95, fy), (-0.6, fy)])
+
+
+def _chevrons(screen, cx, cy, s, col, w, away=False):
+    """Dash — a double chevron blinking across, with a faint origin dot."""
+    sign = -1 if away else 1
+    for off in (-0.18, 0.34):
+        _lines(screen, col, w, cx, cy, s,
+               [(sign * (-0.5) + off * sign, -0.55), (sign * 0.5 + off * sign, 0.0),
+                (sign * (-0.5) + off * sign, 0.55)])
+    _dot(screen, col, cx, cy, s, -0.72 * sign, 0.0, 0.09 * s)
+
+
+def _blade(screen, cx, cy, s, col, w, droplet=False):
+    """A blade point-up; with a venom droplet at the tip for Poisoned Blade."""
+    _poly(screen, col, cx, cy, s, [(0, -0.85), (0.26, 0.2), (0, 0.42), (-0.26, 0.2)], w)
+    _lines(screen, col, w, cx, cy, s, [(0, 0.42), (0, 0.8)])            # grip
+    _lines(screen, col, w, cx, cy, s, [(-0.3, 0.5), (0.3, 0.5)])        # guard
+    if droplet:
+        _dot(screen, col, cx, cy, s, 0.44, -0.5, 0.13 * s)
+        _poly(screen, col, cx, cy, s, [(0.44, -0.74), (0.56, -0.48), (0.32, -0.48)])
+
+
+def _reticle_dagger(screen, cx, cy, s, col, w):
+    """Ambush — a dagger striking down between target brackets."""
+    for sx in (-1, 1):                                  # corner brackets framing the mark
+        for sy in (-1, 1):
+            _lines(screen, col, w, cx, cy, s,
+                   [(sx * 0.85, sy * 0.5), (sx * 0.85, sy * 0.85), (sx * 0.5, sy * 0.85)])
+    _poly(screen, col, cx, cy, s, [(0, 0.72), (0.2, -0.2), (0, -0.42), (-0.2, -0.2)], w)  # blade down
+    _lines(screen, col, w, cx, cy, s, [(-0.28, -0.2), (0.28, -0.2)])   # guard
+    _lines(screen, col, w, cx, cy, s, [(0, -0.42), (0, -0.68)])        # grip up
+
+
+def _dodge(screen, cx, cy, s, col, w):
+    """Evasion — a sidestep: a swept arc flicking off to one side."""
+    _arc(screen, col, w, cx, cy, s, 0.72, 0.85, math.radians(20), math.radians(200))
+    _poly(screen, col, cx, cy, s, [(0.66, -0.28), (0.86, -0.12), (0.6, 0.0)])
+    _dot(screen, col, cx, cy, s, -0.62, 0.42, 0.09 * s)
+
+
+def _trap(screen, cx, cy, s, col, w):
+    """Snare — a noose loop drawn over its tightening knot and stake."""
+    loop = pygame.Rect(round(cx - 0.5 * s), round(cy - 0.75 * s), round(1.0 * s), round(0.8 * s))
+    pygame.draw.ellipse(screen, col, loop, w)
+    _lines(screen, col, w, cx, cy, s, [(-0.14, 0.05), (0.14, 0.05)])   # knot
+    _lines(screen, col, w, cx, cy, s, [(0, 0.05), (0, 0.85)])          # stake
+    _dot(screen, col, cx, cy, s, 0, 0.85, 0.09 * s)
+
+
+def _pin(screen, cx, cy, s, col, w):
+    """Pinning — a spike driven down through a ring, holding a foe in place."""
+    _ring(screen, col, cx, cy - 0.1 * s, s, 0.34, w)
+    _lines(screen, col, w, cx, cy, s, [(0, -0.8), (0, 0.7)])
+    _poly(screen, col, cx, cy, s, [(0, 0.9), (-0.18, 0.55), (0.18, 0.55)])
+    _lines(screen, col, w, cx, cy, s, [(-0.55, 0.8), (0.55, 0.8)])      # ground line
+
+
+def _wisp(screen, cx, cy, s, col, w):
+    """Vanish — a curl of smoke dispersing upward into fading motes."""
+    _lines(screen, col, w, cx, cy, s,
+           [(-0.1, 0.85), (0.28, 0.5), (-0.28, 0.12), (0.2, -0.24)])
+    for (fx, fy, r) in ((-0.05, -0.44, 0.11), (0.28, -0.66, 0.08), (-0.24, -0.72, 0.055)):
+        _dot(screen, col, cx, cy, s, fx, fy, r * s)
+
+
+def _shield(screen, cx, cy, s, col, w):
+    """Defence / stance — a shield."""
+    _poly(screen, col, cx, cy, s,
+          [(0, -0.8), (0.65, -0.5), (0.65, 0.2), (0, 0.85), (-0.65, 0.2), (-0.65, -0.5)], w)
+
+
+def _plates(screen, cx, cy, s, col, w):
+    """Soak — layered plates (Iron Skin)."""
+    for fy in (-0.5, -0.05, 0.4):
+        _lines(screen, col, w, cx, cy, s, [(-0.6, fy + 0.18), (0, fy - 0.18), (0.6, fy + 0.18)])
+
+
+def _cross(screen, cx, cy, s, col, w):
+    """Heal — a soft cross (Second Wind)."""
+    _lines(screen, col, w, cx, cy, s, [(0, -0.6), (0, 0.6)])
+    _lines(screen, col, w, cx, cy, s, [(-0.6, 0), (0.6, 0)])
+    _ring(screen, col, cx, cy, s, 0.85, w)
+
+
+def _burst(screen, cx, cy, s, col, w):
+    """Wrath / crit — a radiating strike."""
+    for k in range(8):
+        a = math.radians(k * 45)
+        r0, r1 = (0.3, 0.9) if k % 2 == 0 else (0.24, 0.6)
+        _lines(screen, col, w, cx, cy, s,
+               [(r0 * math.cos(a), r0 * math.sin(a)), (r1 * math.cos(a), r1 * math.sin(a))])
+
+
+def _arrow(screen, cx, cy, s, col, w):
+    """Ranged — an arrow on the rise."""
+    _lines(screen, col, w, cx, cy, s, [(-0.7, 0.7), (0.7, -0.7)])
+    _poly(screen, col, cx, cy, s, [(0.7, -0.7), (0.3, -0.62), (0.62, -0.3)])
+    _lines(screen, col, w, cx, cy, s, [(-0.7, 0.7), (-0.7, 0.34)])
+    _lines(screen, col, w, cx, cy, s, [(-0.7, 0.7), (-0.34, 0.7)])
+
+
+def _pool(screen, cx, cy, s, col, w):
+    """Endurance — a reserve filling a vessel."""
+    _arc(screen, col, w, cx, cy, s, 0.7, 0.7, math.radians(180), math.radians(360))
+    _lines(screen, col, w, cx, cy, s, [(-0.7, 0), (-0.7, -0.5)])
+    _lines(screen, col, w, cx, cy, s, [(0.7, 0), (0.7, -0.5)])
+    _lines(screen, col, w, cx, cy, s, [(-0.4, 0.24), (0.4, 0.24)])
+
+
+def _diamond(screen, cx, cy, s, col, w):
+    """Generic trait — a filled chevron/diamond."""
+    _poly(screen, col, cx, cy, s, [(0, -0.7), (0.6, 0), (0, 0.7), (-0.6, 0)], w)
+
+
+# --- capstone wrapper ------------------------------------------------------
+def _spark(screen, cx, cy, s, col, w):
+    for a in (0, 90, 45, 135):
+        r = 0.28 if a % 90 else 0.4
+        rad = math.radians(a)
+        _lines(screen, col, max(1, w - 1), cx, cy, s,
+               [(-r * math.cos(rad), -r * math.sin(rad)), (r * math.cos(rad), r * math.sin(rad))])
+
+
+# --- dispatch --------------------------------------------------------------
+_BY_ID: dict = {
+    "hp_stealth": _footprint,
+    "hp_ambush": _reticle_dagger,
+    "hp_evasion": _dodge,
+    "hp_shadowstep": _chevrons,
+    "hp_poison": lambda sc, cx, cy, s, c, w: _blade(sc, cx, cy, s, c, w, droplet=True),
+    "hp_deathblow": _blade,
+    "hp_snare": _trap,
+    "hp_pinning": _pin,
+    "hp_disengage": lambda sc, cx, cy, s, c, w: _chevrons(sc, cx, cy, s, c, w, away=True),
+    "hp_vanish": _wisp,
+}
+
+
+def _archetype(node) -> Callable:
+    """Pick a glyph from the node's data for Paths without a bespoke icon."""
+    if node.active is not None:
+        kind = node.active.kind
+        return {
+            "dash": lambda sc, cx, cy, s, c, w: _chevrons(sc, cx, cy, s, c, w),
+            "place_tile": _trap,
+            "root": _pin,
+            "vanish": _wisp,
+            "heal": _cross,
+            "stance": _shield,
+            "wrath": _burst,
+        }.get(kind, _diamond)
+    if node.soak_bonus:
+        return _plates
+    if node.defence_bonus:
+        return _shield
+    if node.stealth_bonus:
+        return _footprint
+    if node.melee_bleed:
+        return lambda sc, cx, cy, s, c, w: _blade(sc, cx, cy, s, c, w, droplet=True)
+    if node.ambush_bonus_damage or node.ambush_advantage:
+        return _reticle_dagger
+    if node.ranged_bonus or node.ranged_damage_bonus:
+        return _arrow
+    if node.crit_range:
+        return _burst
+    if node.atk_bonus or node.melee_damage_bonus:
+        return _blade
+    if node.max_endurance_bonus:
+        return _pool
+    return _diamond
+
+
+def draw(screen: "pygame.Surface", node, cx: int, cy: int, size: int, col: Color) -> None:
+    """Paint ``node``'s icon centred at ``(cx, cy)`` filling a ``size``-px box,
+    tinted ``col``. Capstones get a ring-and-spark surround."""
+    s = size / 2
+    w = max(2, round(size * 0.085))
+    drawer = _BY_ID.get(node.id) or _archetype(node)
+    if node.capstone:
+        _ring(screen, col, cx, cy, s, 0.98, max(2, w - 1))
+        drawer(screen, cx, cy, int(s * 0.66), col, max(2, w - 1))
+        _spark(screen, cx + int(0.7 * s), cy - int(0.7 * s), int(s * 0.4), col, w)
+    else:
+        drawer(screen, cx, cy, int(s * 0.86), col, w)
