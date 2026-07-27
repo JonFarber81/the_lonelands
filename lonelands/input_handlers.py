@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import tcod
 
-from lonelands import actions, character, color, overworld_map, perks
+from lonelands import actions, character, color, events, overworld_map, perks
+from lonelands.events import CENTER, KeySym, Modifier
 from lonelands.tile_glyphs import graphic_char
 from lonelands.render_functions import (
     draw_filled_bar,
@@ -30,8 +31,6 @@ from lonelands.exceptions import Impossible, QuitWithoutSaving
 if TYPE_CHECKING:
     from lonelands.engine import Engine
     from lonelands.entity import Actor, Item
-
-KeySym = tcod.event.KeySym
 
 MOVE_KEYS = {
     KeySym.UP: (0, -1), KeySym.DOWN: (0, 1),
@@ -58,8 +57,8 @@ _CURSOR_DOWN = {KeySym.DOWN, KeySym.KP_2}
 # ===========================================================================
 # Base handlers
 # ===========================================================================
-class BaseEventHandler(tcod.event.EventDispatch["BaseEventHandler"]):
-    def handle_events(self, event: tcod.event.Event) -> "BaseEventHandler":
+class BaseEventHandler(events.BaseEventHandler):
+    def handle_events(self, event) -> "BaseEventHandler":
         state = self.dispatch(event)
         if isinstance(state, BaseEventHandler):
             return state
@@ -86,7 +85,7 @@ class PopupMessage(BaseEventHandler):
         console.rgb["bg"] //= 4
         console.print(
             SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, self.text,
-            fg=color.white, bg=color.black, alignment=tcod.constants.CENTER,
+            fg=color.white, bg=color.black, alignment=CENTER,
         )
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
@@ -97,7 +96,7 @@ class EventHandler(BaseEventHandler):
     def __init__(self, engine: "Engine"):
         self.engine = engine
 
-    def handle_events(self, event: tcod.event.Event) -> BaseEventHandler:
+    def handle_events(self, event) -> BaseEventHandler:
         action_or_state = self.dispatch(event)
         if isinstance(action_or_state, BaseEventHandler):
             return action_or_state
@@ -312,9 +311,9 @@ class GameOverEventHandler(EventHandler):
         console.rgb["bg"] //= 3
         cx, cy = MAP_WIDTH // 2, MAP_HEIGHT // 2
         console.print(cx, cy - 1, "Here ends the road.", fg=color.player_die,
-                      alignment=tcod.constants.CENTER)
+                      alignment=CENTER)
         console.print(cx, cy + 1, "[Enter] to return to the title    [Esc] to quit",
-                      fg=color.gray, alignment=tcod.constants.CENTER)
+                      fg=color.gray, alignment=CENTER)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         from lonelands import savegame
@@ -844,7 +843,7 @@ class OverworldMapHandler(AskUserHandler):
         console.rgb["bg"] = color.near_black
 
         console.print(SCREEN_WIDTH // 2, 0, "The Ranger's Atlas — Eriador",
-                      fg=color.menu_title, alignment=tcod.constants.CENTER)
+                      fg=color.menu_title, alignment=CENTER)
 
         gw = self.engine.game_world
         buf = overworld_map.render_map(gw.coord, self.cursor)
@@ -1140,7 +1139,7 @@ class ShopHandler(EventHandler):
                 if self.mode == "buy":
                     self._buy()
                 else:
-                    whole = bool(event.mod & tcod.event.Modifier.SHIFT)
+                    whole = bool(event.mod & Modifier.SHIFT)
                     self._sell(whole_stack=whole)
                 return None
         if event.sym == KeySym.ESCAPE:
@@ -1212,7 +1211,7 @@ class MainMenuHandler(BaseEventHandler):
         cx = SCREEN_WIDTH // 2
         for i, line in enumerate(TITLE_ART):
             fg = color.menu_title if i == 0 else color.menu_text
-            console.print(cx, 8 + i * 2, line, fg=fg, alignment=tcod.constants.CENTER)
+            console.print(cx, 8 + i * 2, line, fg=fg, alignment=CENTER)
         from lonelands import savegame
         options = []
         if savegame.has_save():
@@ -1221,10 +1220,10 @@ class MainMenuHandler(BaseEventHandler):
         options.append("[Q]  Depart")
         for i, o in enumerate(options):
             console.print(cx, 22 + i * 2, o, fg=color.selected,
-                          alignment=tcod.constants.CENTER)
+                          alignment=CENTER)
         console.print(cx, SCREEN_HEIGHT - 3,
                       "Powered by The One Ring · feat die + success dice",
-                      fg=color.gray, alignment=tcod.constants.CENTER)
+                      fg=color.gray, alignment=CENTER)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         from lonelands import savegame, setup_game
@@ -1251,18 +1250,18 @@ class DifficultySelectHandler(BaseEventHandler):
         console.rgb["bg"] = color.near_black
         cx = SCREEN_WIDTH // 2
         console.print(cx, 8, "How hard is the road?", fg=color.menu_title,
-                      alignment=tcod.constants.CENTER)
+                      alignment=CENTER)
         row = 14
         for i, (_key, name, _mult, blurb) in enumerate(config.DIFFICULTIES):
             fg = color.selected if _key == config.DEFAULT_DIFFICULTY else color.menu_text
             console.print(cx, row, f"[{i + 1}]  {name}", fg=fg,
-                          alignment=tcod.constants.CENTER)
+                          alignment=CENTER)
             console.print(cx, row + 1, blurb, fg=color.gray,
-                          alignment=tcod.constants.CENTER)
+                          alignment=CENTER)
             row += 3
         console.print(cx, SCREEN_HEIGHT - 3,
                       "Press 1–3 to set out · [Esc] back",
-                      fg=color.gray, alignment=tcod.constants.CENTER)
+                      fg=color.gray, alignment=CENTER)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         from lonelands import config, setup_game
