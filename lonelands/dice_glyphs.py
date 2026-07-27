@@ -1,12 +1,13 @@
 """Private-Use-Area codepoints for the baked die-face glyphs.
 
 This is the single registry both sides of the seam agree on: ``fonts.py`` bakes
-pixel art into these codepoints (see ADR 0001), and the dice-tray renderer prints
-them by the same codepoint. Keep drawing routines out of here — this module is
-pure constants so it can be imported from anywhere without pulling in FreeType.
+pixel art into these codepoints (see ADR 0001, 0010), and the dice-tray renderer
+prints them by the same codepoint. Keep drawing routines out of here — this
+module is pure constants so it can be imported from anywhere without pulling in
+the rendering stack (pygame/the glyph atlas).
 
-Each die is drawn **two cells wide by two cells tall** (tcod renders one glyph
-per cell), so every face occupies a 2×2 block of four consecutive codepoints in
+Each die is drawn **two cells wide by two cells tall** (one glyph per cell), so
+every face occupies a 2×2 block of four consecutive codepoints in
 row-major order: (top-left, top-right, bottom-left, bottom-right). The larger
 block gives each face's numeral the pixels it needs to read clearly. Feat die
 faces map value 1..12; 11 is the Eye of Sauron and 12 the Gandalf rune (drawn

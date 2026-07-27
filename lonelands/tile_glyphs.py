@@ -14,8 +14,8 @@ plain ASCII codepoint and its TTF glyph. One character, two glyphs, chosen by
 context.
 
 Like :mod:`lonelands.dice_glyphs` this module is pure constants so ``tile_types``
-can import it without pulling in FreeType. Its range is kept clear of the dice
-codepoints (0xE000–0xE05B).
+can import it without pulling in the rendering stack (pygame/the glyph atlas).
+Its range is kept clear of the dice codepoints (0xE000–0xE05B).
 """
 from __future__ import annotations
 

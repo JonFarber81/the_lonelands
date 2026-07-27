@@ -1,8 +1,9 @@
 # Map tilesets
 
 The game renders map terrain and entity glyphs from a Dwarf-Fortress-style
-CP437 tilesheet (see `lonelands/fonts.py`, `lonelands/tile_glyphs.py`). Prose,
-menus, and the dice tray still use the bundled TrueType font.
+CP437 tilesheet (see `lonelands/fonts.py`, `lonelands/tile_glyphs.py`). The
+map/HUD prose and the dice tray use the bundled monospace TrueType font; the
+native menus render in a proportional font (`lonelands/ui.py`).
 
 ## Wanderlust (`wanderlust_16x16.png`) — NOT committed
 
