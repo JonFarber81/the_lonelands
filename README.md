@@ -36,6 +36,11 @@ is absent the map falls back to the font's own glyphs, so the game always runs.
   givers, and **Halbarad's shop**), the **Hamlets** of **Combe** and **Staddle**
   and the lonely **Forsaken Inn** sit out on the Bree-land cell, and **Archet**
   nestles in the Chetwood — each with its own bystanders, signposts, and errands.
+- **Ambient barks**: short, non-interactive flavor lines overheard as you move
+  near a **bark source** — *a dog barks somewhere down the Staddle lane*, the
+  knock of a tankard from the Forsaken Inn, birdsong at the Chetwood eaves. Each
+  source is data (a point, a radius, a pool of lines, a **cadence**) authored
+  next to a region's content and throttled per-map so the log stays sparse.
 - **A d20 resolution core** (see `docs/adr/0005`): every action is a **Check** —
   `d20 + attribute (+ perk/gear)` vs a **Target Number**. A natural 20 is a
   **Critical** (auto-hit + bonus damage), a natural 1 a **Fumble** (auto-miss);
@@ -101,6 +106,7 @@ lonelands/
   affixes.py         the prefix/suffix generator → Plain / Fine / Rare loot
   story/             per-location NPCs, dialog trees & quests (bree, breeland, chetwood)
   quests.py          quest definitions + quest log
+  barks.py           ambient proximity-triggered flavor lines (bark sources/fields)
   overworld.py       the 15×9 Region plan-as-data (cells, bands, road edges)
   world.py           the Region grid + travel between Regions and Levels
   procgen.py         Bree / wilderness / barrow generation
