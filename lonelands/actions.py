@@ -33,6 +33,18 @@ def resolve_ambush(hero, target_fighter) -> Tuple[bool, int, int]:
     return is_ambush, advantage, bonus
 
 
+def _second_person(desc: str) -> str:
+    """A creature's third-person attack verb (``"hacks at"``, ``"snaps at"``,
+    ``"strikes"``) read in the second person for the player (``"hack at"``,
+    ``"snap at"``, ``"strike"``): only the leading verb sheds its ``-s``, so a
+    trailing preposition is kept. Without this the melee log reads "You strikes".
+    """
+    head, sep, rest = desc.partition(" ")
+    if head.endswith("s"):
+        head = head[:-1]
+    return head + (sep + rest if rest else "")
+
+
 class Action:
     def __init__(self, entity: "Actor") -> None:
         self.entity = entity
@@ -131,6 +143,9 @@ class MeleeAction(ActionWithDirection):
 
         who = "You" if is_player else f"The {attacker.name}"
         target_name = "you" if target is engine.player else f"the {target.name}"
+        # The player is addressed in the second person ("You strike"), a foe in
+        # the third ("The warg savages").
+        attack_desc = _second_person(af.attack_desc) if is_player else af.attack_desc
         atk_color = color.player_atk if is_player else color.enemy_atk
 
         # A Critical is a natural crit-face or higher (Swift Wrath widens it); a
@@ -139,7 +154,7 @@ class MeleeAction(ActionWithDirection):
         if not (crit or result.is_success):
             verb = "swing wildly" if result.is_fumble else "miss"
             engine.message_log.add_message(
-                f"{who} {af.attack_desc} at {target_name} but {verb}.",
+                f"{who} {attack_desc} at {target_name} but {verb}.",
                 color.sauron_eye if result.is_fumble else color.gray,
             )
             return
@@ -163,7 +178,7 @@ class MeleeAction(ActionWithDirection):
         if ambush:
             flavour += " From the shadows!"
         engine.message_log.add_message(
-            f"{who} {af.attack_desc} {target_name} for {dmg} endurance.{flavour}",
+            f"{who} {attack_desc} {target_name} for {dmg} endurance.{flavour}",
             atk_color,
         )
 

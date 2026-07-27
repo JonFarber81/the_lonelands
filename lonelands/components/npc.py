@@ -16,16 +16,24 @@ class NPC(BaseComponent):
 
     parent: "Actor"
 
-    def __init__(self, title: str, tree: Dict[str, Any], start: str = "root"):
+    def __init__(self, title: str, tree: Dict[str, Any], start: str = "root",
+                 keep_tree: bool = False):
         self.title = title
         self.tree = tree
         self.start = start
+        # Authored NPCs drop their tree on save (it holds lambdas) and are
+        # rehydrated by name. A *generated* wandering Bystander has no authored
+        # twin to rehydrate from, but its tree is a single self-contained text
+        # node with no lambdas — so it pickles cleanly and we keep it instead.
+        self.keep_tree = keep_tree
 
     def __getstate__(self) -> Dict[str, Any]:
         """Drop the dialog tree — it is full of lambdas and is static content.
-        savegame._rehydrate restores it by the speaker's name on load."""
+        savegame._rehydrate restores it by the speaker's name on load. A tree
+        flagged `keep_tree` (a generated patron's) is lambda-free and kept."""
         state = self.__dict__.copy()
-        state["tree"] = None
+        if not getattr(self, "keep_tree", False):
+            state["tree"] = None
         return state
 
     def __deepcopy__(self, memo: Dict[int, Any]) -> "NPC":

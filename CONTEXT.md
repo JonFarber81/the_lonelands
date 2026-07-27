@@ -16,7 +16,10 @@ not a spec: it defines *what words mean*, never *how things are built*.
 - **Surface** — a Region's topmost Level: the one the player arrives on when
   walking in from a neighbour. *Only the Surface edge-connects to neighbouring
   Regions*; deeper Levels are reached only by Enter, from within their Region.
-- **Square** — the town's central plaza only. *Not* a synonym for Region.
+- **Square** — *retired.* Bree once had a central market plaza; it was dropped
+  when the town was redrawn around the Prancing Pony as its social heart (the
+  Pony's **common room** is now the hub). The word carries no canonical meaning;
+  do not reintroduce it as a synonym for Region.
 - **Overworld Map** — the full-reveal reference chart of the *whole* Region grid,
   opened with **`M`**: a knowledgeable Ranger's atlas of Eriador, showing every
   Region at once with its band, role, Town/Landmark names, roads, the Sea/Mountain
@@ -85,7 +88,24 @@ player **bumps** any of them to open the conversation.
   overworld cell — it is content placed on a cell's Surface.
 - **Bystander** — a speaking NPC with dialog but *no* shop or quest: colour and
   rumour only. Distinct from the functional NPCs — the quest-givers and
-  **merchants** (shopkeepers) — who move the game state.
+  **merchants** (shopkeepers) — who move the game state. A Bystander is one of
+  two kinds. A **fixed Bystander** is hand-authored: a named figure standing at a
+  chosen spot with its own dialog tree (the West-gate gatekeeper, Bill Ferny).
+  A **wandering Bystander** is *generated*: no authored name, a random **kind**
+  (Bree-man, hobbit, dwarf, weathered traveller) drawn from a pool, a
+  colour-with-occasional-rumour line on bump, and a peaceful **idle-wander**
+  behaviour that drifts it tile-by-tile (it never attacks, and bumping it opens
+  talk, not a blow). Wandering Bystanders are the Prancing Pony's **hubbub** —
+  seeded in and around the inn, free to spill into the streets — while every
+  *functional* NPC and *fixed* Bystander stays put and easy to find. The
+  wandering crowd is **lettered by race** on the map (`m` man, `h` hobbit, `d`
+  dwarf) so a roomful reads at a glance; the player and every hand-authored NPC —
+  questgiver, merchant, or fixed Bystander alike — keep the roguelike `@`,
+  reserving that glyph for the folk you seek out by name. This is the standing
+  rule for **every** NPC (ADR-0009): `story/_helpers.RACE_GLYPHS` is the single
+  source of truth a lettered NPC draws its glyph from, and a new race adds one
+  entry there. (Hostile creatures carry their own beast letters — see *Wandering
+  threats* — with no overlap.)
 - **Signpost** — an examinable wayfinding/flavor prop: a readable post the
   player bumps, built on the same NPC machinery with a single dialog node. Each
   carries a unique name so its text restores correctly on save/load.

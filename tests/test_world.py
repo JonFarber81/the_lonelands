@@ -207,7 +207,15 @@ def test_bree_all_edges_and_npcs_are_reachable_on_foot(game):
     assert any((x, H - 1) in seen for x in range(W)), "south edge unreachable"
 
     npcs = [a for a in gm.actors if a is not player]
-    assert len(npcs) == 5  # elder, healer, halbarad, innkeeper, fletcher (ADR 0006)
+    # The fixed cast: 5 named townsfolk + the West-gate keeper + Bill Ferny +
+    # 2 signposts, plus ~10 wandering Bystanders (patrons, whose count varies).
+    # Guard the fixed names explicitly; everyone must be reachable and standing
+    # on open ground (ADR 0008).
+    names = {n.name for n in npcs}
+    for expected in ("Butterbur", "Dírhael the Elder", "Halbarad",
+                     "Mistress Rushlight", "Cob", "Harry Goatleaf", "Bill Ferny"):
+        assert expected in names, f"{expected} missing from Bree"
+    assert len(npcs) >= 15
     for npc in npcs:
         assert walk[npc.x, npc.y], f"{npc.name} stands on an unwalkable tile"
         assert (npc.x, npc.y) in seen, f"{npc.name} is unreachable"
