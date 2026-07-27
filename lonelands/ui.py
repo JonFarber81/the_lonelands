@@ -22,14 +22,18 @@ from lonelands import color
 
 Color = Tuple[int, int, int]
 
-# Proportional face candidates, in preference order; SysFont falls back to
-# pygame's bundled default (also proportional) if none are installed.
-_FACE = "Avenir Next,Avenir,Helvetica Neue,Segoe UI,DejaVu Sans,Arial"
+# Two proportional faces, each a preference-ordered candidate list (SysFont
+# falls back to pygame's bundled default if none are installed):
+#   _SANS — the HUD chrome (sidebar stats, Chronicle log, menus): scanned, dense.
+#   _PROSE — text that's *read* (NPC speech, quest descriptions): a humanist book
+#            serif, warmer for Middle-earth and free of Avenir's restless 'u'.
+_SANS = "Seravek,Helvetica Neue,Avenir Next,Segoe UI,DejaVu Sans,Arial"
+_PROSE = "Iowan Old Style,Palatino,Georgia,DejaVu Serif,Times New Roman,serif"
 
 
-def _font(size: int, bold: bool = False) -> "pygame.font.Font":
+def _font(size: int, bold: bool = False, face: str = _SANS) -> "pygame.font.Font":
     pygame.font.init()
-    return pygame.font.SysFont(_FACE, size, bold=bold)
+    return pygame.font.SysFont(face, size, bold=bold)
 
 
 class UI:
@@ -46,6 +50,8 @@ class UI:
         self.head = _font(int(base * 1.02), bold=True)
         self.title = _font(int(base * 2.0), bold=True)
         self.subtitle = _font(int(base * 1.15))
+        self.prose = _font(base, face=_PROSE)          # read text: NPC speech, quests
+        self.prose_line = self.prose.get_linesize()
         self.pad = base                      # panel inner padding
         self.line = self.body.get_linesize()  # default row advance
         self._mono: dict = {}                # size -> monospace font (help page)
@@ -96,7 +102,7 @@ class UI:
 
     def paragraph(self, x: int, y: int, s: str, col: Color, max_w: int, font=None) -> int:
         """Draw wrapped prose; return the y just below the last line."""
-        font = font or self.body
+        font = font or self.prose
         step = font.get_linesize()
         for line in self.wrap(s, max_w, font):
             self.text(x, y, line, col, font)

@@ -1078,17 +1078,17 @@ class DialogHandler(EventHandler):
         opts = self._visible_options()
         self.cursor = max(0, min(self.cursor, len(opts) - 1)) if opts else 0
         w = int(display.win_w * 0.72)
-        text_lines = ui.wrap(self._text(), w - ui.pad * 2)
-        h = (ui.pad * 3 + ui.head.get_linesize() + len(text_lines) * ui.line
+        text_lines = ui.wrap(self._text(), w - ui.pad * 2, ui.prose)
+        h = (ui.pad * 3 + ui.head.get_linesize() + len(text_lines) * ui.prose_line
              + ui.pad + len(opts) * ui.line + ui.line)
         x = (display.win_w - w) // 2
         # Anchor near the bottom, but never let a long speech run off the top.
         y = max(ui.pad, display.win_h - h - int(display.win_h * 0.05))
         inner = ui.panel(x, y, w, int(h), f"{self.speaker.name} — {self.npc.title}")
         cx, cy = inner.x, inner.y
-        for line in text_lines:  # speech is prose: read it
-            ui.text(cx, cy, line, color.white)
-            cy += ui.line
+        for line in text_lines:  # speech is prose: read it, in the serif face
+            ui.text(cx, cy, line, color.white, ui.prose)
+            cy += ui.prose_line
         cy += ui.pad // 2
         ox = cx + ui.measure("  1.  ")[0]
         for i, o in enumerate(opts):
