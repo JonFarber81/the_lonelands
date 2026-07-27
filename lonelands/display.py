@@ -9,10 +9,9 @@ console.
 
 :class:`Display` owns the pygame window and paints a :class:`Console` to it. Each
 cell is a glyph blitted from a cache keyed by codepoint, tinted by the cell's
-foreground colour, over the cell's background. The glyph bitmaps still come from
-:func:`lonelands.fonts.load_tileset` for now — Phase 2 (see the issue) replaces
-that baking with a native pygame glyph cache; Phase 1 only swaps the window,
-render, and input layer.
+foreground colour, over the cell's background. The white glyph surfaces come
+from :class:`lonelands.fonts.GlyphAtlas` (prose, map tiles, and dice, all baked
+natively in pygame); the display tints and caches them per foreground colour.
 """
 from __future__ import annotations
 
@@ -168,31 +167,13 @@ class Display:
 
     # --- glyph cache -------------------------------------------------------
     def _load_glyphs(self) -> None:
-        self._tileset = fonts.load_tileset(self.cell_w, self.cell_h)
-        # cp -> white glyph surface (or None for a blank/absent codepoint)
-        self._base: Dict[int, Optional[pygame.Surface]] = {}
-        # (cp, fg) -> glyph tinted to that foreground colour
+        # The atlas owns the white per-codepoint surfaces (and caches them); the
+        # display only caches the tinted copies keyed by foreground colour.
+        self._atlas = fonts.GlyphAtlas(self.cell_w, self.cell_h)
         self._tinted: Dict[Tuple[int, Color], Optional[pygame.Surface]] = {}
 
     def _base_surface(self, cp: int) -> Optional[pygame.Surface]:
-        if cp in self._base:
-            return self._base[cp]
-        surf: Optional[pygame.Surface] = None
-        try:
-            tile = self._tileset.get_tile(cp)  # (cell_h, cell_w, 4) RGBA, white ink
-        except (KeyError, IndexError):
-            tile = None
-        if tile is not None and int(tile[..., 3].max()) > 0:
-            alpha = np.ascontiguousarray(tile[:, :, 3].T)  # -> (cell_w, cell_h)
-            surf = pygame.Surface((self.cell_w, self.cell_h), pygame.SRCALPHA)
-            rgb = pygame.surfarray.pixels3d(surf)
-            rgb[:] = 255
-            del rgb
-            av = pygame.surfarray.pixels_alpha(surf)
-            av[:] = alpha
-            del av
-        self._base[cp] = surf
-        return surf
+        return self._atlas.base_surface(cp)
 
     def _glyph(self, cp: int, fg: Color) -> Optional[pygame.Surface]:
         key = (cp, fg)

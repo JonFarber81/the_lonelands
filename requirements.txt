@@ -1,4 +1,3 @@
-pygame>=2.5   # windowing, rendering, and input (issue #66)
+pygame>=2.5   # windowing, rendering, input, and glyph rasterisation (issue #66)
 tcod>=16.0    # retained headless: FOV (engine) + pathfinding (components/ai)
 numpy>=1.24
-freetype-py>=2.4  # crisp, cell-filling TTF rendering (lonelands/fonts.py)
