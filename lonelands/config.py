@@ -39,10 +39,10 @@ LOG_TEXT_HEIGHT = LOG_HEIGHT - (3 + TRAY_ROWS)
 # leave a gap after each letter that scatters prose and reads worse. We bundle
 # Atkinson Hyperlegible Mono (SIL OFL, see assets/fonts/OFL.txt), which fills
 # the cell as tightly as Andale but with letterforms engineered for reading, so
-# the Chronicle and menus stay legible without hurting the map. The system fonts
-# are fallbacks if the bundled file is missing. NOTE: libtcod can only load
-# plain .ttf files, not .ttc collections (e.g. Menlo.ttc). Fallbacks are tried
-# in order; the first that both exists and loads wins.
+# the Chronicle stays legible without hurting the map. (Native menus render in a
+# proportional font instead — see lonelands/ui.py.) The system fonts are
+# fallbacks if the bundled file is missing; the first that both exists and loads
+# wins.
 _ASSETS = os.path.join(os.path.dirname(__file__), "assets", "fonts")
 
 FONT_CANDIDATES = [
@@ -65,8 +65,8 @@ TILESET_CANDIDATES = [
     os.path.join(_TILES, "wanderlust_16x16.png"),
 ]
 
-# Cell size in pixels. A tcod console has one cell size for the whole screen, so
-# map and prose share it. The tileset art is square 16x16; lonelands.fonts
+# Cell size in pixels. The console grid has one cell size for the whole screen,
+# so map and prose share it. The tileset art is square 16x16; lonelands.fonts
 # letterboxes it (centres the square tile, never stretches) so the cell can be a
 # little taller than wide — giving the TTF prose the vertical room it needs to
 # stay legible while the map tiles stay crisp, with only a thin grid gap between
