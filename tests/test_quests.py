@@ -280,3 +280,102 @@ def test_delivery_descriptor_survives_pickling():
     restored = pickle.loads(pickle.dumps(q))
     assert restored.deliver_item == "dwarf-trader's parcel"
     assert restored.deliver_to == "Barliman"
+
+
+# --- Talk-to objectives -----------------------------------------------------
+
+def make_talk_quest(node=None, **kw):
+    kw.setdefault("target_count", 1)
+    q = make_quest(quest_id="errand", title="Word to the Woodsman",
+                   objective="carry word to the woodsman of Combe", **kw)
+    q.talk_target = "Woodsman"
+    if node is not None:
+        q.talk_node = node
+    return q
+
+
+def test_notify_talk_advances_matching_quest_only():
+    log = QuestLog()
+    woodsman = make_talk_quest()
+    other = make_quest(quest_id="o", title="Other")
+    other.talk_target = "Butterbur"
+    log.register(woodsman)
+    log.register(other)
+    log.start("errand")
+    log.start("o")
+
+    log.notify_talk("Woodsman", FakeEngine(), opening=True)
+    assert woodsman.state == QuestState.READY
+    assert other.progress == 0
+
+
+def test_notify_talk_ignores_unstarted_quest():
+    log = QuestLog()
+    q = make_talk_quest()
+    log.register(q)  # still UNSTARTED
+    log.notify_talk("Woodsman", FakeEngine(), opening=True)
+    assert q.progress == 0
+    assert q.state == QuestState.UNSTARTED
+
+
+def test_notify_talk_ignores_the_wrong_npc():
+    log = QuestLog()
+    q = make_talk_quest()
+    log.register(q)
+    log.start("errand")
+    log.notify_talk("Butterbur", FakeEngine(), opening=True)
+    assert q.progress == 0
+
+
+def test_notify_talk_matches_a_specific_node_when_named():
+    log = QuestLog()
+    q = make_talk_quest(node="secret")
+    log.register(q)
+    log.start("errand")
+
+    # right NPC, but not the node the quest cares about
+    log.notify_talk("Woodsman", FakeEngine(), node="root")
+    assert q.progress == 0
+    # the named node advances it
+    log.notify_talk("Woodsman", FakeEngine(), node="secret")
+    assert q.state == QuestState.READY
+
+
+def test_plain_talk_to_fires_at_the_hello_not_on_later_nodes():
+    log = QuestLog()
+    q = make_talk_quest(target_count=1)  # no talk_node
+    log.register(q)
+    log.start("errand")
+    # Node entries mid-conversation don't count for a plain talk-to...
+    log.notify_talk("Woodsman", FakeEngine(), node="deeper")
+    assert q.progress == 0
+    # ...only the opening greeting does.
+    log.notify_talk("Woodsman", FakeEngine(), node="root", opening=True)
+    assert q.state == QuestState.READY
+
+
+def test_plain_talk_to_counts_once_per_conversation():
+    """A multi-count talk-to advances only at each conversation's hello, so
+    walking a tree of nodes in one visit can't over-count."""
+    log = QuestLog()
+    q = make_talk_quest(target_count=2)  # no talk_node
+    log.register(q)
+    log.start("errand")
+
+    # One visit: one hello, then several node steps.
+    log.notify_talk("Woodsman", FakeEngine(), node="root", opening=True)
+    log.notify_talk("Woodsman", FakeEngine(), node="lore")
+    log.notify_talk("Woodsman", FakeEngine(), node="deeper")
+    assert q.progress == 1  # the node walk didn't rack up progress
+
+    # A second, separate visit advances it to the target.
+    log.notify_talk("Woodsman", FakeEngine(), node="root", opening=True)
+    assert q.state == QuestState.READY
+
+
+def test_talk_descriptor_survives_pickling():
+    import pickle
+    q = make_talk_quest(node="secret")
+    restored = pickle.loads(pickle.dumps(q))
+    assert restored.talk_target == "Woodsman"
+    assert restored.talk_node == "secret"

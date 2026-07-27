@@ -860,9 +860,16 @@ class DialogHandler(EventHandler):
         self.node_id = self.npc.start
         self.cursor = 0
         engine.event_handler = self
+        self._notify_talk(opening=True)  # the hello is itself a talk-to beat
 
     def _node(self):
         return self.npc.tree[self.node_id]
+
+    def _notify_talk(self, opening: bool = False) -> None:
+        """Tell the quest log the player is speaking with this NPC at this node,
+        advancing any talk-to quest that wants them (see Quest.talk_target)."""
+        self.engine.quest_log.notify_talk(
+            self.speaker.name, self.engine, self.node_id, opening=opening)
 
     def _visible_options(self):
         opts = []
@@ -923,6 +930,7 @@ class DialogHandler(EventHandler):
             return self.engine.event_handler
         self.node_id = goto
         self.cursor = 0  # a new node starts its choices from the top
+        self._notify_talk()  # reaching a node can satisfy a node-pinned talk-to
         return None
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
