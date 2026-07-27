@@ -1,10 +1,16 @@
-"""A curated palette. Muted, slightly desaturated earth-and-shadow tones in the
-Brogue tradition: readable, atmospheric, never garish."""
+"""A curated palette. Earthy, desaturated hues in the Brogue tradition, but
+pitched *bold and readable* first — atmospheric through hue, legible through a
+wide brightness range. See CONTEXT.md "chrome visual language" for how the
+luminance tiers, filled bars, rules and stateful colours are meant to be used."""
 from __future__ import annotations
 
 # --- UI base ---------------------------------------------------------------
 black = (0, 0, 0)
 near_black = (10, 10, 14)
+# Background for UI chrome (sidebar, Chronicle, popups). A cool dark stone tone
+# so the interface reads as worked grey stone, distinct from the black play
+# field. Swap this one value to re-theme all panels at once.
+panel_bg = (0x27, 0x28, 0x2C)  # dark stone
 white = (0xE8, 0xE4, 0xD8)
 gray = (0x8A, 0x86, 0x7C)
 dark_gray = (0x4A, 0x47, 0x42)
@@ -77,3 +83,18 @@ xp_empty = (0x1E, 0x28, 0x38)
 menu_title = (0xD8, 0xC8, 0x8A)
 menu_text = (0xB8, 0xB2, 0xA6)
 selected = (0xF0, 0xE4, 0xB0)
+
+# --- Chrome visual language (CONTEXT.md) ------------------------------------
+# The three luminance tiers every line of chrome text belongs to. A Value always
+# out-glows its Label; Body is the readable default in between.
+tier_label = (0x6C, 0x6E, 0x74)   # dim  — field names, static captions (stone)
+tier_body = (0xA2, 0xA4, 0xAA)    # normal — readable prose
+tier_value = (0xD8, 0xDA, 0xE0)   # bright — scanned numbers (soft, not glaring)
+section_head = (0xCC, 0xB0, 0x5E) # gold — section headers over a rule
+rule = (0x48, 0x4A, 0x52)         # thin dim horizontal rule under a header
+# Filled bar (reverse-video "this is the thing"): bright text on an accent block.
+bar_accent = (0x45, 0x48, 0x54)   # the identity/header/selection block (stone)
+# Stateful Value hues — Endurance green→amber→red by fraction of max.
+end_full = (0x8A, 0xC0, 0x6E)
+end_mid = (0xD8, 0xC0, 0x5A)
+end_low = (0xD8, 0x6A, 0x4A)
