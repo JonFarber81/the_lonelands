@@ -34,6 +34,38 @@ def render_bar(
     console.print(x=x + 1, y=y, string=f"{label} {value}/{maximum}", fg=color.white)
 
 
+# --- Chrome visual language (CONTEXT.md "chrome visual language") -----------
+# Shared primitives so every panel — sidebar and popups alike — speaks one
+# language: luminance tiers, header-over-rule, filled bars, stateful colour.
+def draw_rule(console, x: int, y: int, w: int) -> None:
+    """A thin dim horizontal rule (under a section header). The bundled font has
+    no box-drawing ink, so we rule with hyphens (as the dice tray does)."""
+    console.print(x, y, "-" * w, fg=color.rule)
+
+
+def draw_section(console, x: int, y: int, w: int, text: str) -> int:
+    """A section header (bright gold) over a dim rule; returns the next free y."""
+    console.print(x, y, text, fg=color.section_head)
+    draw_rule(console, x, y + 1, w)
+    return y + 2
+
+
+def draw_filled_bar(console, x: int, y: int, w: int, text: str,
+                    fg=color.tier_value, bg=color.bar_accent) -> None:
+    """A reverse-video filled bar spanning ``w`` cells: 'this is the thing'."""
+    console.draw_rect(x, y, w, 1, ord(" "), fg=fg, bg=bg)
+    console.print(x + 1, y, text, fg=fg, bg=bg)
+
+
+def endurance_color(cur: int, mx: int):
+    """Stateful Endurance colour: green when hale, amber when hurt, red when low."""
+    frac = cur / mx if mx else 0.0
+    if frac >= 0.6:
+        return color.end_full
+    if frac >= 0.3:
+        return color.end_mid
+    return color.end_low
+
 
 def get_names_at(x: int, y: int, engine: "Engine") -> str:
     gm = engine.game_map
@@ -112,12 +144,18 @@ def render_sidebar(console, engine: "Engine") -> None:
     x0 = SIDEBAR_X
     console.draw_frame(
         x=x0, y=0, width=SIDEBAR_WIDTH, height=SCREEN_HEIGHT,
-        title="", clear=True, fg=color.frame, bg=color.black,
+        title="", clear=True, fg=color.frame, bg=color.panel_bg,
     )
-    # Log frame
+    # Chronicle box. Paint the interior stone first (ch=0 keeps the message
+    # text the log already drew, recolouring only the cells behind it), then the
+    # frame border on top.
+    console.draw_rect(
+        x=0, y=LOG_Y, width=MAP_WIDTH, height=LOG_HEIGHT,
+        ch=0, bg=color.panel_bg,
+    )
     console.draw_frame(
         x=0, y=LOG_Y, width=MAP_WIDTH, height=LOG_HEIGHT,
-        title="", clear=False, fg=color.frame, bg=color.black,
+        title="", clear=False, fg=color.frame, bg=color.panel_bg,
     )
     console.print(x=2, y=LOG_Y, string=" Chronicle ", fg=color.frame_bright)
 
@@ -128,13 +166,15 @@ def render_sidebar(console, engine: "Engine") -> None:
     w = SIDEBAR_WIDTH - 4
     y = 1
 
-    console.print(x=x0 + 1, y=y, string=f" {p.name} ", fg=color.menu_title)
+    # Identity — the one filled bar (the hero-name header).
+    draw_filled_bar(console, x0 + 1, y, SIDEBAR_WIDTH - 2, p.name)
     y += 1
     console.print(x=ix, y=y, string=hero.culture, fg=color.ranger_green)
     y += 1
-    console.print(x=ix, y=y, string=f"{hero.calling} · Solo", fg=color.gray)
+    console.print(x=ix, y=y, string=f"{hero.calling} · Solo", fg=color.tier_label)
     y += 2
 
+    # Vitals — the always-on filled bars.
     render_bar(console, ix, y, w, f.endurance, f.max_endurance,
                color.bar_filled, color.bar_empty, "END")
     y += 1
@@ -153,57 +193,64 @@ def render_sidebar(console, engine: "Engine") -> None:
     console.print(x=ix, y=y, string="· " + "  ".join(c[0] for c in conds), fg=conds[0][1])
     y += 2
 
-    # Attributes (small d20 modifiers)
-    console.print(x=ix, y=y, string="ATTRIBUTES", fg=color.frame_bright)
-    y += 1
+    # Attributes — label dim, modifier bright.
+    y = draw_section(console, ix, y, w, "ATTRIBUTES")
     for attr in character.ATTRIBUTES:
-        console.print(x=ix, y=y, string=f"{attr:<9}{hero.modifier(attr):+d}",
-                      fg=color.menu_text)
+        console.print(x=ix, y=y, string=attr, fg=color.tier_body)
+        console.print(x=ix + 9, y=y, string=f"{hero.modifier(attr):+d}",
+                      fg=color.tier_value)
         y += 1
     y += 1
 
-    # Advancement
-    console.print(x=ix, y=y, string="ADVANCEMENT", fg=color.frame_bright)
-    y += 1
-    console.print(x=ix, y=y, string=f"Level {hero.level}   XP {hero.xp}/{hero.xp_to_next}",
-                  fg=color.menu_text)
+    # Advancement — Perk points glow gold only while there are points to spend.
+    y = draw_section(console, ix, y, w, "ADVANCEMENT")
+    xp = f"{hero.xp}/{hero.xp_to_next}"
+    console.print(x=ix, y=y, string="Level", fg=color.tier_label)
+    console.print(x=ix + 6, y=y, string=str(hero.level), fg=color.tier_value)
+    console.print(x=ix + 12, y=y, string="XP", fg=color.tier_label)
+    console.print(x=ix + 15, y=y, string=xp, fg=color.tier_value)
     y += 1
     pp = hero.perk_points
-    pp_col = color.xp_filled if pp else color.gray
-    console.print(x=ix, y=y, string=f"Perk points  {pp}", fg=pp_col)
+    console.print(x=ix, y=y, string="Perk points", fg=color.tier_label)
+    console.print(x=ix + 12, y=y, string=str(pp),
+                  fg=color.hope_gain if pp else color.tier_body)
     y += 2
 
-    # Wielded
-    console.print(x=ix, y=y, string="WIELDED", fg=color.frame_bright)
+    # Wielded — weapon name, then the combat line split to fit the panel.
+    y = draw_section(console, ix, y, w, "WIELDED")
+    console.print(x=ix, y=y, string=f.weapon_name[:w], fg=color.weapon_c)
     y += 1
-    console.print(x=ix, y=y, string=f.weapon_name[: w], fg=color.weapon_c)
+    console.print(x=ix, y=y, string="Def", fg=color.tier_label)
+    console.print(x=ix + 4, y=y, string=str(f.defence), fg=color.tier_value)
+    console.print(x=ix + 9, y=y, string="Atk", fg=color.tier_label)
+    console.print(x=ix + 13, y=y, string=f"+{f.attack_bonus}", fg=color.tier_value)
     y += 1
-    console.print(x=ix, y=y, string=f"Def {f.defence}  Atk +{f.attack_bonus}  Soak {f.soak}  Load {hero.load}",
-                  fg=color.menu_text)
-    y += 2
-
-    # Purse
-    console.print(x=ix, y=y, string=f"Coins {hero.coins}", fg=color.gold_c)
+    console.print(x=ix, y=y, string="Soak", fg=color.tier_label)
+    console.print(x=ix + 5, y=y, string=str(f.soak), fg=color.tier_value)
+    console.print(x=ix + 9, y=y, string="Load", fg=color.tier_label)
+    console.print(x=ix + 14, y=y, string=str(hero.load), fg=color.tier_value)
+    y += 1
+    console.print(x=ix, y=y, string="Coins", fg=color.tier_label)
+    console.print(x=ix + 6, y=y, string=str(hero.coins), fg=color.gold_c)
     y += 2
 
     # Quests
-    console.print(x=ix, y=y, string="ERRANDS", fg=color.frame_bright)
-    y += 1
+    y = draw_section(console, ix, y, w, "ERRANDS")
     actives = engine.quest_log.active_quests()
     if not actives:
-        console.print(x=ix, y=y, string="— none —", fg=color.gray)
+        console.print(x=ix, y=y, string="— none —", fg=color.tier_label)
         y += 1
     else:
         for q in actives[:4]:
             line = q.status_line()
-            col = color.hope_gain if q.state.name == "READY" else color.menu_text
+            col = color.hope_gain if q.state.name == "READY" else color.tier_body
             for seg in _wrap(line, w):
                 console.print(x=ix, y=y, string=seg, fg=col)
                 y += 1
 
     # Footer
     console.print(x=ix, y=SCREEN_HEIGHT - 2,
-                  string="[?] help  [C] sheet", fg=color.gray)
+                  string="[?] help  [C] sheet", fg=color.tier_label)
 
 
 def _wrap(text: str, width: int):

@@ -225,3 +225,36 @@ Gear shows its full stat line on pickup — there is **no identification**.
   *player's* rolls, never an enemy's. The scrolling **message log** beneath it
   carries pure narrative prose with no dice math — the tray is the sole home for
   the numbers.
+
+### The chrome visual language
+
+The shared vocabulary for **chrome** — the sidebar, popups (character sheet,
+dialog, menus), and Chronicle, as opposed to the play field (the map). Every
+panel speaks this one language so highlighting means the same thing everywhere.
+The palette is *bold and readable* first: earthy hues over a wide brightness
+range (the earlier "never garish, keep it dim" aim is retired — muted read as
+unreadable).
+
+- **Luminance tier** — the three brightness levels every line of chrome text
+  belongs to. **Label** (dim) for field names and static text · **Body**
+  (normal) for readable prose · **Value** (bright, near-white *glow*) for the
+  numbers the eye scans (`26/26`, `+3`, `Def 15`). The backbone of readability:
+  a value always out-glows its label.
+- **Filled bar** — a reverse-video block (bright text on an accent background)
+  spanning a row. The one strong-emphasis mark, meaning *"this is the thing"*:
+  used only for the hero-name header, the vitals bars (Endurance/XP), and the
+  **selected** row of a menu. Never used for section headers.
+- **Rule** — a thin dim horizontal line under a **section header** (a bright
+  gold caption like `ATTRIBUTES`). Header-plus-rule divides a panel into
+  chapters without the weight of a Filled bar.
+- **Stateful colour** — a Value that changes hue to report state, used *only*
+  where the colour drives a decision: Endurance (green→amber→red), Perk points
+  (gold when spendable), Weary/Bleeding warnings, coins (gold). Every other
+  Value glows neutral. Colour carries meaning, never decoration.
+- **Scrim** — the dimming of the map and sidebar (to ~35–40% brightness) while
+  any popup is open, so the popup reads as the top layer.
+- **Glance vs. deep view** — the **sidebar** is the always-on *glance* (vitals,
+  conditions, a one-line stat summary); a popup like the **character sheet** is
+  the deliberate *deep view* (attributes with what they govern, the full Paths
+  breakdown, lineage, perks). The deep view is self-contained — it never makes
+  the player rely on the glance.

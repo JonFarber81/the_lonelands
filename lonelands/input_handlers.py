@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import tcod
 
 from lonelands import actions, character, color, perks
+from lonelands.render_functions import (
+    draw_filled_bar,
+    draw_section,
+    endurance_color,
+)
 from lonelands.actions import (
     Action,
     ActivateAbilityAction,
@@ -43,6 +48,10 @@ MOVE_KEYS = {
 }
 WAIT_KEYS = {KeySym.PERIOD, KeySym.KP_5, KeySym.z, KeySym.CLEAR}
 CONFIRM_KEYS = {KeySym.RETURN, KeySym.KP_ENTER}
+# Menu-cursor keys. Only the arrows/keypad move a list cursor — never h/j/k/l,
+# which double as letter accelerators in the perk and ability lists.
+_CURSOR_UP = {KeySym.UP, KeySym.KP_8}
+_CURSOR_DOWN = {KeySym.DOWN, KeySym.KP_2}
 
 
 # ===========================================================================
@@ -319,6 +328,13 @@ class GameOverEventHandler(EventHandler):
 # Overlay base: renders game underneath, closes on Esc
 # ===========================================================================
 class AskUserHandler(EventHandler):
+    def on_render(self, console: tcod.console.Console) -> None:
+        # Draw the game, then quiet it: a popup always reads as the top layer
+        # (CONTEXT.md "Scrim"). Subclasses call super() then paint their panel
+        # on top at full brightness.
+        super().on_render(console)
+        _scrim(console)
+
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         if event.sym in (KeySym.ESCAPE,) or event.sym in CONFIRM_KEYS:
             return self.on_exit()
@@ -329,8 +345,18 @@ class AskUserHandler(EventHandler):
         return self.engine.event_handler
 
 
+def _scrim(console) -> None:
+    """Dim the whole console to ~37% so an open popup reads as the top layer.
+
+    Divide-then-multiply keeps the arithmetic inside uint8 (a bare ``* 3`` would
+    overflow); the small precision loss is invisible at this brightness.
+    """
+    console.rgb["fg"] = (console.rgb["fg"] // 8) * 3
+    console.rgb["bg"] = (console.rgb["bg"] // 8) * 3
+
+
 def _panel(console, x, y, w, h, title):
-    console.draw_frame(x, y, w, h, clear=True, fg=color.frame_bright, bg=color.near_black)
+    console.draw_frame(x, y, w, h, clear=True, fg=color.frame_bright, bg=color.panel_bg)
     if title:
         console.print(x + 2, y, f" {title} ", fg=color.menu_title)
 
@@ -341,6 +367,10 @@ def _panel(console, x, y, w, h, title):
 class InventorySelectHandler(AskUserHandler):
     title = "Inventory"
 
+    def __init__(self, engine: "Engine"):
+        super().__init__(engine)
+        self.cursor = 0
+
     def on_render(self, console: tcod.console.Console) -> None:
         super().on_render(console)
         items = self.engine.player.inventory.items
@@ -348,29 +378,45 @@ class InventorySelectHandler(AskUserHandler):
         w = 72
         x, y = 4, 4
         _panel(console, x, y, w, h, self.title)
+        ix, iw = x + 2, w - 4
         if not items:
-            console.print(x + 2, y + 2, "(your pack is empty)", fg=color.gray)
+            console.print(ix, y + 2, "(your pack is empty)", fg=color.tier_label)
         else:
+            self.cursor = max(0, min(self.cursor, len(items) - 1))
             eq = self.engine.player.equipment
             for i, item in enumerate(items):
+                cy = y + 2 + i
                 key = chr(ord("a") + i)
+                sel = i == self.cursor
+                if sel:  # the selection filled bar
+                    console.draw_rect(ix, cy, iw, 1, ord(" "), bg=color.bar_accent)
+                head = f"{item.char} {item.name}{item.count_label}"
                 worn = " (worn)" if eq.item_is_equipped(item) else ""
                 stats = (f"  [{item.equippable.stat_line()}]"
                          if item.equippable is not None else "")
-                console.print(x + 2, y + 2 + i,
-                              f"({key}) {item.char} {item.name}{item.count_label}{worn}{stats}",
-                              fg=color.menu_text)
-        console.print(x + 2, y + h - 1, " a-z use/equip · Esc close ", fg=color.gray)
+                console.print(ix, cy, f"({key})", fg=color.tier_label)
+                console.print(ix + 4, cy, head,
+                              fg=color.tier_value if sel else color.tier_body)
+                if worn or stats:
+                    console.print(ix + 4 + len(head), cy, f"{worn}{stats}",
+                                  fg=color.tier_label)
+        console.print(ix, y + h - 1,
+                      " up/down move · Enter use/equip · a-z select · Esc close ",
+                      fg=color.tier_label)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        items = self.engine.player.inventory.items
+        if items and event.sym in _CURSOR_UP:
+            self.cursor = (self.cursor - 1) % len(items)
+            return None
+        if items and event.sym in _CURSOR_DOWN:
+            self.cursor = (self.cursor + 1) % len(items)
+            return None
+        if items and event.sym in CONFIRM_KEYS:
+            return self.on_item_selected(items[self.cursor])
         index = event.sym - KeySym.a
-        if 0 <= index <= 26:
-            try:
-                item = self.engine.player.inventory.items[index]
-            except IndexError:
-                self.engine.message_log.add_message("No such item.", color.invalid)
-                return None
-            return self.on_item_selected(item)
+        if 0 <= index < len(items):
+            return self.on_item_selected(items[index])
         return super().ev_keydown(event)
 
     def on_item_selected(self, item: "Item") -> Optional[BaseEventHandler]:
@@ -415,67 +461,87 @@ class CharacterScreenHandler(AskUserHandler):
     }
 
     def on_render(self, console: tcod.console.Console) -> None:
-        super().on_render(console)
+        super().on_render(console)  # scrim applied by AskUserHandler
         hero = self.engine.player.hero
         f = self.engine.player.fighter
-        w, h = 60, 26
+        w, h = 60, 31
         x, y = 4, 3
-        _panel(console, x, y, w, h, f"{self.engine.player.name} — Character")
+        _panel(console, x, y, w, h, "Character")
+        ix, iw = x + 2, w - 4
         cy = y + 2
-        lineage = f"{hero.true_name} · " if hero.true_name else ""
-        console.print(x + 2, cy, f"{lineage}{hero.culture} · {hero.calling}",
-                      fg=color.ranger_green)
+
+        # Identity — the one filled bar (the hero-name header).
+        ident = f"{self.engine.player.name} · {hero.culture} · {hero.calling}"
+        draw_filled_bar(console, ix, cy, iw, ident)
+        if hero.true_name:
+            cy += 1
+            console.print(ix, cy, hero.true_name, fg=color.ranger_green)
         cy += 2
 
-        console.print(x + 2, cy, f"Level {hero.level}", fg=color.menu_title)
-        console.print(x + 16, cy, f"XP {hero.xp} / {hero.xp_to_next} to next",
-                      fg=color.xp_filled)
+        # Advancement strip — label dim, value bright; Perk points glow gold
+        # only while there are points to spend.
+        xp = f"{hero.xp}/{hero.xp_to_next}"
+        console.print(ix, cy, "Level", fg=color.tier_label)
+        console.print(ix + 6, cy, str(hero.level), fg=color.tier_value)
+        console.print(ix + 12, cy, "XP", fg=color.tier_label)
+        console.print(ix + 15, cy, xp, fg=color.tier_value)
+        console.print(ix + 16 + len(xp), cy, "to next", fg=color.tier_label)
         cy += 1
         pp = hero.perk_points
-        pp_col = color.xp_filled if pp else color.gray
-        console.print(x + 2, cy, f"Perk points  {pp}", fg=pp_col)
-        console.print(x + 16, cy, f"Coins {hero.coins}", fg=color.gold_c)
+        console.print(ix, cy, "Perk points", fg=color.tier_label)
+        console.print(ix + 12, cy, str(pp),
+                      fg=color.hope_gain if pp else color.tier_body)
+        console.print(ix + 24, cy, "Coins", fg=color.tier_label)
+        console.print(ix + 30, cy, str(hero.coins), fg=color.gold_c)
         cy += 2
 
-        console.print(x + 2, cy, "ATTRIBUTES", fg=color.frame_bright)
-        cy += 1
+        # ATTRIBUTES
+        cy = draw_section(console, ix, cy, iw, "ATTRIBUTES")
         for attr in character.ATTRIBUTES:
-            governs = self._ATTR_GOVERNS.get(attr, "")
-            console.print(x + 4, cy, f"{attr:<7}{hero.modifier(attr):+d}",
-                          fg=color.menu_title)
-            console.print(x + 16, cy, governs, fg=color.gray)
+            console.print(ix + 2, cy, attr, fg=color.tier_body)
+            console.print(ix + 9, cy, f"{hero.modifier(attr):+d}", fg=color.tier_value)
+            console.print(ix + 14, cy, self._ATTR_GOVERNS.get(attr, ""),
+                          fg=color.tier_label)
             cy += 1
         cy += 1
 
-        console.print(x + 2, cy, "IN THE FIELD", fg=color.frame_bright)
+        # IN THE FIELD
+        cy = draw_section(console, ix, cy, iw, "IN THE FIELD")
+        console.print(ix + 2, cy, "Endurance", fg=color.tier_body)
+        console.print(ix + 14, cy, f"{f.endurance}/{f.max_endurance}",
+                      fg=endurance_color(f.endurance, f.max_endurance))
         cy += 1
-        console.print(x + 4, cy, f"Endurance  {f.endurance}/{f.max_endurance}",
-                      fg=color.menu_text)
+        console.print(ix + 2, cy, "Defence", fg=color.tier_label)
+        console.print(ix + 10, cy, str(f.defence), fg=color.tier_value)
+        console.print(ix + 14, cy, "Attack", fg=color.tier_label)
+        console.print(ix + 21, cy, f"+{f.attack_bonus}", fg=color.tier_value)
+        console.print(ix + 26, cy, "Soak", fg=color.tier_label)
+        console.print(ix + 31, cy, str(f.soak), fg=color.tier_value)
+        console.print(ix + 35, cy, "Load", fg=color.tier_label)
+        console.print(ix + 40, cy, str(hero.load), fg=color.tier_value)
         cy += 1
-        console.print(x + 4, cy,
-                      f"Defence {f.defence}   Attack +{f.attack_bonus}   "
-                      f"Soak {f.soak}   Load {hero.load}", fg=color.menu_text)
-        cy += 1
-        console.print(x + 4, cy, f"Wielding  {f.weapon_name}", fg=color.weapon_c)
+        console.print(ix + 2, cy, "Wielding", fg=color.tier_label)
+        console.print(ix + 14, cy, f.weapon_name, fg=color.weapon_c)
         if hero.is_weary:
             cy += 1
-            console.print(x + 4, cy, "Weary — burdened past your vigour.",
+            console.print(ix + 2, cy, "Weary — burdened past your vigour.",
                           fg=color.enemy_atk)
-
         cy += 2
-        console.print(x + 2, cy, "PATHS", fg=color.frame_bright)
-        cy += 1
+
+        # PATHS
+        cy = draw_section(console, ix, cy, iw, "PATHS")
         owned = hero.perks
         for path in perks.PATHS:
             count = sum(1 for pk in path.perks if pk.id in owned)
-            col = color.ranger_green if count else color.gray
-            console.print(x + 4, cy, f"{path.name:<20} {count}/{len(path.perks)}",
-                          fg=col)
+            console.print(ix + 2, cy, f"{path.name:<20}",
+                          fg=color.ranger_green if count else color.tier_label)
+            console.print(ix + 24, cy, f"{count}/{len(path.perks)}",
+                          fg=color.tier_value if count else color.tier_label)
             cy += 1
 
-        console.print(x + 2, y + h - 1,
+        console.print(ix, y + h - 1,
                       " p Paths & perks · a abilities · Esc close ",
-                      fg=color.gray)
+                      fg=color.tier_label)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         if event.sym == KeySym.p:
@@ -493,6 +559,10 @@ class PathsHandler(AskUserHandler):
     to buy when it is affordable and its in-Path prerequisites (and capstone
     gating) are met. A Ranger blends freely across Paths."""
 
+    def __init__(self, engine: "Engine"):
+        super().__init__(engine)
+        self.cursor = 0
+
     def _perk_list(self) -> List["perks.Perk"]:
         return [pk for path in perks.PATHS for pk in path.perks]
 
@@ -507,56 +577,80 @@ class PathsHandler(AskUserHandler):
     def on_render(self, console) -> None:
         super().on_render(console)
         hero = self.engine.player.hero
+        self.cursor = max(0, min(self.cursor, len(self._perk_list()) - 1))
         w, h = 78, 49
         x, y = 2, 2
         _panel(console, x, y, w, h, "Paths of the Ranger")
-        pp_col = color.xp_filled if hero.perk_points else color.gray
-        console.print(x + 2, y + 1,
-                      f"Perk points: {hero.perk_points}    "
-                      f"(★ = capstone · blend freely across Paths)", fg=pp_col)
+        ix, iw = x + 2, w - 4
+        console.print(ix, y + 1, "Perk points", fg=color.tier_label)
+        console.print(ix + 12, y + 1, str(hero.perk_points),
+                      fg=color.hope_gain if hero.perk_points else color.tier_body)
+        console.print(ix + 16, y + 1, "* capstone · blend freely across Paths",
+                      fg=color.tier_label)
         cy = y + 3
         idx = 0
         for path in perks.PATHS:
-            console.print(x + 2, cy, path.name, fg=color.menu_title)
-            cy += 1
-            console.print(x + 4, cy, path.blurb, fg=color.gray)
+            cy = draw_section(console, ix, cy, iw, path.name.upper())
+            console.print(ix, cy, path.blurb, fg=color.tier_label)
             cy += 1
             for pk in path.perks:
                 letter = chr(ord("a") + idx)
+                sel = idx == self.cursor
                 if hero.has_perk(pk.id):
-                    status, col = "owned", color.ranger_green
+                    status, scol = "owned", color.ranger_green
                 elif hero.can_buy(pk):
-                    status, col = f"BUY ({pk.cost}pp)", color.selected
+                    status, scol = f"BUY ({pk.cost}pp)", color.selected
                 else:
-                    status, col = self._locked_reason(hero, pk), color.dark_gray
+                    status, scol = self._locked_reason(hero, pk), color.tier_label
                 tag = "*" if pk.capstone else " "
-                console.print(
-                    x + 4, cy,
-                    f"({letter}){tag}{pk.name:<18} T{pk.tier} {pk.cost}pp   "
-                    f"{status:<16}{pk.desc}"[:w - 6],
-                    fg=col,
-                )
+                if sel:  # the selection filled bar
+                    console.draw_rect(ix, cy, iw, 1, ord(" "), bg=color.bar_accent)
+                if hero.has_perk(pk.id):
+                    name_col = color.ranger_green
+                elif sel:
+                    name_col = color.tier_value
+                else:
+                    name_col = color.tier_body
+                console.print(ix, cy, f"({letter}){tag}", fg=color.tier_label)
+                console.print(ix + 4, cy, f"{pk.name:<18}", fg=name_col)
+                console.print(ix + 23, cy, f"T{pk.tier} {pk.cost}pp",
+                              fg=color.tier_label)
+                console.print(ix + 32, cy, f"{status:<15}", fg=scol)
+                console.print(ix + 48, cy, pk.desc[:iw - 48],
+                              fg=color.tier_body if sel else color.tier_label)
                 cy += 1
                 idx += 1
             cy += 1
-        console.print(x + 2, y + h - 1,
-                      " a-t buy a perk · Esc close ", fg=color.gray)
+        console.print(ix, y + h - 1,
+                      " up/down move · Enter buy · a-t buy · Esc close ",
+                      fg=color.tier_label)
+
+    def _buy(self, pk) -> None:
+        hero = self.engine.player.hero
+        if hero.has_perk(pk.id):
+            self.engine.message_log.add_message(
+                f"You already walk that road ({pk.name}).", color.invalid)
+        elif hero.buy_perk(pk):
+            self.engine.message_log.add_message(
+                f"You take up {pk.name}. {pk.desc}", color.xp_filled)
+        else:
+            self.engine.message_log.add_message(
+                f"You cannot take {pk.name} yet.", color.impossible)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         rows = self._perk_list()
+        if event.sym in _CURSOR_UP:
+            self.cursor = (self.cursor - 1) % len(rows)
+            return None
+        if event.sym in _CURSOR_DOWN:
+            self.cursor = (self.cursor + 1) % len(rows)
+            return None
+        if event.sym in CONFIRM_KEYS:
+            self._buy(rows[self.cursor])
+            return None
         index = event.sym - KeySym.a
         if 0 <= index < len(rows):
-            pk = rows[index]
-            hero = self.engine.player.hero
-            if hero.has_perk(pk.id):
-                self.engine.message_log.add_message(
-                    f"You already walk that road ({pk.name}).", color.invalid)
-            elif hero.buy_perk(pk):
-                self.engine.message_log.add_message(
-                    f"You take up {pk.name}. {pk.desc}", color.xp_filled)
-            else:
-                self.engine.message_log.add_message(
-                    f"You cannot take {pk.name} yet.", color.impossible)
+            self._buy(rows[index])
             return None
         return super().ev_keydown(event)
 
@@ -566,44 +660,70 @@ class AbilitiesHandler(AskUserHandler):
     fire a ready one. Firing produces an ActivateAbilityAction (a full turn):
     heal/stance resolve at once, a Wrath-style active primes the next melee hit."""
 
+    def __init__(self, engine: "Engine"):
+        super().__init__(engine)
+        self.cursor = 0
+
     def on_render(self, console) -> None:
         super().on_render(console)
         hero = self.engine.player.hero
         actives = hero.actives()
-        w = 56
-        h = max(6, len(actives) + 5)
+        w = 60
+        h = max(7, len(actives) + 5)
         x, y = 4, 4
         _panel(console, x, y, w, h, "Deeds & Abilities")
+        ix, iw = x + 2, w - 4
         if not actives:
-            console.print(x + 2, y + 2,
-                          "You have learned no active deeds yet.", fg=color.gray)
-        for i, pk in enumerate(actives):
-            letter = chr(ord("a") + i)
-            cd = hero.cooldown_left(pk.id)
-            if hero.is_primed(pk.id):
-                state, col = "primed", color.hope_gain
-            elif cd > 0:
-                state, col = f"cooldown {cd}", color.dark_gray
-            else:
-                state, col = "ready", color.selected
-            console.print(x + 2, y + 2 + i,
-                          f"({letter}) {pk.active.name:<16} {state:<12}{pk.desc}"[:w - 4],
-                          fg=col)
-        console.print(x + 2, y + h - 1,
-                      " a-z use a ready deed · Esc close ", fg=color.gray)
+            console.print(ix, y + 2,
+                          "You have learned no active deeds yet.", fg=color.tier_label)
+        else:
+            self.cursor = max(0, min(self.cursor, len(actives) - 1))
+            for i, pk in enumerate(actives):
+                cy = y + 2 + i
+                letter = chr(ord("a") + i)
+                cd = hero.cooldown_left(pk.id)
+                if hero.is_primed(pk.id):
+                    state, scol = "primed", color.hope_gain
+                elif cd > 0:
+                    state, scol = f"cooldown {cd}", color.tier_label
+                else:
+                    state, scol = "ready", color.end_full
+                sel = i == self.cursor
+                if sel:  # the selection filled bar
+                    console.draw_rect(ix, cy, iw, 1, ord(" "), bg=color.bar_accent)
+                console.print(ix, cy, f"({letter})", fg=color.tier_label)
+                console.print(ix + 4, cy, pk.active.name,
+                              fg=color.tier_value if sel else color.tier_body)
+                console.print(ix + 21, cy, state, fg=scol)
+                console.print(ix + 33, cy, pk.desc[:iw - 33],
+                              fg=color.tier_body if sel else color.tier_label)
+        console.print(ix, y + h - 1,
+                      " up/down move · Enter use · a-z use · Esc close ",
+                      fg=color.tier_label)
+
+    def _use(self, pk) -> Optional[BaseEventHandler]:
+        hero = self.engine.player.hero
+        if not hero.ability_ready(pk.id):
+            self.engine.message_log.add_message(
+                f"{pk.active.name} is not ready.", color.impossible)
+            return None
+        self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
+        return MainGameEventHandler(self.engine)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         hero = self.engine.player.hero
         actives = hero.actives()
+        if actives and event.sym in _CURSOR_UP:
+            self.cursor = (self.cursor - 1) % len(actives)
+            return None
+        if actives and event.sym in _CURSOR_DOWN:
+            self.cursor = (self.cursor + 1) % len(actives)
+            return None
+        if actives and event.sym in CONFIRM_KEYS:
+            return self._use(actives[self.cursor])
         index = event.sym - KeySym.a
         if 0 <= index < len(actives):
-            pk = actives[index]
-            if not hero.ability_ready(pk.id):
-                self.engine.message_log.add_message(
-                    f"{pk.active.name} is not ready.", color.impossible)
-                return None
-            self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
-            return MainGameEventHandler(self.engine)
+            return self._use(actives[index])
         return super().ev_keydown(event)
 
 
@@ -616,24 +736,25 @@ class QuestScreenHandler(AskUserHandler):
         w, h = 60, 40
         x, y = 4, 4
         _panel(console, x, y, w, h, "Errands & Tidings")
+        ix, iw = x + 2, w - 4
         quests = list(self.engine.quest_log.quests.values())
         cy = y + 2
         shown = [q for q in quests if q.state.name != "UNSTARTED"]
         if not shown:
-            console.print(x + 2, cy, "You carry no errands yet. Seek out the folk of Bree.",
-                          fg=color.gray)
+            console.print(ix, cy, "You carry no errands yet. Seek out the folk of Bree.",
+                          fg=color.tier_label)
         for q in shown:
             head_col = {
                 "DONE": color.health_recovered,
                 "READY": color.hope_gain,
-            }.get(q.state.name, color.menu_title)
-            console.print(x + 2, cy, q.status_line(), fg=head_col)
+            }.get(q.state.name, color.section_head)
+            console.print(ix, cy, q.status_line(), fg=head_col)
             cy += 1
-            for line in textwrap.wrap(q.summary, w - 6):
-                console.print(x + 4, cy, line, fg=color.menu_text)
+            for line in textwrap.wrap(q.summary, iw - 2):
+                console.print(ix + 2, cy, line, fg=color.white)  # prose: read it
                 cy += 1
             cy += 1
-        console.print(x + 2, y + h - 1, " Esc close ", fg=color.gray)
+        console.print(ix, y + h - 1, " Esc close ", fg=color.tier_label)
 
 
 # ===========================================================================
@@ -676,12 +797,15 @@ VITALS     Endurance is your vigour — at 0 you fall. Grow Weary as burdens
 class HelpHandler(AskUserHandler):
     def on_render(self, console) -> None:
         super().on_render(console)
-        w, h = 68, 30
-        x, y = 6, 6
+        lines = HELP_TEXT.strip("\n").splitlines()
+        w, h = 68, len(lines) + 4  # size to the content so nothing spills
+        x, y = 6, 3
         _panel(console, x, y, w, h, "Lore of the Wayfarer")
-        for i, line in enumerate(HELP_TEXT.strip("\n").splitlines()):
-            console.print(x + 2, y + 2 + i, line, fg=color.menu_text)
-        console.print(x + 2, y + h - 1, " any key to close ", fg=color.gray)
+        for i, line in enumerate(lines):
+            # The heading line reads as a caption; the rest is prose to read.
+            col = color.section_head if i == 0 else color.white
+            console.print(x + 2, y + 2 + i, line, fg=col)
+        console.print(x + 2, y + h - 1, " any key to close ", fg=color.tier_label)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         return self.on_exit()
@@ -696,10 +820,16 @@ class EscapeMenuHandler(AskUserHandler):
         w, h = 36, 12
         x, y = MAP_WIDTH // 2 - w // 2, MAP_HEIGHT // 2 - h // 2
         _panel(console, x, y, w, h, "The wayfarer pauses")
-        console.print(x + 2, y + 2, "[Enter]  return to the road", fg=color.menu_text)
-        console.print(x + 2, y + 4, "[S]      save and continue", fg=color.menu_text)
-        console.print(x + 2, y + 6, "[T]      save & quit to title", fg=color.menu_text)
-        console.print(x + 2, y + 8, "[Q]      quit to the outer dark", fg=color.menu_text)
+        ix = x + 2
+        for i, (key, desc) in enumerate((
+            ("[Enter]", "return to the road"),
+            ("[S]", "save and continue"),
+            ("[T]", "save & quit to title"),
+            ("[Q]", "quit to the outer dark"),
+        )):
+            cy = y + 2 + i * 2
+            console.print(ix, cy, key, fg=color.section_head)
+            console.print(ix + 9, cy, desc, fg=color.tier_body)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         from lonelands import savegame
@@ -728,6 +858,7 @@ class DialogHandler(EventHandler):
         self.npc = npc_actor.npc
         self.speaker = npc_actor
         self.node_id = self.npc.start
+        self.cursor = 0
         engine.event_handler = self
 
     def _node(self):
@@ -747,39 +878,37 @@ class DialogHandler(EventHandler):
 
     def on_render(self, console) -> None:
         self.engine.render(console)
+        _scrim(console)  # a popup reads as the top layer (CONTEXT.md "Scrim")
         w = 72
         x = (SCREEN_WIDTH - w) // 2
         text_lines: List[str] = []
         for para in self._text().split("\n"):
             text_lines.extend(textwrap.wrap(para, w - 4) or [""])
         opts = self._visible_options()
+        self.cursor = max(0, min(self.cursor, len(opts) - 1)) if opts else 0
         h = len(text_lines) + len(opts) + 6
         y = SCREEN_HEIGHT - h - 2
         _panel(console, x, y, w, h, f"{self.speaker.name} — {self.npc.title}")
+        ix, iw = x + 2, w - 4
         cy = y + 2
         for line in text_lines:
-            console.print(x + 2, cy, line, fg=color.white)
+            console.print(ix, cy, line, fg=color.white)  # speech is prose: read it
             cy += 1
         cy += 1
         for i, o in enumerate(opts):
-            console.print(x + 2, cy, f"{i + 1}. {o['text']}", fg=color.menu_text)
+            sel = i == self.cursor
+            if sel:  # the selection filled bar
+                console.draw_rect(ix, cy, iw, 1, ord(" "), bg=color.bar_accent)
+            marker = "›" if sel else " "
+            console.print(ix, cy, f"{marker}{i + 1}.", fg=color.tier_label)
+            console.print(ix + 4, cy, o["text"][:iw - 4],
+                          fg=color.tier_value if sel else color.tier_body)
             cy += 1
-        console.print(x + 2, y + h - 1, " press a number · Esc to end ", fg=color.gray)
+        console.print(ix, y + h - 1,
+                      " up/down move · Enter choose · number choose · Esc end ",
+                      fg=color.tier_label)
 
-    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        opts = self._visible_options()
-        if event.sym == KeySym.ESCAPE:
-            self.engine.event_handler = MainGameEventHandler(self.engine)
-            return self.engine.event_handler
-        idx = None
-        if KeySym.N1 <= event.sym <= KeySym.N9:
-            idx = event.sym - KeySym.N1
-        elif KeySym.KP_1 <= event.sym <= KeySym.KP_9:
-            idx = event.sym - KeySym.KP_1
-        if idx is None or idx >= len(opts):
-            return None
-
-        chosen = opts[idx]
+    def _choose(self, chosen) -> Optional[BaseEventHandler]:
         do = chosen.get("do")
         if do:
             do(self.engine)
@@ -793,7 +922,32 @@ class DialogHandler(EventHandler):
             self.engine.event_handler = MainGameEventHandler(self.engine)
             return self.engine.event_handler
         self.node_id = goto
+        self.cursor = 0  # a new node starts its choices from the top
         return None
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        opts = self._visible_options()
+        if event.sym == KeySym.ESCAPE:
+            self.engine.event_handler = MainGameEventHandler(self.engine)
+            return self.engine.event_handler
+        if not opts:
+            return None
+        if event.sym in _CURSOR_UP:
+            self.cursor = (self.cursor - 1) % len(opts)
+            return None
+        if event.sym in _CURSOR_DOWN:
+            self.cursor = (self.cursor + 1) % len(opts)
+            return None
+        if event.sym in CONFIRM_KEYS:
+            return self._choose(opts[self.cursor])
+        idx = None
+        if KeySym.N1 <= event.sym <= KeySym.N9:
+            idx = event.sym - KeySym.N1
+        elif KeySym.KP_1 <= event.sym <= KeySym.KP_9:
+            idx = event.sym - KeySym.KP_1
+        if idx is None or idx >= len(opts):
+            return None
+        return self._choose(opts[idx])
 
 
 # ===========================================================================
