@@ -126,7 +126,7 @@ def test_cluster_cells_field_band_appropriate_beasts(game):
     # A Perilous anchor (Old Forest) must crawl with beasts; the shared model
     # ties count to band danger.
     forest = _surface(gw, (-2, 1))
-    (lo, _), _ = content.BAND_BEASTS["Perilous"]
+    (lo, _), _ = content.BAND_THREATS["Perilous"]
     beasts = sum(1 for a in forest.actors if a is not player)
     assert beasts >= lo
 

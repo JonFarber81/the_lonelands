@@ -337,6 +337,30 @@ warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 8, bleed_on_hit=1,
               kind="beast", desc="savages",
               loot=[[(None, 25), (warg_pelt, 72), (wolf_fang, 3)]])
 
+# --- Brigands (ADR 0007) -----------------------------------------------------
+# Human predators who work the roads. The footpad is a weak knife-man; the
+# highwayman a solid swordsman. Both are `kind="man"` with the plain HostileEnemy
+# AI (they close and fight, they do not skulk like a beast). Loot is coin plus,
+# now and then, the weapon off their belt.
+footpad = _beast("b", "footpad", color.orc_c, 8, 11, 3, "1d4", 4,
+                 kind="man", desc="knifes",
+                 loot=[
+                     [(None, 45), (Coins(1, 3), 55)],
+                     [(None, 90), (hunting_dagger, 10)],
+                 ])
+highwayman = _beast("b", "highwayman", (0xB0, 0x7A, 0x4A), 14, 12, 4, "1d6", 7,
+                    soak=1, kind="man", desc="cuts at",
+                    loot=[
+                        [(None, 30), (Coins(2, 5), 65), (Coins(5, 9), 5)],
+                        [(None, 85), (short_sword, 15)],
+                    ])
+
+# --- Boar (ADR 0007) ---------------------------------------------------------
+# An aggressive wild animal that hunts alone — no pack AI, just a bad temper and
+# a goring tusk that opens a wound.
+boar = _beast("q", "wild boar", (0x6B, 0x5A, 0x3E), 12, 11, 4, "1d6", 6,
+              bleed_on_hit=1, kind="beast", desc="gores")
+
 
 # Depth-weighted spawn tables: (template, weight)
 def monsters_for_depth(depth: int) -> List[Tuple[Actor, int]]:
@@ -367,20 +391,57 @@ def items_for_depth(depth: int) -> List[Tuple[Item, int]]:
     return table
 
 
-WILD_BEASTS = [(wolf, 3), (great_spider, 1)]
+# ---------------------------------------------------------------------------
+# Band → wandering-threat model (ADR 0007, was ADR 0003)
+# ---------------------------------------------------------------------------
+# Every Surface seeds **wandering threats** from its Region's **band**, regardless
+# of terrain. A threat is one of three **kinds** — BRIGAND, WILD_ANIMAL, MONSTER —
+# and a band is a *blend* of them, not one flat table: the blend (which kinds, in
+# what proportion) is what makes settled country read differently from the Dark,
+# not just the count. Free is animals-and-a-lone-footpad; Wild is brigands-and-
+# animals with monsters *rare* (this is what keeps spiders and orcs off Bree's
+# doorstep); Dark/Perilous are monster country.
+#
+# `procgen.apply_band_threats` reads this: for each of `randint(lo, hi)` threats it
+# picks a kind by weight, then a member of that kind by weight (via `members_for`),
+# then places it — honouring the road safety buffer for animals/monsters and the
+# road-bias for brigands (see procgen). Tune it all here, in one place.
+BRIGAND = "brigand"
+WILD_ANIMAL = "wild_animal"
+MONSTER = "monster"
+
+# Members of each kind, as (template, weight) tables.
+_BRIGANDS = [(footpad, 3), (highwayman, 2)]
+_WILD_ANIMALS = [(wolf, 3), (boar, 2)]
+_MONSTERS = [(great_spider, 3), (warg, 2), (orc_soldier, 2), (orc_archer, 1)]
+
+BAND_MEMBERS = {
+    BRIGAND: _BRIGANDS,
+    WILD_ANIMAL: _WILD_ANIMALS,
+    MONSTER: _MONSTERS,
+}
+
+# A band may narrow a kind's roster: settled Free country sees only the weak
+# **lone footpad**, never the swordsman highwayman of the open road (ADR 0007).
+_BAND_MEMBER_OVERRIDES = {
+    (overworld.FREE, BRIGAND): [(footpad, 1)],
+}
 
 
-# ---------------------------------------------------------------------------
-# Band → wandering-beast model (ADR 0003)
-# ---------------------------------------------------------------------------
-# Every Surface seeds wandering beasts from its Region's **band**, regardless of
-# terrain: a (count_range, weighted-table) pair. "Level" is expressed as *which*
-# creatures roam — Free lands see a lone wolf at worst; Perilous lands crawl with
-# wargs, spiders, and the Enemy's orcs. Tune the counts/weights here, in one
-# place. Keyed by the band constants in `overworld` so the names can't drift.
-BAND_BEASTS = {
-    overworld.FREE:     ((0, 1), [(wolf, 1)]),
-    overworld.WILD:     ((2, 4), WILD_BEASTS),
-    overworld.DARK:     ((3, 5), [(wolf, 2), (warg, 2), (orc_soldier, 2), (great_spider, 1)]),
-    overworld.PERILOUS: ((4, 6), [(warg, 2), (great_spider, 3), (orc_soldier, 2), (orc_archer, 1)]),
+def members_for(band: str, kind: str):
+    """The (template, weight) roster to draw a `kind` threat from in `band` —
+    a band-specific override where one exists, else the kind's default."""
+    return _BAND_MEMBER_OVERRIDES.get((band, kind), BAND_MEMBERS[kind])
+
+
+# Per-band kind blend, as (count_range, [(kind, weight), ...]).
+#   Free  — animals mostly, a rare lone footpad, no monsters.
+#   Wild  — brigands + animals dominant; monsters ~10% (weight 1 vs 9).
+#   Dark  — monsters dominant, a few animals, no brigands.
+#   Perilous — monsters only.
+BAND_THREATS = {
+    overworld.FREE:     ((0, 1), [(WILD_ANIMAL, 9), (BRIGAND, 1)]),
+    overworld.WILD:     ((1, 3), [(BRIGAND, 5), (WILD_ANIMAL, 4), (MONSTER, 1)]),
+    overworld.DARK:     ((3, 5), [(MONSTER, 8), (WILD_ANIMAL, 2)]),
+    overworld.PERILOUS: ((4, 6), [(MONSTER, 1)]),
 }

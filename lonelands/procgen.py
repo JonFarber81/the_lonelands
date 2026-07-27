@@ -13,6 +13,8 @@ from __future__ import annotations
 import math
 from typing import List, Tuple
 
+import numpy as np
+
 from lonelands import affixes, content, overworld, story, tile_types
 from lonelands.config import MAP_HEIGHT, MAP_WIDTH
 from lonelands.dice import rng
@@ -279,7 +281,7 @@ def generate_weathertop(engine) -> GameMap:
     gm.ruin_entrance_xy = ruin_xy
     gm.barrow_entrance_xy = ruin_xy   # where the player surfaces from the deeps
 
-    apply_band_beasts(gm, "Wild")     # Weathertop lies in the Wild-Lands band
+    apply_band_threats(gm, "Wild")     # Weathertop lies in the Wild-Lands band
 
     gm.entry_xy = (1, ford_y)   # fallback landing = just inside the west edge
     return gm
@@ -289,7 +291,7 @@ def generate_weathertop(engine) -> GameMap:
 # Terrain-primitive toolkit
 # ---------------------------------------------------------------------------
 # Small, reusable painters the Region generators compose. Each mutates `gm` in
-# place. Together with `apply_band_beasts` they generalize the old `_open_surface`
+# place. Together with `apply_band_threats` they generalize the old `_open_surface`
 # so any cell of the overworld grid can be built from its plan `Cell` (ADR 0003).
 def scatter(gm: GameMap, tile, chance: float, *, over=None) -> None:
     """Sprinkle `tile` across the map with per-cell probability `chance`,
@@ -341,16 +343,58 @@ def patches(gm: GameMap, tile, count: int, radius: int, chance: float) -> None:
         patch(gm, tile, cx, cy, radius, chance)
 
 
-def apply_band_beasts(gm: GameMap, band: str) -> None:
-    """Seed wandering beasts from the Region's band (content.BAND_BEASTS),
-    regardless of terrain — the plan's Free/Wild/Dark/Perilous beast model."""
-    (lo, hi), table = content.BAND_BEASTS[band]
+ROAD_BUFFER = 4    # keep-away radius (Chebyshev) around road tiles (ADR 0007)
+_BRIGAND_ROAD_BIAS = 0.65   # chance a brigand aims for the road — a gentle bias,
+                            # not a hard rule (ADR 0007): they still turn up off-road
+
+
+def _near_road_mask(gm: GameMap):
+    """Boolean map, True within `ROAD_BUFFER` tiles (Chebyshev) of any road tile.
+    Roads are threaded before beasts are seeded (`_finish_surface`), so the tiles
+    are already painted; this is the safety buffer wild animals and monsters keep
+    clear of, and the corridor brigands are drawn toward (ADR 0007)."""
+    road = gm.tiles["kind"] == tile_types.KIND_ROAD
+    near = np.zeros_like(road)
+    r = ROAD_BUFFER
+    for rx, ry in np.argwhere(road):
+        near[max(0, rx - r):rx + r + 1, max(0, ry - r):ry + r + 1] = True
+    return near
+
+
+def _free_spot(gm: GameMap, ok) -> Tuple[int, int] | None:
+    """A random walkable, unoccupied tile for which `ok(x, y)` holds, or None if
+    24 tries fail (dense terrain, or no tile satisfies the buffer predicate)."""
+    for _try in range(24):
+        x, y = rng.randint(2, gm.width - 3), rng.randint(2, gm.height - 3)
+        if (gm.tiles["walkable"][x, y]
+                and gm.get_blocking_entity_at(x, y) is None
+                and ok(x, y)):
+            return x, y
+    return None
+
+
+def apply_band_threats(gm: GameMap, band: str) -> None:
+    """Seed wandering threats from the Region's band (content.BAND_THREATS),
+    regardless of terrain — the three-kind blend model (ADR 0007). Each threat's
+    kind is rolled from the band blend, then a member of that kind. Wild animals
+    and monsters keep clear of the road safety buffer; brigands are biased toward
+    the road and ignore the buffer."""
+    (lo, hi), kinds = content.BAND_THREATS[band]
+    near_road = _near_road_mask(gm)
     for _ in range(rng.randint(lo, hi)):
-        for _try in range(24):     # retry so dense terrain (a wood, a fen) still fills
-            bx, by = rng.randint(2, gm.width - 3), rng.randint(2, gm.height - 3)
-            if gm.tiles["walkable"][bx, by] and gm.get_blocking_entity_at(bx, by) is None:
-                _weighted(table).spawn(gm, bx, by)
-                break
+        kind = _weighted(kinds)
+        member = _weighted(content.members_for(band, kind))
+        if kind == content.BRIGAND:
+            # Bias toward the road (ambush where travellers pass); fall back to
+            # anywhere if the preferred side has no free tile — a gentle bias.
+            want_road = rng.random() < _BRIGAND_ROAD_BIAS
+            spot = (_free_spot(gm, lambda x, y: near_road[x, y] == want_road)
+                    or _free_spot(gm, lambda x, y: True))
+        else:
+            # Wild animals and monsters never spawn inside the buffer.
+            spot = _free_spot(gm, lambda x, y: not near_road[x, y])
+        if spot is not None:
+            member.spawn(gm, *spot)
 
 
 # Per-band terrain feel for placeholder surfaces: (tree, low-grass) chances,
@@ -518,7 +562,7 @@ def _finish_surface(gm: GameMap, cell) -> GameMap:
     by the caller *before* this — the roads and borders read over it."""
     diegetic_borders(gm, cell.coord)
     thread_road(gm, cell.coord)
-    apply_band_beasts(gm, cell.band)
+    apply_band_threats(gm, cell.band)
     gm.entry_xy = nearest_walkable(gm, gm.width // 2, gm.height // 2)
     gm.start_xy = gm.entry_xy
     return gm

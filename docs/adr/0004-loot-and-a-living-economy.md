@@ -27,7 +27,7 @@ trade-goods onto the corpse tile) which the hero hauls back to Bree and **sells*
 - **Loot is template-driven.** Each creature carries a **loot table** resolved in
   the non-player branch of `Fighter.die()`; a creature drops the same table
   wherever it dies. Encounter *pacing* is already handled upstream by which
-  creatures spawn where (`monsters_for_depth`, `BAND_BEASTS`), so danger and
+  creatures spawn where (`monsters_for_depth`, `BAND_THREATS`), so danger and
   reward gradients align for free without threading location into `die()`.
 - **A loot table is one-or-more independent weighted rolls**, each including a
   "nothing" slice; a single kill may resolve several (coins *and* a trophy). This
