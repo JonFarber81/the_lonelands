@@ -477,6 +477,13 @@ class CharacterScreenHandler(AskUserHandler):
                       " p Paths & perks · a abilities · Esc close ",
                       fg=color.gray)
 
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        if event.sym == KeySym.p:
+            return PathsHandler(self.engine)
+        if event.sym == KeySym.a:
+            return AbilitiesHandler(self.engine)
+        return super().ev_keydown(event)
+
 
 # ===========================================================================
 # Paths & perks (issue #38)
