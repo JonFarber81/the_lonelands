@@ -28,3 +28,6 @@ lonelands/assets/tiles/*.png
 
 # Save games
 savegame.sav
+
+# Media / captures (trailers, screen recordings — not distributed)
+*.mp4
