@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-from lonelands import config, display, events, input_handlers as ih, setup_game  # noqa: E402
+from lonelands import config, display, input_handlers as ih, setup_game  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -82,8 +82,20 @@ def test_prop_fit_rows_fit_available_height(env):
         assert step * n <= h
 
 
-def test_grid_handler_has_noop_native(env):
-    # The map view draws only to the console grid; its native pass is a no-op.
+def test_main_game_renders_native_hud(env):
+    # The map draws to the console grid; the sidebar + Chronicle + banner render
+    # on the native layer (the HUD). Both passes must run without error.
+    disp, console, engine = env
+    from lonelands import color, dice
+    engine.message_log.add_message("A test line of prose for the Chronicle.", color.white)
+    engine.last_roll = dice.RollResult(die=18, mod=3, tn=15, dice=[18], damage=6)
+    _render(env, ih.MainGameEventHandler(engine))
+
+
+def test_overworld_atlas_opts_out_of_hud_backdrop(env):
+    # The full-screen atlas is a grid page; its native pass is a deliberate no-op
+    # so the HUD backdrop doesn't paint over it.
     _, _, engine = env
-    handler = ih.MainGameEventHandler(engine)
-    assert type(handler).on_render_native is events.BaseEventHandler.on_render_native
+    assert ih.OverworldMapHandler.on_render_native is not \
+        ih.AskUserHandler.on_render_native
+    _render(env, ih.OverworldMapHandler(engine))

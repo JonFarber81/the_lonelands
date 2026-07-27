@@ -124,6 +124,38 @@ class UI:
         """A ``w``×``h`` rect centred in the window."""
         return pygame.Rect((self.w - w) // 2, (self.h - h) // 2, w, h)
 
+    def hud_panel(self, x: int, y: int, w: int, h: int) -> "pygame.Rect":
+        """A solid dark-stone panel docked to a screen edge (the HUD panes), with
+        a thin border. Returns the padded inner content rect."""
+        pygame.draw.rect(self.screen, color.panel_bg, (x, y, w, h))
+        pygame.draw.rect(self.screen, color.frame, (x, y, w, h), width=1)
+        p = self.pad
+        return pygame.Rect(x + p, y + p // 2, w - 2 * p, h - p)
+
+    def scrim(self, alpha: int = 165) -> None:
+        """Dim the whole window (so an open panel reads as the top layer,
+        CONTEXT.md 'Scrim'). Native replacement for the old console-grid dim."""
+        s = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        s.fill((0, 0, 0, alpha))
+        self.screen.blit(s, (0, 0))
+
+    def bar(self, x: int, y: int, w: int, frac: float,
+            fill: Color, empty: Color, label: str, value: str = "",
+            label_col: Color = color.white) -> int:
+        """A filled progress bar (Endurance, XP) with a label and optional
+        right-aligned value. Returns the y below it."""
+        h = int(self.line * 0.92)
+        frac = max(0.0, min(1.0, frac))
+        pygame.draw.rect(self.screen, empty, (x, y, w, h), border_radius=4)
+        fw = int(w * frac)
+        if fw > 0:
+            pygame.draw.rect(self.screen, fill, (x, y, fw, h), border_radius=4)
+        ty = y + (h - self.small.get_height()) // 2
+        self.text(x + self.pad // 2, ty, label, label_col, self.small)
+        if value:
+            self.text_right(x + w - self.pad // 2, ty, value, label_col, self.small)
+        return y + h
+
     def section(self, x: int, y: int, w: int, label: str) -> int:
         """A gold section header over a thin rule; returns the next free y."""
         self.text(x, y, label, color.section_head, self.bold)

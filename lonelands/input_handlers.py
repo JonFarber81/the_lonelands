@@ -77,10 +77,10 @@ class PopupMessage(BaseEventHandler):
 
     def on_render(self, console: "Console") -> None:
         self.parent.on_render(console)
-        console.rgb["fg"] //= 4
-        console.rgb["bg"] //= 4
 
     def on_render_native(self, display) -> None:
+        self.parent.on_render_native(display)  # the layer beneath (HUD or a menu)
+        display.ui.scrim()
         ui = display.ui
         lines = self.text.split("\n")
         w = max(ui.measure(ln)[0] for ln in lines) + ui.pad * 4
@@ -133,6 +133,17 @@ class EventHandler(BaseEventHandler):
 
     def on_render(self, console: "Console") -> None:
         self.engine.render(console)
+
+    def on_render_native(self, display) -> None:
+        # The always-on HUD (sidebar + Chronicle) sits on the native layer,
+        # over the blitted map grid. Overlays draw a scrimmed backdrop instead.
+        self.engine.render_hud(display)
+
+    def _scrimmed_backdrop(self, display) -> None:
+        """Draw the HUD, then dim the whole screen — the top-layer backdrop an
+        open panel (menu, dialog, shop) reads against."""
+        self.engine.render_hud(display)
+        display.ui.scrim()
 
 
 # ===========================================================================
@@ -272,6 +283,11 @@ class LockOnHandler(EventHandler):
                       string="[Tab] cycle  [f/Enter] loose  [Esc] cancel",
                       fg=color.gray)
 
+    def on_render_native(self, display) -> None:
+        # The HUD, but without the location banner — the targeting prompt (drawn
+        # on the grid in on_render) owns the map's top row while aiming.
+        self.engine.render_hud(display, banner=False)
+
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
         if key == KeySym.ESCAPE:
@@ -311,14 +327,16 @@ class RangedTargetHandler(LockOnHandler):
 
 class GameOverEventHandler(EventHandler):
     def on_render(self, console: "Console") -> None:
-        self.engine.render(console)
-        console.rgb["fg"] //= 3
-        console.rgb["bg"] //= 3
-        cx, cy = MAP_WIDTH // 2, MAP_HEIGHT // 2
-        console.print(cx, cy - 1, "Here ends the road.", fg=color.player_die,
-                      alignment=CENTER)
-        console.print(cx, cy + 1, "[Enter] to return to the title    [Esc] to quit",
-                      fg=color.gray, alignment=CENTER)
+        self.engine.render(console)  # the map, as it fell
+
+    def on_render_native(self, display) -> None:
+        display.ui.scrim(200)  # the world goes dark; no HUD for the fallen
+        ui = display.ui
+        cx, cy = display.win_w // 2, display.win_h // 2
+        ui.text_center(cx, cy - ui.title.get_linesize(), "Here ends the road.",
+                       color.player_die, ui.title)
+        ui.text_center(cx, cy + ui.line, "[Enter] to return to the title    [Esc] to quit",
+                       color.gray, ui.body)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         from lonelands import savegame
@@ -335,12 +353,12 @@ class GameOverEventHandler(EventHandler):
 # Overlay base: renders game underneath, closes on Esc
 # ===========================================================================
 class AskUserHandler(EventHandler):
-    def on_render(self, console: "Console") -> None:
-        # Draw the game, then quiet it: a popup always reads as the top layer
-        # (CONTEXT.md "Scrim"). Subclasses call super() then paint their panel
-        # on top at full brightness.
-        super().on_render(console)
-        _scrim(console)
+    # on_render inherits EventHandler's map-only grid draw; the dimmed HUD
+    # backdrop and the panel are drawn on the native layer (on_render_native).
+    def on_render_native(self, display) -> None:
+        # Subclasses call super() for the scrimmed HUD backdrop, then paint
+        # their panel on top at full brightness.
+        self._scrimmed_backdrop(display)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         if event.sym in (KeySym.ESCAPE,) or event.sym in CONFIRM_KEYS:
@@ -350,16 +368,6 @@ class AskUserHandler(EventHandler):
     def on_exit(self) -> Optional[BaseEventHandler]:
         self.engine.event_handler = MainGameEventHandler(self.engine)
         return self.engine.event_handler
-
-
-def _scrim(console) -> None:
-    """Dim the whole console to ~37% so an open popup reads as the top layer.
-
-    Divide-then-multiply keeps the arithmetic inside uint8 (a bare ``* 3`` would
-    overflow); the small precision loss is invisible at this brightness.
-    """
-    console.rgb["fg"] = (console.rgb["fg"] // 8) * 3
-    console.rgb["bg"] = (console.rgb["bg"] // 8) * 3
 
 
 # ===========================================================================
@@ -373,6 +381,7 @@ class InventorySelectHandler(AskUserHandler):
         self.cursor = 0
 
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         items = self.engine.player.inventory.items
         w = int(display.win_w * 0.62)
@@ -461,6 +470,7 @@ class CharacterScreenHandler(AskUserHandler):
     }
 
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         hero = self.engine.player.hero
         f = self.engine.player.fighter
@@ -571,6 +581,7 @@ class PathsHandler(AskUserHandler):
         return "-"
 
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         hero = self.engine.player.hero
         self.cursor = max(0, min(self.cursor, len(self._perk_list()) - 1))
@@ -669,6 +680,7 @@ class AbilitiesHandler(AskUserHandler):
         self.cursor = 0
 
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         hero = self.engine.player.hero
         actives = hero.actives()
@@ -736,6 +748,7 @@ class AbilitiesHandler(AskUserHandler):
 # ===========================================================================
 class QuestScreenHandler(AskUserHandler):
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         w, h = int(display.win_w * 0.6), int(display.win_h * 0.82)
         r = ui.centered(w, h)
@@ -798,6 +811,7 @@ VITALS     Endurance is your vigour — at 0 you fall. Grow Weary as burdens
 
 class HelpHandler(AskUserHandler):
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         lines = HELP_TEXT.strip("\n").splitlines()
         w, h = int(display.win_w * 0.74), int(display.win_h * 0.92)
@@ -835,6 +849,11 @@ class OverworldMapHandler(AskUserHandler):
         super().__init__(engine)
         # Start the cursor on the player's own Region.
         self.cursor: Tuple[int, int] = engine.game_world.coord
+
+    def on_render_native(self, display) -> None:
+        # The atlas is a full-screen grid page (drawn in on_render); no native
+        # HUD backdrop over it, unlike the panel overlays.
+        pass
 
     # --- layout -----------------------------------------------------------
     _GX = (SCREEN_WIDTH - overworld_map.GRID_W) // 2   # centred left margin
@@ -915,6 +934,7 @@ class OverworldMapHandler(AskUserHandler):
 # ===========================================================================
 class EscapeMenuHandler(AskUserHandler):
     def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         rows = (
             ("[Enter]", "return to the road"),
@@ -986,10 +1006,10 @@ class DialogHandler(EventHandler):
         return t(self.engine) if callable(t) else t
 
     def on_render(self, console) -> None:
-        self.engine.render(console)
-        _scrim(console)  # a popup reads as the top layer (CONTEXT.md "Scrim")
+        self.engine.render(console)  # map grid; the dimmed HUD backdrop is native
 
     def on_render_native(self, display) -> None:
+        self._scrimmed_backdrop(display)  # dimmed HUD behind the panel
         ui = display.ui
         opts = self._visible_options()
         self.cursor = max(0, min(self.cursor, len(opts) - 1)) if opts else 0
@@ -1090,10 +1110,10 @@ class ShopHandler(EventHandler):
         return [(it, content.sell_price(it)) for it in self._sell_items()]
 
     def on_render(self, console) -> None:
-        self.engine.render(console)
-        _scrim(console)  # a popup reads as the top layer (CONTEXT.md "Scrim")
+        self.engine.render(console)  # map grid; the dimmed HUD backdrop is native
 
     def on_render_native(self, display) -> None:
+        self._scrimmed_backdrop(display)  # dimmed HUD behind the panel
         ui = display.ui
         rows = self._rows()
         hero = self.engine.player.hero
