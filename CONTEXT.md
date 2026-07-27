@@ -76,6 +76,13 @@ player **bumps** any of them to open the conversation.
 - **Signpost** — an examinable wayfinding/flavor prop: a readable post the
   player bumps, built on the same NPC machinery with a single dialog node. Each
   carries a unique name so its text restores correctly on save/load.
+- **Bark** — a short, non-interactive flavor line overheard as the player moves
+  near a **bark source** (a dog, a hamlet, birdsong): it prints to the message
+  log, never opens a conversation. A source is pure data — a point, a radius, a
+  pool of lines, and a **cadence** (its minimum quiet between barks) — authored
+  next to a region's content and gathered per-map into a **bark field**, which
+  adds a field-wide throttle so the lines stay sparse. Not an NPC: no dialog, no
+  bump, no glyph on the map.
 
 ## The d20 core
 

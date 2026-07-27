@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import List
 
 from lonelands import color, content
+from lonelands.barks import BarkField, BarkSource
 from lonelands.entity import Actor
 from lonelands.quests import Quest
 from lonelands.story._helpers import make_npc, make_signpost, opt
@@ -349,6 +350,52 @@ def make_signposts() -> List[Actor]:
             "old Arnorian mark:\n  \"FORSAKEN INN AHEAD. BOLT THE DOOR.\"",
         ),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Ambient barks — idle flavor overheard as the player passes near the hamlets,
+# the wood's eaves, or the Inn (issue #54). Pure data (no dialog), attached to
+# the Bree-land Surface by procgen. Coordinates track the layout carved in
+# procgen.generate_breeland: Combe's green ~(24,12), Staddle's slope ~(24,34),
+# the northern copses toward the Chetwood, and the Forsaken Inn out east ~(51,27).
+# ---------------------------------------------------------------------------
+def make_barks() -> BarkField:
+    return BarkField([
+        BarkSource(  # Combe — a working woodsman-hamlet
+            24, 12, radius=8, cadence=16,
+            lines=[
+                "An axe rings on wood somewhere up in the Combe coppices.",
+                "A rook clatters up out of the northern trees, cawing.",
+                "Someone is splitting kindling; the sound carries across the green.",
+                "A dog barks twice behind a Combe fence, then falls quiet.",
+            ],
+        ),
+        BarkSource(  # Staddle — sleepy hobbit-holes on the sunny slope
+            24, 34, radius=8, cadence=16,
+            lines=[
+                "A dog barks somewhere down the Staddle lane.",
+                "Pipe-smoke and the smell of frying drift up from a green door.",
+                "A hobbit-child laughs, high and clear, among the smials.",
+                "A kettle whistles inside one of the holes and is taken off.",
+            ],
+        ),
+        BarkSource(  # the Chetwood eaves along the north edge
+            30, 3, radius=7, cadence=18,
+            lines=[
+                "Birdsong spills from the Chetwood eaves to the north.",
+                "The wind moves in the high trees — a long, green hush.",
+                "Away in the wood something breaks a twig, and is still.",
+            ],
+        ),
+        BarkSource(  # the Forsaken Inn, lonely out east on the Road
+            51, 27, radius=7, cadence=16,
+            lines=[
+                "Muffled voices and the knock of a tankard carry from the Inn.",
+                "The Inn's sign creaks on its irons in the road-wind.",
+                "A bench scrapes inside the Forsaken Inn; someone laughs, low.",
+            ],
+        ),
+    ])
 
 
 # The aggregate seam story/__init__.py fans across for savegame rehydration.

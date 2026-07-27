@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from lonelands import (
-    content, savegame, setup_game, story, world,
+    barks, color, content, savegame, setup_game, story, world,
 )
 from lonelands.dice import set_seed
 from lonelands.quests import QuestState
@@ -88,6 +88,78 @@ def test_breeland_dialog_survives_save_load(game, tmp_path):
     for name, npc in _speakers(gm).items():
         assert npc.npc.tree, f"{name} lost its dialog tree across save/load"
         assert npc.npc.start in npc.npc.tree
+
+
+# --- ambient barks (#54): both the Bree-land and Bree town carry a field -----
+
+def test_breeland_and_bree_carry_bark_fields(game):
+    _, gw, _ = game
+    for coord in ((1, 0), (0, 0)):
+        field = getattr(_surface(gw, coord), "barks", None)
+        assert field is not None and field.sources, f"no bark field on {coord}"
+
+
+def _emit_many(engine, turns=400):
+    """Drive barks.emit across many turns; barks are dice-gated, so a single
+    call proves nothing. set_seed (the `game` fixture) keeps this deterministic."""
+    for turn in range(1, turns):
+        engine.turn_count = turn
+        barks.emit(engine)
+
+
+def test_a_bark_is_overheard_near_a_source(game):
+    engine, gw, player = game
+    gm = _surface(gw, (1, 0))
+    engine.game_map = gm
+    source = gm.barks.sources[0]
+    player.x, player.y = source.x, source.y   # stand right on it
+    before = len(engine.message_log.messages)
+    _emit_many(engine)
+    new = engine.message_log.messages[before:]
+    assert new, "no bark ever fired while standing on a source"
+    assert new[0].fg == color.ambient
+    assert new[0].plain_text in source.lines
+
+
+def test_no_bark_when_far_from_every_source(game):
+    engine, gw, player = game
+    gm = _surface(gw, (1, 0))
+    engine.game_map = gm
+    player.x, player.y = 0, 0    # the far NW corner, out of every source's radius
+    before = len(engine.message_log.messages)
+    _emit_many(engine)
+    assert len(engine.message_log.messages) == before
+
+
+def test_barks_fire_through_a_real_player_move(game):
+    # The load-bearing wiring: a bark rides the player's own MovementAction
+    # (not just a direct barks.emit call, as the other tests exercise).
+    from lonelands import actions
+    engine, gw, player = game
+    gm = _surface(gw, (1, 0))
+    engine.game_map = gm
+    src = gm.barks.sources[1]           # Staddle
+    before = len(engine.message_log.messages)
+    for i in range(400):
+        player.x, player.y = src.x, src.y
+        engine.turn_count = i + 1
+        try:
+            actions.MovementAction(player, 0, 1 if i % 2 else -1).perform()
+        except Exception:
+            pass                        # a blocked step is fine; we only want the hook
+    heard = engine.message_log.messages[before:]
+    assert heard, "no bark ever fired across the player's moves"
+    assert all(m.plain_text in src.lines for m in heard)
+
+
+def test_bark_field_survives_save_load(game, tmp_path):
+    engine, gw, _ = game
+    gw.cross_edge(1, 0)
+    path = tmp_path / "barks.sav"
+    savegame.save_game(engine, str(path))
+    after = savegame.load_game(str(path))
+    gm = after.game_world.current_region.level(0)
+    assert getattr(gm, "barks", None) is not None and gm.barks.sources
 
 
 # --- the new quests drive through the existing machinery ---------------------
