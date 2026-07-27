@@ -981,32 +981,44 @@ class ShopHandler(EventHandler):
 
     def on_render(self, console) -> None:
         self.engine.render(console)
+        _scrim(console)  # a popup reads as the top layer (CONTEXT.md "Scrim")
         rows = self._rows()
-        w, h = 52, max(len(rows), 1) + 7
+        w, h = 60, max(len(rows), 1) + 8
         x = (SCREEN_WIDTH - w) // 2
         y = 6
         _panel(console, x, y, w, h, self.title)
         hero = self.engine.player.hero
-        verb = "Buy" if self.mode == "buy" else "Sell"
-        console.print(x + 2, y + 1,
-                      f"Your purse: {hero.coins} coins        [{verb}]", fg=color.gold_c)
+        ix, iw = x + 2, w - 4
+        cy = y + 2
+
+        # Purse strip — label dim, coins glinting gold.
+        console.print(ix, cy, "Coins", fg=color.tier_label)
+        console.print(ix + 6, cy, str(hero.coins), fg=color.gold_c)
+        cy += 2
+
+        # The active view is its own gold-header-over-rule section.
+        cy = draw_section(console, ix, cy, iw, "BUYING" if self.mode == "buy" else "SELLING")
         if not rows:
-            console.print(x + 2, y + 3, "(nothing to sell)", fg=color.gray)
+            empty = "(nothing to buy)" if self.mode == "buy" else "(nothing to sell)"
+            console.print(ix + 2, cy, empty, fg=color.tier_label)
         for i, (item, price) in enumerate(rows):
             sel = i == self.cursor
-            fg = color.selected if sel else color.menu_text
+            if sel:  # the selection filled bar
+                console.draw_rect(ix, cy, iw, 1, ord(" "), bg=color.bar_accent)
             if self.mode == "buy":
                 afford = color.gold_c if hero.coins >= price else color.impossible
             else:
                 afford = color.gold_c
-            prefix = "> " if sel else "  "
-            label = f"{prefix}{item.char} {item.name}{item.count_label}"
-            console.print(x + 2, y + 3 + i, label[:w - 14], fg=fg)
-            console.print(x + w - 10, y + 3 + i, f"{price:>3} c", fg=afford)
+            marker = "›" if sel else " "
+            head = f"{marker} {item.char} {item.name}{item.count_label}"
+            console.print(ix, cy, head[:iw - 6],
+                          fg=color.tier_value if sel else color.tier_body)
+            console.print(ix + iw - 5, cy, f"{price:>3} c", fg=afford)
+            cy += 1
         hint = (" Tab buy/sell · Enter buy · Esc leave "
                 if self.mode == "buy"
-                else " Tab buy/sell · Enter sell 1 · Shift+Enter sell all · Esc leave ")
-        console.print(x + 2, y + h - 1, hint, fg=color.gray)
+                else " Tab buy/sell · Enter sell 1 · Shift+Enter all · Esc leave ")
+        console.print(ix, y + h - 1, hint, fg=color.tier_label)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         rows = self._rows()
