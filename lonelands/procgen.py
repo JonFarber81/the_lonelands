@@ -216,6 +216,9 @@ def generate_bree(engine) -> GameMap:
     healer.spawn(gm, 12, 29)        # Mistress Rushlight, in her physic-garden
     fletcher.spawn(gm, 22, 22)      # Cob, at his stall by the market square
 
+    # ambient barks: the town's idle life overheard as you cross it (#54)
+    gm.barks = story.bree.make_barks()
+
     gm.entry_xy = (cx, cy)          # fallback landing = the market square
     gm.start_xy = (cx, cy)          # a new game begins at the crossing
     return gm
@@ -729,6 +732,9 @@ def generate_breeland(engine) -> GameMap:
     pedlar.spawn(gm, 48, 28)            # the lean pedlar, in a dark corner
     crossroads_post.spawn(gm, 29, ROAD_ROW - 2)   # the fingerpost by the crossing
     milestone.spawn(gm, 44, ROAD_ROW + 1)         # the milestone, east on the Road
+
+    # ambient barks: idle flavor overheard near the hamlets, wood, and Inn (#54)
+    gm.barks = story.breeland.make_barks()
 
     gm.entry_xy = nearest_walkable(gm, 3, ROAD_ROW)   # arriving from Bree in the west
     gm.start_xy = gm.entry_xy

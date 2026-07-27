@@ -92,6 +92,11 @@ class MovementAction(ActionWithDirection):
         if gm.get_blocking_entity_at(dest_x, dest_y):
             raise Impossible("Something bars the way.")
         self.entity.move(self.dx, self.dy)
+        # Only the player overhears ambient barks, and only on their own steps
+        # (foes move through this same action). Throttled inside barks.emit.
+        if self.entity is self.engine.player:
+            from lonelands import barks
+            barks.emit(self.engine)
 
 
 class MeleeAction(ActionWithDirection):

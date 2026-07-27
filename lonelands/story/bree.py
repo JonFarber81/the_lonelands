@@ -13,6 +13,7 @@ import copy
 from typing import List
 
 from lonelands import color, content
+from lonelands.barks import BarkField, BarkSource
 from lonelands.entity import Actor
 from lonelands.quests import Quest
 from lonelands.story._helpers import make_npc, opt
@@ -350,6 +351,42 @@ def make_fletcher() -> Actor:
 def make_town_npcs() -> List[Actor]:
     return [make_elder(), make_healer(), make_halbarad(), make_innkeeper(),
             make_fletcher()]
+
+
+# ---------------------------------------------------------------------------
+# Ambient barks — the town's idle life overheard as the player crosses it (#54).
+# Coordinates track procgen.generate_bree: the market square at the crossing
+# ~(22,22), the Prancing Pony's yard ~(15,17), and the hobbit-holes dug into
+# Bree-hill's western face along x≈47.
+# ---------------------------------------------------------------------------
+def make_barks() -> BarkField:
+    return BarkField([
+        BarkSource(  # the market square at the meeting of the roads
+            22, 22, radius=9, cadence=14,
+            lines=[
+                "A hawker cries stockfish and small-beer across the market.",
+                "Cartwheels rumble over the market cobbles.",
+                "A dog barks from under a market stall and is shooed off.",
+                "Two Bree-men argue prices by the well, unhurried.",
+            ],
+        ),
+        BarkSource(  # the Prancing Pony
+            15, 17, radius=7, cadence=14,
+            lines=[
+                "Laughter and a snatch of song spill out of the Prancing Pony.",
+                "A pony stamps and blows in the Pony's coach-yard.",
+                "The Pony's door bangs; a serving-lad hurries across the yard.",
+            ],
+        ),
+        BarkSource(  # the hobbit-holes in the west face of Bree-hill
+            47, 22, radius=9, cadence=16,
+            lines=[
+                "Smoke curls from a round door in the face of Bree-hill.",
+                "Somewhere up the hill a hobbit calls the children in to supper.",
+                "The smell of new bread drifts down from the smials.",
+            ],
+        ),
+    ])
 
 
 # The aggregate seam every location module exposes (see story/__init__.py):

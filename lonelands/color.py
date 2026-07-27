@@ -30,6 +30,11 @@ enemy_die = (0xD8, 0x8A, 0x4A)
 needs_target = (0x6C, 0xC8, 0xE0)
 status_effect_applied = (0x7A, 0xC0, 0x7A)
 
+# Ambient barks — idle flavour overheard as the player passes near a source
+# (a dog, a hamlet, birdsong). A soft mossy grey-green: it reads as background
+# atmosphere, dimmer than event lines but warmer than a plain miss.
+ambient = (0x7E, 0x88, 0x74)
+
 invalid = (0xE0, 0x6C, 0x4A)
 impossible = (0x80, 0x80, 0x80)
 error = (0xE0, 0x40, 0x40)
