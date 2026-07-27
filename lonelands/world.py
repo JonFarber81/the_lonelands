@@ -29,7 +29,8 @@ _AUTHORED_SURFACES: Dict[Coord, Callable[["Engine"], GameMap]] = {
     (2, 0): procgen.generate_weathertop,       # Amon Sûl watchtower
     (-1, 0): procgen.generate_barrow_downs,     # Tyrn Gorthad — the main quest barrow
     # Cluster 2 — Bree & environs (issue #17): the anchors ringing the crossroads.
-    (0, -1): procgen.generate_chetwood,         # wooded country north of Bree
+    (0, -1): procgen.generate_chetwood,         # wooded country north of Bree (holds Archet)
+    (1, 0): procgen.generate_breeland,          # the Bree-land east: Combe, Staddle, Forsaken Inn
     (1, -1): procgen.generate_midgewater,       # the biting Midgewater fen
     (-2, 1): procgen.generate_old_forest,       # the awake, ill-disposed wood
     (-1, 1): procgen.generate_sarn_ford,        # the Brandywine ford, Ranger post

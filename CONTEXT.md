@@ -47,12 +47,35 @@ Landmarks around the Bree hub:
 - **Weathertop** `(2,0)` — **east** along the Great East Road; the ruined
   watchtower of Amon Sûl, with its own deeps (the watch-vaults).
 - **the Chetwood** `(0,-1)` — the **north** Region; close-grown woodland the
-  Greenway climbs through (Cluster 2, issue #17).
+  Greenway climbs through, holding the woodwrights' **Hamlet** of **Archet** at
+  its south eaves (Cluster 2, issue #17).
+- **the Bree-land** `(1,0)` — the settled country **east** of Bree-hill; holds
+  the Hamlets of **Combe** (woodsmen) and **Staddle** (hobbits), and the lonely
+  **Forsaken Inn** further out on the Great East Road. First content authored
+  onto a former placeholder cell.
 - **the South Downs** `(0,1)` — the **south** Region; low rolling downs south of
   the Great Road, the Greenway crossing them (Cluster 2, issue #17).
 - **Midgewater** `(1,-1)`, **Sarn Ford** `(-1,1)`, **the Old Forest** `(-2,1)` —
   the rest of the Bree cluster: the biting fen, the Rangers' Brandywine ford, and
   the awake, ill-disposed ancient wood (Cluster 2, issue #17).
+
+## Inhabitants & content
+
+The folk and props authored onto a Region's Surface. Speaking characters and
+signposts alike use the one **NPC** dialog component (a node-graph `tree`); the
+player **bumps** any of them to open the conversation.
+
+- **Hamlet** — a small settlement authored *onto* a wilderness Surface,
+  subordinate to a hub town: far smaller than Bree, and several may share one
+  Region (Combe, Staddle, and the Forsaken Inn all sit on the Bree-land cell;
+  Archet sits within the Chetwood). A Hamlet is not a Region and never its own
+  overworld cell — it is content placed on a cell's Surface.
+- **Bystander** — a speaking NPC with dialog but *no* shop or quest: colour and
+  rumour only. Distinct from the functional NPCs — the quest-givers and
+  **merchants** (shopkeepers) — who move the game state.
+- **Signpost** — an examinable wayfinding/flavor prop: a readable post the
+  player bumps, built on the same NPC machinery with a single dialog node. Each
+  carries a unique name so its text restores correctly on save/load.
 
 ## The d20 core
 

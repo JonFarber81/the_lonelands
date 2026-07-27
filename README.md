@@ -80,7 +80,7 @@ lonelands/
   dice_glyphs.py     die-face glyphs for the dice tray
   tor.py             attributes, skills, proficiencies, TN mapping
   content.py         player, creatures, weapons, armour, consumables (templates)
-  story.py           NPCs and dialog trees
+  story/             per-location NPCs, dialog trees & quests (bree, breeland, chetwood)
   quests.py          quest definitions + quest log
   procgen.py         Bree / wilderness / barrow generation
   world.py           the Region grid + travel between Regions and Levels
