@@ -143,6 +143,27 @@ class QuestLog:
             q.advance()
             self._progress_msg(q, engine)
 
+    def notify_arrival(self, coord, engine, *, level_index: int = 0) -> None:
+        """Advance quests fulfilled by *reaching a place* — the travel mirror of
+        notify_kill/notify_event. `world.py` calls this as the player crosses
+        into a Region (level_index 0) or Enters one of its Levels, passing the
+        overworld `coord` and the Level index arrived at.
+
+        A quest pins its destination with `travel_target` (an overworld Coord)
+        and, optionally, `travel_level` (which Level within it; default 0 = the
+        Surface). Idempotency falls out of the state machine: a target_count of 1
+        flips the quest to READY on first arrival, so re-entering the same place
+        — no longer ACTIVE — cannot double-count."""
+        for q in self.quests.values():
+            if q.state != QuestState.ACTIVE:
+                continue
+            if getattr(q, "travel_target", None) != coord:
+                continue
+            if getattr(q, "travel_level", 0) != level_index:
+                continue
+            q.advance()
+            self._progress_msg(q, engine)
+
     @staticmethod
     def _held_item(engine, item_name: str):
         """The player's pack slot matching item_name, or None."""

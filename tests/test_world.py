@@ -129,6 +129,50 @@ def test_enter_does_nothing_on_plain_ground(game):
     assert gw.level_index == 0
 
 
+# --- travel-to quests fire from transitions ---------------------------------
+
+def _register_travel_quest(engine, coord, level=None):
+    from lonelands.quests import Quest
+    q = Quest("journey", "Journey", "s", objective="reach the place",
+              target_count=1)
+    q.travel_target = coord
+    if level is not None:
+        q.travel_level = level
+    engine.quest_log.register(q)
+    engine.quest_log.start("journey")
+    return q
+
+
+def test_crossing_into_a_region_advances_a_travel_quest(game):
+    engine, gw, player = game
+    q = _register_travel_quest(engine, (1, 0))  # the Bree-land, east
+    place_on_surface(engine, gw, (0, 0), 61, 22)
+    assert gw.cross_edge(1, 0) is True
+    assert gw.coord == (1, 0)
+    assert q.state.name == "READY"  # arrived -> objective met
+
+
+def test_re_entering_a_region_does_not_double_count(game):
+    engine, gw, player = game
+    q = _register_travel_quest(engine, (1, 0))
+    place_on_surface(engine, gw, (0, 0), 61, 22)
+    gw.cross_edge(1, 0)          # into (1, 0) -> READY
+    gw.cross_edge(-1, 0)         # back to Bree
+    gw.cross_edge(1, 0)          # in again
+    assert q.progress == 1       # the second arrival didn't advance it
+
+
+def test_entering_a_deep_advances_a_level_pinned_travel_quest(game):
+    engine, gw, player = game
+    q = _register_travel_quest(engine, (-1, 0), level=-1)  # first deep of the barrow
+    surface = place_on_surface(engine, gw, (-1, 0), 0, 0)
+    player.x, player.y = surface.ruin_entrance_xy
+    assert q.state.name == "ACTIVE"   # standing on the Surface doesn't satisfy it
+    gw.use_tile()                     # descend into the deeps
+    assert gw.level_index == -1
+    assert q.state.name == "READY"
+
+
 # --- persistence ------------------------------------------------------------
 
 def test_regions_and_levels_are_cached(game):

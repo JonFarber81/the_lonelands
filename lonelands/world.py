@@ -191,6 +191,7 @@ class GameWorld:
         self.coord = region.coord
         self.level_index = 0
         self._go(gm, dest)
+        self.engine.quest_log.notify_arrival(self.coord, self.engine)
         return True
 
     # --- vertical: Enter a stair or entrance ------------------------------
@@ -219,6 +220,7 @@ class GameWorld:
                 dest = getattr(surface, "barrow_entrance_xy", None) \
                     or getattr(surface, "entry_xy", surface.start_xy)
                 self._go(surface, dest)
+                self.engine.quest_log.notify_arrival(self.coord, self.engine)
                 return "You climb back into daylight and the clean wind of the hills."
             self._enter_level(self.level_index + 1, arrive="down")
             return f"You climb to the {_ordinal(-self.level_index)} deep of the barrow."
@@ -235,6 +237,7 @@ class GameWorld:
         else:
             dest = gm.entry_xy
         self._go(gm, dest)
+        self.engine.quest_log.notify_arrival(self.coord, self.engine, level_index=index)
 
 
 # ---------------------------------------------------------------------------
