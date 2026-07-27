@@ -17,6 +17,14 @@ not a spec: it defines *what words mean*, never *how things are built*.
   walking in from a neighbour. *Only the Surface edge-connects to neighbouring
   Regions*; deeper Levels are reached only by Enter, from within their Region.
 - **Square** — the town's central plaza only. *Not* a synonym for Region.
+- **Overworld Map** — the full-reveal reference chart of the *whole* Region grid,
+  opened with **`M`**: a knowledgeable Ranger's atlas of Eriador, showing every
+  Region at once with its band, role, Town/Landmark names, roads, the Sea/Mountain
+  frame, and where deeps lie. Distinct from the **local map** — the in-Region
+  Surface or Level the player actually walks. The Overworld Map marks the player's
+  current Region; it never advances a turn. *Not* fog-of-war — it reveals the
+  whole world from the start. Distinct from the **overworld grid** (the underlying
+  plan-as-data in `overworld.py`); the Overworld Map is the *screen that draws it*.
 
 The whole **15×9 overworld grid** is live: all 116 walkable cells exist and are
 enterable, built lazily from `lonelands/overworld.py` (the plan-as-data twin of

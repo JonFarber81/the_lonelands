@@ -177,6 +177,14 @@ def _impassable_frame(x: int, y: int):
     return None
 
 
+def frame_at(x: int, y: int):
+    """The Impassable frame beyond `(x, y)` — `SEA` or `MOUNTAIN` — or None if it
+    is walkable land within the window. The public twin of the internal geometry
+    (cf. `road_edges`), for callers such as the Overworld Map that paint the
+    Sea/Mountain frame around the grid."""
+    return _impassable_frame(x, y)
+
+
 def _default_cell(x: int, y: int):
     """Role/band/note for an un-authored cell, or None if it is Impassable
     (the Sea / Mountain-wall frame). Mirrors build_overworld.default_cell."""

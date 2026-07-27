@@ -29,13 +29,27 @@ GRAPHIC_BASE = 0xE100
 # marks) is left on its own codepoint so it renders as text.
 GRAPHIC_RANGE = range(0x20, 0x7F)
 
+# Extra map glyphs beyond printable ASCII: box-drawing road segments and the
+# deeps marker. The Overworld Map (overworld_map.py) draws the Great Roads and
+# the ``▼`` deeps mark from these — shapes the prose TTF lacks but the CP437
+# tilesheet carries. Baked into the graphic block (above the ASCII range) so the
+# atlas draws them like any other map tile; keyed by their real Unicode char so
+# call sites read as the glyph they mean. Order fixes their codepoints — append
+# only.
+GRAPHIC_EXTRA = ("─", "│", "┼", "▼")
+GRAPHIC_EXTRA_BASE = GRAPHIC_BASE + 0x80  # 0xE180, clear of the ASCII block
+_EXTRA_CP = {ch: GRAPHIC_EXTRA_BASE + i for i, ch in enumerate(GRAPHIC_EXTRA)}
+
 
 def graphic_cp(ch: str) -> int:
     """Codepoint of the graphical (tileset) glyph for ``ch``.
 
-    Printable ASCII maps into the Private-Use graphic block; any other character
-    is returned unchanged, so it falls through to its normal text glyph.
+    Printable ASCII and the handful of extra map glyphs (:data:`GRAPHIC_EXTRA`)
+    map into the Private-Use graphic block; any other character is returned
+    unchanged, so it falls through to its normal text glyph.
     """
+    if ch in _EXTRA_CP:
+        return _EXTRA_CP[ch]
     o = ord(ch)
     if o in GRAPHIC_RANGE:
         return GRAPHIC_BASE + o
