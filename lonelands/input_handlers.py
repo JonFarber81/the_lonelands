@@ -4,7 +4,6 @@ import textwrap
 import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
-import tcod
 
 from lonelands import actions, character, color, events, overworld_map, perks
 from lonelands.events import CENTER, KeySym, Modifier
@@ -25,6 +24,7 @@ from lonelands.config import MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH
 from lonelands.exceptions import Impossible, QuitWithoutSaving
 
 if TYPE_CHECKING:
+    from lonelands.display import Console
     from lonelands.engine import Engine
     from lonelands.entity import Actor, Item
 
@@ -60,13 +60,13 @@ class BaseEventHandler(events.BaseEventHandler):
             return state
         return self
 
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         raise NotImplementedError()
 
-    def ev_quit(self, event: tcod.event.Quit) -> Optional["BaseEventHandler"]:
+    def ev_quit(self, event: "events.Quit") -> Optional["BaseEventHandler"]:
         raise SystemExit()
 
-    def ev_mousemotion(self, event: tcod.event.MouseMotion) -> Optional["BaseEventHandler"]:
+    def ev_mousemotion(self, event: "events.MouseMotion") -> Optional["BaseEventHandler"]:
         return None
 
 
@@ -75,7 +75,7 @@ class PopupMessage(BaseEventHandler):
         self.parent = parent
         self.text = text
 
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         self.parent.on_render(console)
         console.rgb["fg"] //= 4
         console.rgb["bg"] //= 4
@@ -127,11 +127,11 @@ class EventHandler(BaseEventHandler):
         self.engine.update_fov()
         return True
 
-    def ev_mousemotion(self, event: tcod.event.MouseMotion) -> None:
+    def ev_mousemotion(self, event: "events.MouseMotion") -> None:
         if self.engine.game_map.in_bounds(event.tile.x, event.tile.y):
             self.engine.mouse_location = (event.tile.x, event.tile.y)
 
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         self.engine.render(console)
 
 
@@ -143,7 +143,7 @@ class MainGameEventHandler(EventHandler):
         super().__init__(engine)
         engine.event_handler = self
 
-    def ev_keydown(self, event: tcod.event.KeyDown):
+    def ev_keydown(self, event: "events.KeyDown"):
         key = event.sym
         player = self.engine.player
 
@@ -310,7 +310,7 @@ class RangedTargetHandler(LockOnHandler):
 
 
 class GameOverEventHandler(EventHandler):
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         self.engine.render(console)
         console.rgb["fg"] //= 3
         console.rgb["bg"] //= 3
@@ -335,7 +335,7 @@ class GameOverEventHandler(EventHandler):
 # Overlay base: renders game underneath, closes on Esc
 # ===========================================================================
 class AskUserHandler(EventHandler):
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         # Draw the game, then quiet it: a popup always reads as the top layer
         # (CONTEXT.md "Scrim"). Subclasses call super() then paint their panel
         # on top at full brightness.
@@ -840,7 +840,7 @@ class OverworldMapHandler(AskUserHandler):
     _GX = (SCREEN_WIDTH - overworld_map.GRID_W) // 2   # centred left margin
     _GY = 2                                            # title sits on row 0
 
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         # A full-screen atlas: paint over the whole console rather than the game
         # + scrim, so the map reads as its own page.
         console.rgb["ch"] = ord(" ")
@@ -1211,7 +1211,7 @@ TITLE_ART = [
 
 
 class MainMenuHandler(BaseEventHandler):
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         console.rgb["bg"] = color.near_black  # the title page is drawn natively
 
     def on_render_native(self, display) -> None:
@@ -1257,7 +1257,7 @@ class DifficultySelectHandler(BaseEventHandler):
     """Chosen before a new game begins: the peril of the road ahead. The pick
     only scales the damage the player takes (see config.DIFFICULTIES)."""
 
-    def on_render(self, console: tcod.console.Console) -> None:
+    def on_render(self, console: "Console") -> None:
         console.rgb["bg"] = color.near_black  # drawn natively
 
     def on_render_native(self, display) -> None:

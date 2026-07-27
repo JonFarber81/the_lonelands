@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Tuple
 
-import tcod
-
 from lonelands import character, color
 from lonelands.config import (
     LOG_HEIGHT,

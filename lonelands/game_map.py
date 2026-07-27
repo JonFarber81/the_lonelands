@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Iterable, Iterator, Optional
 
 import numpy as np
-from tcod.console import Console
 
 from lonelands import tile_types
 from lonelands.entity import Actor, Item
 from lonelands.tile_glyphs import graphic_char
 
 if TYPE_CHECKING:
+    from lonelands.display import Console
     from lonelands.engine import Engine
     from lonelands.entity import Entity
 

@@ -11,15 +11,17 @@ of **Tyrn Gorthad** to recover a lost star-brooch of Arnor.
 ## Running
 
 ```bash
-python3 -m pip install -r requirements.txt   # tcod + numpy
+python3 -m pip install -r requirements.txt   # pygame, tcod, numpy
 python3 main.py
 ```
 
-The map and its creatures are drawn from a **Wanderlust** 16×16 CP437 tilesheet
-(a Dwarf-Fortress-style sheet, kept local — see
-`lonelands/assets/tiles/README.md`); prose, menus, and the dice tray render from
-the bundled **Atkinson Hyperlegible Mono** font via FreeType. If the tilesheet
-is absent the map falls back to the font's own glyphs, so the game always runs.
+The window, rendering, and input run on **pygame**; **tcod** is retained only as
+a headless library for field-of-view and pathfinding (see `docs/adr/0010`). The
+map and its creatures are drawn from a **Wanderlust** 16×16 CP437 tilesheet (a
+Dwarf-Fortress-style sheet, kept local — see `lonelands/assets/tiles/README.md`)
+and the map/HUD keep the bundled **Atkinson Hyperlegible Mono** font; menus and
+dialogs render natively in a proportional font. If the tilesheet is absent the
+map falls back to the font's own glyphs, so the game always runs.
 
 ## What's in this slice
 
@@ -91,10 +93,10 @@ is absent the map falls back to the font's own glyphs, so the game always runs.
 ## Layout of the code
 
 ```
-main.py              entry point + tcod context / resize loop
+main.py              entry point + pygame window / event / resize loop
 lonelands/
   config.py          screen/layout constants, fonts, tilesets, difficulties
-  fonts.py           FreeType TTF auto-fit + CP437 tilesheet loading
+  fonts.py           pygame glyph atlas: prose + CP437 tiles + dice faces
   tile_glyphs.py     map/entity char → tilesheet code-point mapping
   color.py           the palette
   dice.py            the d20 Check engine (Critical / Fumble / Advantage)
@@ -115,6 +117,9 @@ lonelands/
   engine.py          turn loop, FOV, rendering orchestration
   actions.py         player/actor actions
   input_handlers.py  all game states (main game, dialog, shop, sheet, menus…)
+  display.py         pygame window + the Console grid shim + glyph cache
+  events.py          input dispatch + KeySym/Modifier shim (SDL keycodes)
+  ui.py              pixel-space UI layer for the native menus (panels, text)
   setup_game.py      new-game construction
   savegame.py        single-slot save / load / delete
   components/        fighter, hero, ai, inventory, equipment, equippable, consumable, npc
