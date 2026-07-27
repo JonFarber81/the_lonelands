@@ -6,7 +6,6 @@ import tcod  # retained headless: FOV only (tcod.map.compute_fov below)
 from tcod import libtcodpy
 
 from lonelands import color, config, render_functions
-from lonelands.config import LOG_TEXT_HEIGHT, LOG_TEXT_Y, MAP_WIDTH
 from lonelands.exceptions import Impossible
 from lonelands.message_log import MessageLog
 from lonelands.quests import QuestLog
@@ -93,17 +92,13 @@ class Engine:
 
     # --- rendering --------------------------------------------------------
     def render(self, console: "Console") -> None:
+        """The cell-grid layer: the map, plus the mouse-hover names that label a
+        map tile. The sidebar, Chronicle, and location banner are drawn natively
+        — see :meth:`render_hud`."""
         self.game_map.render(console)
-
-        # Message log beneath the dice tray (left of the sidebar).
-        self.message_log.render(
-            console,
-            x=1,
-            y=LOG_TEXT_Y,
-            width=MAP_WIDTH - 2,
-            height=LOG_TEXT_HEIGHT,
-        )
-        render_functions.render_sidebar(console, self)
-        render_functions.render_dice_tray(console, self)
-        render_functions.render_location_banner(console, self)
         render_functions.render_names_at_mouse(console, self)
+
+    def render_hud(self, display, banner: bool = True) -> None:
+        """The native pixel HUD around the map (sidebar, Chronicle, banner)."""
+        from lonelands import hud
+        hud.render(display, self, banner=banner)
