@@ -552,12 +552,41 @@ def generate_placeholder_surface(engine, cell) -> GameMap:
 # ---------------------------------------------------------------------------
 def generate_chetwood(engine) -> GameMap:
     """Chetwood (0,-1): the wooded country north of Bree the Greenway climbs
-    through — close-grown trees and copses, denser than open Wild-Lands."""
+    through — close-grown trees and copses, denser than open Wild-Lands. The
+    woodwrights' hamlet of **Archet** sits in a cleared fold at the south eaves
+    (story/chetwood.py); the old felling-axe of its main quest lies dropped deep
+    in the north wood."""
     cell = overworld.cell((0, -1))
     gm = _open_surface(engine, cell)
     scatter(gm, tile_types.grass_low, 0.18)         # undergrowth
     scatter(gm, tile_types.tree, 0.24)              # the wood proper
     patches(gm, tile_types.tree, 6, 4, 0.6)         # thicker copses within it
+
+    # --- Archet: a small hamlet in a cleared fold at the south eaves -------
+    ax0, ay0, ax1, ay1 = 13, 30, 31, 41
+    gm.tiles[ax0:ax1 + 1, ay0:ay1 + 1] = tile_types.grass   # clear the coppice
+    for gx in range(ax0, ax1 + 1):
+        for gy in range(ay0, ay1 + 1):
+            if rng.random() < 0.15:
+                gm.tiles[gx, gy] = tile_types.grass_low
+    for b in [(15, 32, 20, 36, (17, 36)),
+              (23, 31, 28, 35, (25, 35)),
+              (18, 37, 23, 40, (20, 37))]:
+        building(gm, *b)
+
+    woodwright = story.chetwood.make_archet_woodwright()
+    (coppicer,) = story.chetwood.make_bystanders()
+    (path_post,) = story.chetwood.make_signposts()
+    woodwright.spawn(gm, 22, 34)        # Baldo, before the timber hall
+    coppicer.spawn(gm, 26, 37)          # a young coppicer by the wood-stacks
+    path_post.spawn(gm, 22, 30)         # the path-post at the clearing's north edge
+
+    # --- the woodwright's lost felling-axe, deep in the north wood ---------
+    fx, fy = 46, 8
+    gm.tiles[fx - 1:fx + 2, fy - 1:fy + 2] = tile_types.grass   # a reachable spot
+    axe = content.felling_axe.spawn(gm, fx, fy)
+    axe.pickup_event = "archet_axe"
+
     return _finish_surface(gm, cell)
 
 
@@ -623,6 +652,87 @@ def generate_south_downs(engine) -> GameMap:
     patches(gm, tile_types.hill, 8, 4, 0.55)        # the rolling downs
     scatter(gm, tile_types.tree, 0.03)              # a lone thorn on the skyline
     return _finish_surface(gm, cell)
+
+
+def generate_breeland(engine) -> GameMap:
+    """The Bree-land east of the Hill (1,0): the hamlets of **Combe** (a
+    woodsman-village in a northern fold) and **Staddle** (hobbit-holes on the
+    sunny south slope), and the lonely **Forsaken Inn** out east along the Great
+    East Road, where a Blue-Mountain Dwarf keeps a trading-stall (story/breeland.py).
+
+    Bree-hill's shoulder rises along the west edge, continuous with Bree's own
+    eastern hill; the plan's East Road is threaded first, so hamlet walls can't
+    be carved by its meander, and lanes connect each hamlet to it. Settled
+    country: *no wandering beasts* stalk the villages — the wargs and spiders the
+    folk speak of roam the wild cells around (the Chetwood north, the moors east)."""
+    cell = overworld.cell((1, 0))
+    gm = _open_surface(engine, cell)
+    gm.name = "The Bree-land, east of the Hill"   # a name for the once-blank cell
+    T = tile_types
+
+    # --- ground: pasture, with Bree-hill's shoulder heaped along the west --
+    scatter(gm, T.grass_low, 0.10)
+    scatter(gm, T.tree, 0.05)
+    for x in range(0, 9):
+        for y in range(gm.height):
+            if rng.random() < 0.30 - 0.03 * x:      # the hill fades eastward
+                gm.tiles[x, y] = T.hill
+    patches(gm, T.tree, 4, 3, 0.5)                  # copses toward the Chetwood
+
+    # --- the Great East Road first, then borders (so walls survive) --------
+    thread_road(gm, cell.coord)
+    diegetic_borders(gm, cell.coord)
+
+    # --- Combe: a woodsman-hamlet in a northern fold ----------------------
+    for b in [(17, 7, 22, 11, (19, 11)),
+              (25, 6, 30, 10, (27, 10)),
+              (20, 13, 25, 17, (22, 13))]:
+        building(gm, *b)
+    for gx in range(18, 31):                        # a beaten green between them
+        gm.tiles[gx, 12] = T.grass_low
+    for y in range(12, ROAD_ROW):                   # a lane down to the Road
+        gm.tiles[27, y] = T.road
+
+    # --- Staddle: hobbit-holes on the sunny south slope -------------------
+    for b in [(16, 31, 20, 35, (18, 31)),
+              (26, 32, 31, 36, (28, 32))]:
+        building(gm, *b)
+    for sx in (21, 23, 25):                         # smial-doors in a low rise
+        gm.tiles[sx, 34] = T.door
+        gm.tiles[sx, 35] = T.floor
+    for x in range(30, 36):                         # rows of Southlinch pipe-weed
+        for y in range(33, 37):
+            if rng.random() < 0.5:
+                gm.tiles[x, y] = T.grass_low
+    for y in range(ROAD_ROW + 1, 32):               # a lane up to the Road
+        gm.tiles[23, y] = T.road
+
+    # --- The Forsaken Inn: a lone hall out east on the Road ---------------
+    building(gm, 47, 24, 55, 30, door=(51, 24))     # door faces north onto the Road
+    for y in range(ROAD_ROW, 24):                   # a short spur from the Road
+        gm.tiles[51, y] = T.road
+
+    # --- the folk of the Bree-land ----------------------------------------
+    woodsman = story.breeland.make_combe_woodsman()
+    provisioner = story.breeland.make_staddle_provisioner()
+    innkeeper = story.breeland.make_forsaken_innkeeper()
+    dwarf = story.breeland.make_dwarf_trader()
+    hobbit, farmer, pedlar = story.breeland.make_bystanders()
+    crossroads_post, milestone = story.breeland.make_signposts()
+
+    woodsman.spawn(gm, 22, 12)          # Todi Heathertoes, on the Combe green
+    farmer.spawn(gm, 25, 12)            # Mattock Mugwort, by the fence-line
+    provisioner.spawn(gm, 28, 34)       # Rollo Tunnelly, in his larder-door
+    hobbit.spawn(gm, 32, 34)            # Nib Sandheaver, among the pipe-weed
+    innkeeper.spawn(gm, 50, 26)         # Mat Ferny, within the inn
+    dwarf.spawn(gm, 53, 28)             # Thulin, at his corner stall
+    pedlar.spawn(gm, 48, 28)            # the lean pedlar, in a dark corner
+    crossroads_post.spawn(gm, 29, ROAD_ROW - 2)   # the fingerpost by the crossing
+    milestone.spawn(gm, 44, ROAD_ROW + 1)         # the milestone, east on the Road
+
+    gm.entry_xy = nearest_walkable(gm, 3, ROAD_ROW)   # arriving from Bree in the west
+    gm.start_xy = gm.entry_xy
+    return gm
 
 
 # ---------------------------------------------------------------------------

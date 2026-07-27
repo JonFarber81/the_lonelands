@@ -1,36 +1,21 @@
-"""Quests, speaking characters, and dialog trees for the starting Region:
-the town of Bree, and the barrow-wight mounds of Tyrn Gorthad in the
-Barrow-downs west of it (the ruined watchtower of Amon Sûl on Weathertop, east
-along the Road, is its own ruin — see ADR 0003).
+"""Quests, speaking characters, and dialog trees for Bree — the hub town at the
+meeting of the roads — and the quests given there (the main barrow-quest that
+sends the hero west to Tyrn Gorthad, and Halbarad's wolf/orc bounties).
 
 Setting: TA 2965. Bree is peopled accurately for that year — the Prancing Pony
 is kept by a Butterbur (an ancestor of the Barliman of later days), and Rangers
 of the North lodge there. Canon detail is left thin on purpose, to be enriched
 later from the TOR Bree supplement; do not invent hard lore here.
-
-A dialog *node* is {"text": str|callable, "options": [option, ...]}.
-An *option* is a dict with:
-    text   : the line the player may choose
-    goto   : next node id, or None to end the conversation
-    show   : optional callable(engine)->bool gating visibility
-    do     : optional callable(engine)->None side effect
-    handler: optional callable(engine)->EventHandler to switch UI (e.g. a shop)
 """
 from __future__ import annotations
 
 import copy
-from typing import Any, Callable, Dict, List, Optional
+from typing import List
 
 from lonelands import color, content
-from lonelands.components.equipment import Equipment
-from lonelands.components.inventory import Inventory
-from lonelands.components.npc import NPC
 from lonelands.entity import Actor
 from lonelands.quests import Quest
-
-
-def opt(text, goto=None, do=None, show=None, handler=None) -> Dict[str, Any]:
-    return {"text": text, "goto": goto, "do": do, "show": show, "handler": handler}
+from lonelands.story._helpers import make_npc, opt
 
 
 # ---------------------------------------------------------------------------
@@ -88,16 +73,6 @@ def build_quests(engine) -> None:
     )
     orcs.kill_target = "orc soldier"
     log.register(orcs)
-
-
-# ---------------------------------------------------------------------------
-# NPC factory helper
-# ---------------------------------------------------------------------------
-def _npc(char, col, name, title, tree) -> Actor:
-    actor = Actor(char=char, color=col, name=name, ai_cls=None,
-                  inventory=Inventory(0), equipment=Equipment(),
-                  npc=NPC(title=title, tree=tree))
-    return actor
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +140,7 @@ def make_elder() -> Actor:
             "options": [opt("It was rightly done.", goto=None)],
         },
     }
-    return _npc("@", color.npc_c, "Dírhael the Elder", "Elder of the Dúnedain", tree)
+    return make_npc("@", color.npc_c, "Dírhael the Elder", "Elder of the Dúnedain", tree)
 
 
 # ---------------------------------------------------------------------------
@@ -187,11 +162,10 @@ def make_healer() -> Actor:
             engine.message_log.add_message("\"I have given what I can spare, friend.\"", color.gray)
             return
         engine.flags[tag] = True
-        import copy as _c
-        herb = _c.deepcopy(content.healing_herbs)
+        herb = copy.deepcopy(content.healing_herbs)
         herb.parent = engine.player.inventory
         engine.player.inventory.items.append(herb)
-        herb2 = _c.deepcopy(content.athelas)
+        herb2 = copy.deepcopy(content.athelas)
         herb2.parent = engine.player.inventory
         engine.player.inventory.items.append(herb2)
         engine.message_log.add_message(
@@ -218,7 +192,7 @@ def make_healer() -> Actor:
             "options": [opt("(step back)", goto="root")],
         },
     }
-    return _npc("@", (0xC8, 0x9A, 0xB0), "Mistress Rushlight", "Herb-wife of Bree", tree)
+    return make_npc("@", (0xC8, 0x9A, 0xB0), "Mistress Rushlight", "Herb-wife of Bree", tree)
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +267,7 @@ def make_halbarad() -> Actor:
             "options": [opt("(step back)", goto="root")],
         },
     }
-    return _npc("@", color.ranger_green, "Halbarad", "Ranger of the North", tree)
+    return make_npc("@", color.ranger_green, "Halbarad", "Ranger of the North", tree)
 
 
 # ---------------------------------------------------------------------------
@@ -315,10 +289,12 @@ def make_innkeeper() -> Actor:
         "roads": {
             "text": "\"Bree sits where the roads cross, see. Walk west and you come to the "
                     "old Barrow-downs — that's where your barrow is, if you're set on it. "
-                    "East on the Great East Road climbs to Weathertop and the Weather "
-                    "Hills, north lies the Chetwood, south the downs along the Greenway. "
-                    "Just walk out and keep going; you'll pass into whichever land you're "
-                    "headed.\"",
+                    "East on the Great East Road you'll pass our little Bree-land "
+                    "villages — Combe and Staddle on the Hill's far shoulder, and the "
+                    "lonely Forsaken Inn beyond — before ever you climb to Weathertop. "
+                    "North lies the Chetwood, and Archet under its eaves; south the "
+                    "downs along the Greenway. Just walk out and keep going; you'll pass "
+                    "into whichever land you're headed.\"",
             "options": [opt("(step back)", goto="root")],
         },
         "rumour": {
@@ -334,7 +310,7 @@ def make_innkeeper() -> Actor:
             "options": [opt("(step back)", goto="root")],
         },
     }
-    return _npc("@", (0xC8, 0xA0, 0x62), "Butterbur", "Keeper of the Prancing Pony", tree)
+    return make_npc("@", (0xC8, 0xA0, 0x62), "Butterbur", "Keeper of the Prancing Pony", tree)
 
 
 # ---------------------------------------------------------------------------
@@ -368,9 +344,15 @@ def make_fletcher() -> Actor:
             "options": [opt("(step back)", goto="root")],
         },
     }
-    return _npc("@", (0xA8, 0x8C, 0x54), "Cob", "Fletcher of Bree", tree)
+    return make_npc("@", (0xA8, 0x8C, 0x54), "Cob", "Fletcher of Bree", tree)
 
 
 def make_town_npcs() -> List[Actor]:
     return [make_elder(), make_healer(), make_halbarad(), make_innkeeper(),
             make_fletcher()]
+
+
+# The aggregate seam every location module exposes (see story/__init__.py):
+# every speaking NPC in this location, used for savegame tree rehydration.
+def make_npcs() -> List[Actor]:
+    return make_town_npcs()

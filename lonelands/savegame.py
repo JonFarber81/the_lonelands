@@ -5,7 +5,7 @@ a pickled Engine, compressed with lzma. Two things make that graph not-quite
 picklable on its own, and both are pure *content* that the code can rebuild:
 
   * lambdas — the world's Region factories (`world.py`), each Region's level
-    builders, `Quest.on_complete`, and every NPC's dialog `tree` (`story.py`).
+    builders, `Quest.on_complete`, and every NPC's dialog `tree` (`story/`).
   * transient UI state — `Engine.event_handler`, `Engine.last_roll`.
 
 Each of those classes drops its lambdas in `__getstate__` (see the respective
@@ -85,8 +85,9 @@ def _rehydrate(engine: "Engine") -> None:
         if fresh_q is not None:
             quest.on_complete = fresh_q.on_complete
 
-    # --- NPCs: restore dialog trees by name across every built map.
-    trees = {npc.name: npc.npc.tree for npc in story.make_town_npcs()}
+    # --- NPCs: restore dialog trees by name across every built map. Spans every
+    #     location (not just Bree), so a save made in a hamlet keeps its dialog.
+    trees = {npc.name: npc.npc.tree for npc in story.all_speaking_npcs()}
     for region in world.regions.values():
         for gamemap in region.levels.values():
             for entity in gamemap.entities:

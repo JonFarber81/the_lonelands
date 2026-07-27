@@ -88,6 +88,11 @@ hunting_dagger = _weapon("hunting dagger", "-", 3, 0, attack_bonus=1, value=7,
 # A spear's reach lets it slip past armour: a small pierce is its property.
 war_spear = _weapon("war spear", "|", 4, 2, pierce=1, value=10,
                     desc="An ash-hafted spear; its point slips past mail.")
+# Dwarf-make: a short, heavy hand-axe of the Blue-Mountain smiths, sold on the
+# East Road by travelling Dwarves. Blunt reliability over a Ranger's finesse.
+dwarf_axe = _weapon("dwarf-make hand-axe", "/", 5, 2, attack_bonus=1, value=16,
+                    desc="A stout single-hand axe forged in the Blue Mountains; "
+                         "its bearded head bites through a shield.")
 
 # Bows go in the `ranged` slot and are loosed with `f` (ADR 0006). Each carries
 # damage dice and an **effective range** — the reach within which a Shot takes no
@@ -141,7 +146,7 @@ leather_gear = Item(
     equippable=Equippable(EquipmentType.ARMOUR, load=1, defence_bonus=1),
 )
 mail_corslet = Item(
-    char="[", color=(0x9A, 0x9E, 0xA6), name="corslet of mail",
+    char="[", color=(0x9A, 0x9E, 0xA6), name="corslet of mail", value=30,
     description="A shirt of riveted rings, heavy but stalwart.",
     equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=2),
 )
@@ -221,9 +226,17 @@ lembas = Item(
     consumable=consumable.HealingConsumable(amount=4),
 )
 miruvor = Item(
-    char="!", color=color.hope_gain, name="draught of the Dúnedain", stackable=True,
+    char="!", color=color.hope_gain, name="draught of the Dúnedain", value=8, stackable=True,
     description="A cordial that kindles new strength in the weary body.",
     consumable=consumable.HealingConsumable(amount=8),
+)
+# Southlinch — the pipe-weed grown on the sunny south slopes of Bree-hill, prized
+# leaf the Staddle hobbits cure and sell. A quiet pipe eases a traveller's hurts.
+pipe_weed = Item(
+    char="%", color=(0x9C, 0x7A, 0x54), name="Southlinch pipe-weed", value=3, stackable=True,
+    description="A twist of fragrant leaf grown on Bree-hill's south slope; a "
+                "quiet pipe of it settles the nerves and eases small hurts.",
+    consumable=consumable.HealingConsumable(amount=3),
 )
 
 # Quest item — the goal of the main quest.
@@ -231,6 +244,14 @@ star_brooch = Item(
     char="*", color=(0xE6, 0xE0, 0xC0), name="star-brooch of Arnor",
     description="A silver brooch wrought as a many-rayed star: the token of the last "
                 "warden of Amon Gûl. Old Dírhael will wish to see this.",
+)
+
+# Quest item — the Archet woodcutters' lost felling-axe, an heirloom left in the
+# Chetwood when fell things drove the coppice-gangs out. Carry it back to Archet.
+felling_axe = Item(
+    char="/", color=(0x8C, 0x6E, 0x46), name="woodwright's felling-axe",
+    description="A broad, worn felling-axe, its haft dark with the grip of many "
+                "hands; the Archet woodcutters will know it, and grieve or rejoice.",
 )
 
 # ---------------------------------------------------------------------------
