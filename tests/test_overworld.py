@@ -86,7 +86,7 @@ def test_you_can_walk_the_whole_map_edge_to_edge(game):
 
 def test_every_band_has_a_beast_table():
     for band in overworld.BANDS:
-        (lo, hi), table = content.BAND_BEASTS[band]
+        (lo, hi), table = content.BAND_THREATS[band]
         assert 0 <= lo <= hi
         assert table, f"{band} has no beast table"
 

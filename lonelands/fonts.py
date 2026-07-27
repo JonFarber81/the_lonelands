@@ -379,6 +379,17 @@ def _bake_graphics(tileset: tcod.tileset.Tileset, width: int, height: int) -> No
             cell = tileset.get_tile(o)[..., 3]  # reuse the TTF glyph's coverage
         tileset.set_tile(cp, cell)
 
+    # The extra map glyphs (box-drawing roads, the deeps ▼): the CP437 tilesheet
+    # carries these where the prose TTF does not, so bake them from the sheet by
+    # their real codepoint (CHARMAP_CP437 maps ▼/─/│/┼ to their cells). With no
+    # sheet, reuse whatever the TTF baked — blank if it lacks the glyph.
+    for ch, cp in tile_glyphs._EXTRA_CP.items():
+        if sheet is not None:
+            cell = _fit_square_centered(sheet.get_tile(ord(ch))[..., 3], width, height)
+        else:
+            cell = tileset.get_tile(ord(ch))[..., 3]
+        tileset.set_tile(cp, cell)
+
 
 def _build_base_tileset(width: int, height: int) -> tcod.tileset.Tileset:
     """The text tileset: FreeType auto-fit, else libtcod's loader, else blank."""

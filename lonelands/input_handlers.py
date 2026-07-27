@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import tcod
 
-from lonelands import actions, character, color, perks
+from lonelands import actions, character, color, overworld_map, perks
+from lonelands.tile_glyphs import graphic_char
 from lonelands.render_functions import (
     draw_filled_bar,
     draw_section,
@@ -166,6 +167,8 @@ class MainGameEventHandler(EventHandler):
             return AbilitiesHandler(self.engine)
         if key == KeySym.q:
             return QuestScreenHandler(self.engine)
+        if key == KeySym.m:
+            return OverworldMapHandler(self.engine)
         if key in (KeySym.SLASH, KeySym.QUESTION):
             return HelpHandler(self.engine)
         if key == KeySym.ESCAPE:
@@ -775,6 +778,7 @@ c          your character sheet
 p          your Paths & perks — spend perk points
 a          your active deeds (abilities on cooldown/charge)
 q          your errands and tidings
+M          the Overworld Map — all of Eriador at a glance
 ?          this help
 Esc        the wayfarer's menu
 
@@ -809,6 +813,97 @@ class HelpHandler(AskUserHandler):
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         return self.on_exit()
+
+
+# ===========================================================================
+# Overworld Map (issue #63) — the full-reveal atlas of the whole Region grid
+# ===========================================================================
+class OverworldMapHandler(AskUserHandler):
+    """A modal, full-screen chart of the entire 15×9 Region grid (CONTEXT.md →
+    *World & navigation*). A cursor roves cell-to-cell; the footer reads the
+    selected Region's name, note, and deeps (or the Sea / Misty Mountains off the
+    grid). No turn passes — it is a reference atlas, available even in the deeps,
+    where it marks the Region overhead. Data and layout come from
+    :mod:`lonelands.overworld_map`; this handler only blits and drives the cursor.
+    """
+
+    def __init__(self, engine: "Engine"):
+        super().__init__(engine)
+        # Start the cursor on the player's own Region.
+        self.cursor: Tuple[int, int] = engine.game_world.coord
+
+    # --- layout -----------------------------------------------------------
+    _GX = (SCREEN_WIDTH - overworld_map.GRID_W) // 2   # centred left margin
+    _GY = 2                                            # title sits on row 0
+
+    def on_render(self, console: tcod.console.Console) -> None:
+        # A full-screen atlas: paint over the whole console rather than the game
+        # + scrim, so the map reads as its own page.
+        console.rgb["ch"] = ord(" ")
+        console.rgb["fg"] = color.gray
+        console.rgb["bg"] = color.near_black
+
+        console.print(SCREEN_WIDTH // 2, 0, "The Ranger's Atlas — Eriador",
+                      fg=color.menu_title, alignment=tcod.constants.CENTER)
+
+        gw = self.engine.game_world
+        buf = overworld_map.render_map(gw.coord, self.cursor)
+        self._blit(console, buf)
+        self._render_legend(console, buf.height)
+        self._render_footer(console, in_deeps=gw.level_index < 0)
+
+    def _blit(self, console, buf) -> None:
+        for r in range(buf.height):
+            row_ch, row_fg, row_bg, row_g = buf.ch[r], buf.fg[r], buf.bg[r], buf.graphic[r]
+            sy = self._GY + r
+            for c in range(buf.width):
+                ch = row_ch[c]
+                string = graphic_char(ch) if row_g[c] else ch
+                console.print(self._GX + c, sy, string,
+                              fg=row_fg[c] or color.gray,
+                              bg=row_bg[c] or color.near_black)
+
+    def _render_legend(self, console, grid_h) -> None:
+        y = self._GY + grid_h + 1
+        for row, label_fg in ((overworld_map.band_legend(), color.tier_body),
+                              (overworld_map.role_legend(), color.tier_label)):
+            x = self._GX
+            for entry in row:
+                glyph = graphic_char(entry.glyph) if entry.graphic else entry.glyph
+                console.print(x, y, glyph, fg=entry.fg)
+                console.print(x + 2, y, entry.label, fg=label_fg)
+                x += 4 + len(entry.label)
+            y += 1
+
+    def _render_footer(self, console, in_deeps) -> None:
+        d = overworld_map.describe(self.cursor)
+        y = self._GY + overworld_map.GRID_H + 4
+        x = self._GX
+        iw = overworld_map.GRID_W
+        head = d.title
+        if not d.off_grid and d.deeps:
+            head += f"   {d.deeps} deep{'s' if d.deeps != 1 else ''} below"
+        console.print(x, y, head, fg=color.section_head)
+        y += 1
+        for line in textwrap.wrap(d.note, iw):
+            console.print(x, y, line, fg=color.tier_body)
+            y += 1
+        if in_deeps and self.cursor == self.engine.game_world.coord:
+            console.print(x, y, "You are below the surface here.", fg=color.ambient)
+        console.print(self._GX, SCREEN_HEIGHT - 1,
+                      " arrows/hjkl move · M or Esc close ", fg=color.tier_label)
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        key = event.sym
+        if key in MOVE_KEYS:
+            dx, dy = MOVE_KEYS[key]
+            x = min(overworld_map.X_MAX, max(overworld_map.X_MIN, self.cursor[0] + dx))
+            y = min(overworld_map.Y_MAX, max(overworld_map.Y_MIN, self.cursor[1] + dy))
+            self.cursor = (x, y)
+            return None
+        if key in (KeySym.ESCAPE, KeySym.m):
+            return self.on_exit()
+        return None
 
 
 # ===========================================================================

@@ -17,6 +17,14 @@ not a spec: it defines *what words mean*, never *how things are built*.
   walking in from a neighbour. *Only the Surface edge-connects to neighbouring
   Regions*; deeper Levels are reached only by Enter, from within their Region.
 - **Square** — the town's central plaza only. *Not* a synonym for Region.
+- **Overworld Map** — the full-reveal reference chart of the *whole* Region grid,
+  opened with **`M`**: a knowledgeable Ranger's atlas of Eriador, showing every
+  Region at once with its band, role, Town/Landmark names, roads, the Sea/Mountain
+  frame, and where deeps lie. Distinct from the **local map** — the in-Region
+  Surface or Level the player actually walks. The Overworld Map marks the player's
+  current Region; it never advances a turn. *Not* fog-of-war — it reveals the
+  whole world from the start. Distinct from the **overworld grid** (the underlying
+  plan-as-data in `overworld.py`); the Overworld Map is the *screen that draws it*.
 
 The whole **15×9 overworld grid** is live: all 116 walkable cells exist and are
 enterable, built lazily from `lonelands/overworld.py` (the plan-as-data twin of
@@ -58,6 +66,11 @@ Landmarks around the Bree hub:
 - **Midgewater** `(1,-1)`, **Sarn Ford** `(-1,1)`, **the Old Forest** `(-2,1)` —
   the rest of the Bree cluster: the biting fen, the Rangers' Brandywine ford, and
   the awake, ill-disposed ancient wood (Cluster 2, issue #17).
+- **Band** — a Region's **danger rating**, one of four rising tiers: **Free**
+  (green, settled), **Wild** (open country where adventure begins), **Dark**,
+  and **Perilous**. The band is read off the map's legend colours and drives both
+  the Region's terrain feel and its wandering threats — how many appear and which
+  kinds. *Not* interchangeably called a "zone" or "difficulty".
 
 ## Inhabitants & content
 
@@ -83,6 +96,32 @@ player **bumps** any of them to open the conversation.
   next to a region's content and gathered per-map into a **bark field**, which
   adds a field-wide throttle so the lines stay sparse. Not an NPC: no dialog, no
   bump, no glyph on the map.
+
+### Wandering threats
+
+The hostile creatures seeded onto a Region's Surface by its **band**. Every
+threat is one of three **kinds**, and a band is a *blend* of them — the blend,
+not just the count, is what makes settled country feel different from the Dark.
+
+- **Wandering threat** — a hostile creature placed by the band, as opposed to a
+  hand-authored set-piece foe (the barrow-wight). Comes in three kinds below.
+  _Avoid_: "random encounter", "spawn" (those name the *act* of placing, not the
+  creature).
+- **Brigand** — a human predator: the weak **footpad** and the stronger
+  **highwayman**. Brigands work the **roads** (that is where the travellers are),
+  so they are **road-biased** — placed *toward* the road, and alone among threats
+  they ignore the road's safety buffer. They belong to settled land (Free/Wild),
+  never the Dark.
+- **Wild animal** — a natural beast with no malice: the **wolf** and the
+  **boar**. Found across every band, thickest in the Wild.
+- **Monster** — the genuinely dark things: great spider, orc, warg. Dominant in
+  **Dark** and **Perilous**, *rare* in Wild (a scare near Bree, not a routine),
+  and absent from Free.
+- **Road safety buffer** — the swept corridor along a road: **wild animals and
+  monsters do not spawn within it**, so a road is safer than the open field it
+  crosses. Brigands are exempt (they haunt the road), so the road trades the
+  danger of beasts for the danger of ambush. Applies in every band; in the Dark
+  the surrounding threats are dense enough that the road is *safer*, never *safe*.
 
 ## The d20 core
 
