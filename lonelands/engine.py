@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict
 
-import tcod
+import tcod  # retained headless: FOV only (tcod.map.compute_fov below)
 from tcod import libtcodpy
 
 from lonelands import color, config, render_functions
@@ -13,6 +13,7 @@ from lonelands.quests import QuestLog
 
 if TYPE_CHECKING:
     from lonelands.dice import RollResult
+    from lonelands.display import Console
     from lonelands.entity import Actor
     from lonelands.game_map import GameMap
     from lonelands.world import GameWorld
@@ -91,7 +92,7 @@ class Engine:
         self.game_map.explored |= self.game_map.visible
 
     # --- rendering --------------------------------------------------------
-    def render(self, console: tcod.console.Console) -> None:
+    def render(self, console: "Console") -> None:
         self.game_map.render(console)
 
         # Message log beneath the dice tray (left of the sidebar).

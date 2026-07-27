@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import textwrap
-from typing import Iterable, List, Reversible, Tuple
-
-import tcod
+from typing import TYPE_CHECKING, Iterable, List, Reversible, Tuple
 
 from lonelands import color
+
+if TYPE_CHECKING:
+    from lonelands.display import Console
 
 
 class Message:
@@ -40,7 +41,7 @@ class MessageLog:
 
     def render(
         self,
-        console: tcod.console.Console,
+        console: "Console",
         x: int,
         y: int,
         width: int,
@@ -58,7 +59,7 @@ class MessageLog:
     @classmethod
     def render_messages(
         cls,
-        console: tcod.console.Console,
+        console: "Console",
         x: int,
         y: int,
         width: int,
