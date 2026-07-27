@@ -3,8 +3,13 @@
 Attributes (Brawn/Wits/Will) are small modifiers on the d20 and feed the derived
 combat numbers on the Fighter. Endurance (on the Fighter) is the single vitality
 pool — there is no Hope, no Shadow, no skills, and no weapon proficiencies. Kills
-grant XP; levels rise often, each one granting +HP, a periodic +to-hit, and a
-perk point every few levels to spend on Paths (a later phase)."""
+grant XP; levels rise often, each one granting +HP and a periodic +to-hit.
+
+Paths (ADR 0011) are a **committed skill-tree**: level 1 is **pathless**; from
+level 2 every level grants **one Path point** and the player **commits to a
+single Path**, into whose tree all points thereafter are spent (nodes and
+ranks). The commit is permanent, and buys outside the committed Path are
+rejected — see :meth:`commit_path` / :meth:`can_buy`."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -46,15 +51,19 @@ class Hero(BaseComponent):
         self.level = 1
         self.xp = 0             # progress toward the next level
         self.xp_total = 0       # lifetime XP earned
-        self.perk_points = 0    # unspent; spent on Paths (perks.py)
+        self.path_points = 0    # unspent; spent on the committed Path (perks.py)
         self._level_to_hit = 0  # periodic +to-hit accrued from levelling
 
-        # --- Paths & perks (issue #38) ------------------------------------
-        self.perks: set = set()             # ids of owned perks (blend across Paths)
-        # Per-perk active runtime: cooldown counts down each player turn (0 = ready);
+        # --- Paths & nodes (ADR 0011) -------------------------------------
+        # The committed Path: None while pathless (level 1). Set once, forever,
+        # at level 2 (commit_path); every Path point after goes into its tree.
+        self.path: Optional[str] = None
+        self.nodes: Dict[str, int] = {}     # owned node id -> current rank (>=1)
+        self.points_in_path = 0             # Path points sunk in (the tier gate)
+        # Per-node active runtime: cooldown counts down each player turn (0 = ready);
         # a "primed" active waits on the next melee hit; a stance grants temp Soak
         # for a number of rounds.
-        self._perk_cooldowns: Dict[str, int] = {}
+        self._node_cooldowns: Dict[str, int] = {}
         self._primed = set()                # ids of primed next-hit actives (Wrath)
         self._stance_soak = 0               # extra Soak from an active stance
         self._stance_rounds = 0             # rounds the stance persists
@@ -90,78 +99,104 @@ class Hero(BaseComponent):
     @property
     def attack_bonus(self) -> int:
         """The hero's contribution to a melee attack d20: Brawn, the periodic
-        to-hit earned by levelling, flat +to-hit perks, and any live rally bonus
+        to-hit earned by levelling, flat +to-hit nodes, and any live rally bonus
         (fires while badly wounded)."""
         return (self.brawn + self._level_to_hit
-                + self.perk_bonus("atk_bonus") + self.rally_atk_bonus())
+                + self.node_bonus("atk_bonus") + self.rally_atk_bonus())
 
     @property
     def defence_bonus(self) -> int:
         """The hero's contribution to Defence: Wits (wary footwork and senses)
-        plus any Defence perks."""
-        return self.wits + self.perk_bonus("defence_bonus")
+        plus any Defence nodes."""
+        return self.wits + self.node_bonus("defence_bonus")
 
     @property
     def ranged_attack_bonus(self) -> int:
         """The hero's contribution to a Shot's d20 (ADR 0006): Wits (the aimed
         eye, not Brawn), the same periodic level to-hit melee earns, and the Far
-        Shot Path's flat ranged to-hit perks. The bow's own +hit is added on the
+        Shot Path's flat ranged to-hit nodes. The bow's own +hit is added on the
         Fighter, mirroring how melee adds the weapon's +hit there."""
-        return self.wits + self._level_to_hit + self.perk_bonus("ranged_bonus")
+        return self.wits + self._level_to_hit + self.node_bonus("ranged_bonus")
 
     @property
     def ranged_damage_bonus(self) -> int:
         """Flat damage the Far Shot Path adds to a Shot (Fletcher's Eye/Deadeye)."""
-        return self.perk_bonus("ranged_damage_bonus")
+        return self.node_bonus("ranged_damage_bonus")
 
-    # --- Paths & perks ----------------------------------------------------
-    def owned_perks(self) -> List["perks.Perk"]:
-        return [perks.ALL_PERKS[pid] for pid in self.perks if pid in perks.ALL_PERKS]
+    # --- Paths & nodes (ADR 0011) -----------------------------------------
+    def owned_nodes(self) -> List["perks.Node"]:
+        """The Nodes the hero owns (rank ≥ 1), in no particular order."""
+        return [perks.ALL_NODES[nid] for nid in self.nodes if nid in perks.ALL_NODES]
 
-    def has_perk(self, perk_id: str) -> bool:
-        return perk_id in self.perks
+    def has_node(self, node_id: str) -> bool:
+        return self.nodes.get(node_id, 0) >= 1
 
-    def can_buy(self, perk: "perks.Perk") -> bool:
-        """Whether ``perk`` may be bought now: not already owned, affordable, and
-        its in-Path prerequisites (and capstone gating) satisfied."""
-        if perk.id in self.perks:
+    def rank_of(self, node_id: str) -> int:
+        """Current rank of ``node_id`` (0 if unowned)."""
+        return self.nodes.get(node_id, 0)
+
+    def commit_path(self, path_id: str) -> bool:
+        """Commit — **permanently** — to a single Path. Legal only while pathless
+        (the one-time level-2 choice); returns False if a Path is already
+        committed or ``path_id`` is unknown. The chooser UI is Phase 2; this is
+        the rule it will drive."""
+        if self.path is not None:
             return False
-        if self.perk_points < perk.cost:
+        if path_id not in perks.PATHS_BY_ID:
             return False
-        return perks.prerequisites_met(perk, self.perks)
-
-    def buy_perk(self, perk: "perks.Perk") -> bool:
-        """Spend ``perk.cost`` points to take ``perk``. Returns False (buying
-        nothing) if it isn't currently buyable. A +max-Endurance perk raises the
-        Fighter's pool at once, exactly as a level-up does."""
-        if not self.can_buy(perk):
-            return False
-        self.perk_points -= perk.cost
-        self.perks.add(perk.id)
-        if perk.max_endurance_bonus:
-            fighter = getattr(self.parent, "fighter", None)
-            if fighter is not None:
-                fighter.max_endurance += perk.max_endurance_bonus
-                fighter.endurance += perk.max_endurance_bonus  # the new vigour is yours now
+        self.path = path_id
         return True
 
-    def perk_bonus(self, field: str) -> int:
+    def can_buy(self, node: "perks.Node") -> bool:
+        """Whether ``node`` (its next rank) may be bought now: a Path is
+        committed and it is *this* Path's, the rank cap isn't reached, the cost is
+        affordable, and both the points-in-Path tier gate and the parent-edge are
+        satisfied."""
+        if self.path is None or node.path != self.path:
+            return False
+        if self.nodes.get(node.id, 0) >= node.max_rank:
+            return False
+        if self.path_points < node.cost:
+            return False
+        if not perks.tier_unlocked(node, self.points_in_path):
+            return False
+        return perks.parent_met(node, self.nodes.keys())
+
+    def buy_node(self, node: "perks.Node") -> bool:
+        """Spend ``node.cost`` Path points to take ``node`` (or its next rank).
+        Returns False (buying nothing) if it isn't currently buyable. A
+        +max-Endurance node raises the Fighter's pool at once, per rank, exactly
+        as a level-up does."""
+        if not self.can_buy(node):
+            return False
+        self.path_points -= node.cost
+        self.points_in_path += node.cost
+        self.nodes[node.id] = self.nodes.get(node.id, 0) + 1
+        if node.max_endurance_bonus:
+            fighter = getattr(self.parent, "fighter", None)
+            if fighter is not None:
+                fighter.max_endurance += node.max_endurance_bonus
+                fighter.endurance += node.max_endurance_bonus  # the new vigour is yours now
+        return True
+
+    def node_bonus(self, field: str) -> int:
         """Sum a flat passive field (e.g. ``"atk_bonus"``, ``"soak_bonus"``) over
-        every owned perk."""
-        return sum(getattr(p, field, 0) for p in self.owned_perks())
+        every owned node, **scaled by rank** (a rank-III Iron Skin gives +3)."""
+        return sum(getattr(n, field, 0) * self.nodes.get(n.id, 0)
+                   for n in self.owned_nodes())
 
     # --- Low-Endurance rally trigger (read live by the Fighter) -----------
     def _rally_bonus(self, field: str) -> int:
-        """Sum a rally field over owned rally perks whose Endurance threshold the
+        """Sum a rally field over owned rally nodes whose Endurance threshold the
         Fighter currently sits at or below."""
         fighter = getattr(self.parent, "fighter", None)
         if fighter is None or fighter.max_endurance <= 0:
             return 0
         frac = fighter.endurance / fighter.max_endurance
         total = 0
-        for p in self.owned_perks():
-            if p.rally_threshold > 0 and frac <= p.rally_threshold:
-                total += getattr(p, field, 0)
+        for n in self.owned_nodes():
+            if n.rally_threshold > 0 and frac <= n.rally_threshold:
+                total += getattr(n, field, 0)
         return total
 
     def rally_atk_bonus(self) -> int:
@@ -171,52 +206,52 @@ class Hero(BaseComponent):
         return self._rally_bonus("rally_soak_bonus")
 
     # --- Active abilities (charges/cooldowns) -----------------------------
-    def actives(self) -> List["perks.Perk"]:
-        """Owned perks that carry an active ability."""
-        return [p for p in self.owned_perks() if p.active is not None]
+    def actives(self) -> List["perks.Node"]:
+        """Owned nodes that carry an active ability."""
+        return [n for n in self.owned_nodes() if n.active is not None]
 
-    def ability_ready(self, perk_id: str) -> bool:
+    def ability_ready(self, node_id: str) -> bool:
         """A ready active is owned, off cooldown, and not already primed."""
-        perk = perks.ALL_PERKS.get(perk_id)
-        if perk is None or perk.active is None or perk_id not in self.perks:
+        node = perks.ALL_NODES.get(node_id)
+        if node is None or node.active is None or not self.has_node(node_id):
             return False
-        if self._perk_cooldowns.get(perk_id, 0) > 0:
+        if self._node_cooldowns.get(node_id, 0) > 0:
             return False
-        return perk_id not in self._primed
+        return node_id not in self._primed
 
-    def cooldown_left(self, perk_id: str) -> int:
-        return self._perk_cooldowns.get(perk_id, 0)
+    def cooldown_left(self, node_id: str) -> int:
+        return self._node_cooldowns.get(node_id, 0)
 
-    def activate_ability(self, perk_id: str) -> Optional[str]:
+    def activate_ability(self, node_id: str) -> Optional[str]:
         """Fire a ready active. Returns a flavour message (or None if it can't
         fire). ``heal``/``stance`` resolve at once and start the cooldown here;
         ``wrath`` primes the next hit and starts its cooldown when that hit lands
         (see ``consume_primed`` in the melee flow)."""
-        if not self.ability_ready(perk_id):
+        if not self.ability_ready(node_id):
             return None
-        perk = perks.ALL_PERKS[perk_id]
-        spec = perk.active
+        node = perks.ALL_NODES[node_id]
+        spec = node.active
         if spec.kind == "wrath":
-            self._primed.add(perk_id)
+            self._primed.add(node_id)
             self._timers_touched_this_turn = True
             return f"You gather your fury — your next blow will strike with {spec.name}."
         if spec.kind == "heal":
             fighter = getattr(self.parent, "fighter", None)
             healed = fighter.heal(roll_damage(spec.magnitude)) if fighter else 0
-            self._perk_cooldowns[perk_id] = spec.cooldown
+            self._node_cooldowns[node_id] = spec.cooldown
             self._timers_touched_this_turn = True
             return f"You draw a Second Wind and recover {healed} Endurance."
         if spec.kind == "stance":
             self._stance_soak = max(self._stance_soak, spec.soak)
             self._stance_rounds = max(self._stance_rounds, spec.duration)
-            self._perk_cooldowns[perk_id] = spec.cooldown
+            self._node_cooldowns[node_id] = spec.cooldown
             self._timers_touched_this_turn = True
             return f"You set your feet — {spec.name}! (+{spec.soak} Soak)"
         return None
 
-    def is_primed(self, perk_id: str) -> bool:
-        """Whether ``perk_id``'s next-hit active is primed and waiting to spend."""
-        return perk_id in self._primed
+    def is_primed(self, node_id: str) -> bool:
+        """Whether ``node_id``'s next-hit active is primed and waiting to spend."""
+        return node_id in self._primed
 
     def consume_primed(self) -> int:
         """Called when a melee hit lands: pay out and clear every primed next-hit
@@ -224,21 +259,22 @@ class Hero(BaseComponent):
         if not self._primed:
             return 0
         bonus = 0
-        for pid in list(self._primed):
-            perk = perks.ALL_PERKS.get(pid)
-            if perk is None or perk.active is None:
+        for nid in list(self._primed):
+            node = perks.ALL_NODES.get(nid)
+            if node is None or node.active is None:
                 continue
-            bonus += roll_damage(perk.active.magnitude)
-            self._perk_cooldowns[pid] = perk.active.cooldown
+            bonus += roll_damage(node.active.magnitude)
+            self._node_cooldowns[nid] = node.active.cooldown
         self._primed.clear()
         self._timers_touched_this_turn = True  # this turn set the Wrath cooldown
         return bonus
 
     def on_kill(self) -> None:
         """Called from ``Fighter.die`` when this hero slays a foe. Reaver's
-        Instinct (Swift Wrath capstone) readies every active deed at once."""
-        if any(p.readies_actives_on_kill for p in self.owned_perks()):
-            self._perk_cooldowns.clear()
+        Instinct (the Long Watch's Reaver capstone) readies every active deed at
+        once."""
+        if any(n.readies_actives_on_kill for n in self.owned_nodes()):
+            self._node_cooldowns.clear()
 
     @property
     def stance_soak(self) -> int:
@@ -247,8 +283,8 @@ class Hero(BaseComponent):
 
     @property
     def ambush_advantage(self) -> bool:
-        """Whether any owned Hidden Path perk grants advantage on a first strike."""
-        return any(p.ambush_advantage for p in self.owned_perks())
+        """Whether any owned Hidden Path node grants advantage on a first strike."""
+        return any(n.ambush_advantage for n in self.owned_nodes())
 
     def end_player_turn(self) -> None:
         """Close out one player turn (called once per action by input_handlers).
@@ -259,14 +295,14 @@ class Hero(BaseComponent):
         if self._timers_touched_this_turn:
             self._timers_touched_this_turn = False
             return
-        self.tick_perks()
+        self.tick_nodes()
 
-    def tick_perks(self) -> None:
-        """Advance per-perk runtime by one player turn: cooldowns count down and
+    def tick_nodes(self) -> None:
+        """Advance per-node runtime by one player turn: cooldowns count down and
         any stance decays. The raw per-turn step used by ``end_player_turn``."""
-        for pid, remaining in list(self._perk_cooldowns.items()):
+        for nid, remaining in list(self._node_cooldowns.items()):
             if remaining > 0:
-                self._perk_cooldowns[pid] = remaining - 1
+                self._node_cooldowns[nid] = remaining - 1
         if self._stance_rounds > 0:
             self._stance_rounds -= 1
             if self._stance_rounds <= 0:
@@ -336,9 +372,10 @@ class Hero(BaseComponent):
             self._level_to_hit += 1
             gains.append("+1 to-hit")
 
-        if self.level % character.PERK_POINT_EVERY == 0:
-            self.perk_points += 1
-            gains.append("+1 perk point")
+        # Level 1 is pathless; from level 2 every level grants a Path point.
+        if self.level >= character.PATH_POINT_FROM_LEVEL:
+            self.path_points += 1
+            gains.append("+1 Path point")
 
         self._announce(gains)
 

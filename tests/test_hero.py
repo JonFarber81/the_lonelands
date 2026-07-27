@@ -37,11 +37,12 @@ def test_modifier_defaults_to_zero_for_unknown_attribute():
 
 # --- The level curve --------------------------------------------------------
 
-def test_a_fresh_hero_starts_at_level_one_with_no_perk_points():
+def test_a_fresh_hero_starts_at_level_one_pathless_with_no_points():
     hero = _hero_actor().hero
     assert hero.level == 1
     assert hero.xp == 0
-    assert hero.perk_points == 0
+    assert hero.path is None          # level 1 is pathless (ADR 0011)
+    assert hero.path_points == 0
 
 
 def test_enough_xp_levels_up_and_grants_hp():
@@ -80,12 +81,16 @@ def test_periodic_to_hit_lands_on_schedule():
     assert actor.fighter.attack_bonus == base_attack + 1
 
 
-def test_perk_points_accrue_every_few_levels():
+def test_path_points_accrue_one_per_level_from_level_two():
     hero = _hero_actor().hero
-    for _ in range(character.PERK_POINT_EVERY):
-        hero.add_xp(character.xp_to_next(hero.level))
-    assert hero.level == character.PERK_POINT_EVERY + 1
-    assert hero.perk_points == 1
+    # Level 1 is pathless: no point yet.
+    assert hero.path_points == 0
+    hero.add_xp(character.xp_to_next(1))          # -> level 2: first point
+    assert hero.level == 2
+    assert hero.path_points == 1
+    hero.add_xp(character.xp_to_next(2))          # -> level 3: one more
+    assert hero.level == 3
+    assert hero.path_points == 2
 
 
 def test_add_xp_ignores_nonpositive():

@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-from lonelands import config, display, input_handlers as ih, setup_game  # noqa: E402
+from lonelands import config, display, input_handlers as ih, perks, setup_game  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -22,7 +22,11 @@ def env():
     console = display.Console(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
     engine = setup_game.new_game()
     engine.update_fov()
-    engine.player.hero.perk_points += 2  # so Paths/Character show buyable perks
+    # Level up to earn Path points and commit a Path so the Paths/Character
+    # screens have a committed tree with buyable nodes to render.
+    engine.player.hero.path_points += 4
+    engine.player.hero.commit_path("long_watch")
+    engine.player.hero.buy_node(perks.ALL_NODES["lw_endure"])
     return disp, console, engine
 
 
@@ -67,7 +71,7 @@ def test_popup_dialog_shop_render(env):
 
 
 def test_paths_screen_fits_panel(env):
-    # The densest screen: all five Paths + their perks must fit (regression on
+    # The densest screen: all three Paths + their nodes must fit (regression on
     # the adaptive prop_fit sizing). Rendering without exception exercises the
     # truncation and fit paths.
     _, _, engine = env

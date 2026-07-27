@@ -28,6 +28,13 @@ if TYPE_CHECKING:
 # One slot, beside the package so it travels with an install.
 SAVE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "savegame.sav")
 
+# The on-disk save-format version. Bumped whenever the hero/engine object graph
+# changes shape in a way that older pickles can't be loaded into. **There is no
+# migration** — a mismatch is rejected and the player starts a fresh run. Bumped
+# to 2 for the Path model (committed Path, ranked nodes, points-in-Path — ADR
+# 0011), which reshaped the Hero.
+SAVE_VERSION = 2
+
 
 def has_save() -> bool:
     return os.path.exists(SAVE_PATH)
@@ -41,14 +48,23 @@ def delete_save() -> None:
 
 
 def save_game(engine: "Engine", path: str = SAVE_PATH) -> None:
-    data = lzma.compress(pickle.dumps(engine))
+    payload = {"version": SAVE_VERSION, "engine": engine}
+    data = lzma.compress(pickle.dumps(payload))
     with open(path, "wb") as f:
         f.write(data)
 
 
 def load_game(path: str = SAVE_PATH) -> "Engine":
     with open(path, "rb") as f:
-        engine = pickle.loads(lzma.decompress(f.read()))
+        payload = pickle.loads(lzma.decompress(f.read()))
+    # Reject anything not written by this exact format version (no migration):
+    # a bare Engine (the pre-versioning format) or an older version both fail.
+    if not isinstance(payload, dict) or payload.get("version") != SAVE_VERSION:
+        raise ValueError(
+            "This save was made by an older version of the game and cannot be "
+            "loaded. Start a new journey."
+        )
+    engine = payload["engine"]
     _rehydrate(engine)
     return engine
 
