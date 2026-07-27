@@ -1,114 +1,114 @@
 """Pure layout & navigation for a Path's tree (ADR 0011, Phase 2 — #74).
 
-The Phase 2 tree screen draws a Path as a shared **trunk** at the top forking
-into two **branches** with tiers descending. That geometry — where each node
-sits and which node an arrow-key press moves to — is engine-free and lives here
-so it can be reasoned about and unit-tested without a display; the handler in
-:mod:`lonelands.input_handlers` turns a :class:`Placement`'s ``col``/``row`` into
-pixels and paints the boxes.
+The tree screen draws a Path as a **tidy tree**: the shared root at the top
+centre, forking down into its branches, a child always directly below (or
+elbowed cleanly off) its parent. That geometry — where each node sits and which
+node an arrow-key press moves to — is engine-free and lives here so it can be
+reasoned about and unit-tested without a display; the handler in
+:mod:`lonelands.input_handlers` turns a :class:`Placement`'s ``x``/``row`` into
+pixels, draws orthogonal prereq connectors, and paints the cards.
 
 Layout
 ------
-Three columns — ``LEFT`` / ``CENTER`` / ``RIGHT``. Trunk nodes stack down the
-centre from the top; the two branches (in the Path's declared branch order) fork
-**left** and **right**, their nodes stacking below the trunk in declaration
-order (which already runs shallow tiers first). A cell is one node; nothing
-overlaps.
+Geometry follows the **parent graph**, not the ``branch`` tag: a node's children
+(the nodes naming it as ``parent``) fork below it, each child subtree owning an
+equal horizontal *slot* of its parent's slot and centred within it. So a lone
+chain (Trapper) drops straight down one column, while a node with two children
+(Ambush → Shadowstep + Poisoned Blade) splits its slot in half and forks. ``x``
+is a fraction in ``[0, 1]`` across the tree's width; ``row`` is depth-packed
+(child row = parent row + 1), so lanes are as short as the data allows and
+capstones simply float at the bottom of their own branch.
+
+A Path may declare **more than one trunk root** (a parentless node — e.g. the
+Long Watch's Steady Endurance *and* Second Wind). The childless roots stack as a
+centre **stem** above the single branching root, which then forks below them.
 
 Navigation
 ----------
-:func:`move` walks between placed nodes: vertical steps run within a column;
-stepping down off the last trunk node drops into the topmost branch node, and
-stepping up off a branch's top climbs back to the bottom of the trunk. Horizontal
-steps cross to the neighbouring column at the nearest depth. Moves off an edge
-stay put (the caller sees the same node id back).
+:func:`move` walks between placed nodes spatially: a step picks the nearest node
+in the direction of travel — vertical steps prefer the nearest row then the
+nearest column, horizontal steps the nearest column at the nearest row. Moves off
+an edge stay put (the caller sees the same node id back).
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from lonelands import perks
 
-# Column lanes, left to right.
-LEFT = 0
-CENTER = 1
-RIGHT = 2
+# Horizontal centre of the tree, in the ``x`` fraction space below.
+CENTER = 0.5
 
 
 @dataclass(frozen=True)
 class Placement:
     node: "perks.Node"
-    col: int
-    row: int
+    x: float   # centre of the node's card, a fraction in [0, 1] across the tree
+    row: int   # depth from the top (0 = the root row)
 
 
 def layout(path: "perks.Path") -> List[Placement]:
-    """Place every node of ``path``: trunk down the centre, the two branches
-    forking left and right below it. Returns placements in a stable order —
-    trunk first, then the left branch, then the right — each tagged with its
-    ``col`` and ``row``."""
-    trunk = [n for n in path.nodes if n.branch == "trunk"]
-    branch_ids = list(path.branches.keys())
-    left_id = branch_ids[0] if branch_ids else None
-    right_id = branch_ids[1] if len(branch_ids) > 1 else None
+    """Place every node of ``path`` as a tidy tree: the branching root centred at
+    the top, its children forking below into equal horizontal slots, depth-packed.
+    Extra childless trunk roots stack as a centre stem above it. Returns placements
+    in a stable order (stem roots first, then the subtree pre-order), each tagged
+    with its ``x`` fraction and ``row``."""
+    children: Dict[Optional[str], List["perks.Node"]] = defaultdict(list)
+    for node in path.nodes:
+        children[node.parent].append(node)
+
+    roots = children[None]
+    branching = [r for r in roots if children[r.id]]
+    childless = [r for r in roots if not children[r.id]]
+    # The stem: childless trunk roots on top, the (single) branching root last so
+    # its fork drops into open space below the stem rather than through a sibling.
+    stem = childless + branching
 
     placements: List[Placement] = []
-    for row, node in enumerate(trunk):
-        placements.append(Placement(node, CENTER, row))
-
-    fork_row = len(trunk)
-    for col, bid in ((LEFT, left_id), (RIGHT, right_id)):
-        if bid is None:
-            continue
-        row = fork_row
-        for node in path.nodes:
-            if node.branch == bid:
-                placements.append(Placement(node, col, row))
-                row += 1
+    row = 0
+    for r in stem[:-1]:
+        placements.append(Placement(r, CENTER, row))
+        row += 1
+    if stem:
+        _place_subtree(stem[-1], 0.0, 1.0, row, children, placements)
     return placements
+
+
+def _place_subtree(node: "perks.Node", x0: float, x1: float, row: int,
+                   children: Dict[Optional[str], List["perks.Node"]],
+                   out: List[Placement]) -> None:
+    """Centre ``node`` in the slot ``[x0, x1]`` at ``row``, then split the slot
+    evenly among its children and recurse one row down."""
+    out.append(Placement(node, (x0 + x1) / 2, row))
+    kids = children[node.id]
+    if not kids:
+        return
+    span = (x1 - x0) / len(kids)
+    for i, kid in enumerate(kids):
+        _place_subtree(kid, x0 + i * span, x0 + (i + 1) * span, row + 1, children, out)
 
 
 def move(placements: List[Placement], current_id: str, dx: int, dy: int) -> str:
     """The node id reached by stepping ``(dx, dy)`` from ``current_id`` across the
-    placed tree. Off-edge steps return ``current_id`` unchanged."""
+    placed tree, picking the nearest node in the direction of travel. Off-edge
+    steps return ``current_id`` unchanged."""
     at = {p.node.id: p for p in placements}
     cur = at.get(current_id)
     if cur is None:
         return current_id
 
     if dy != 0:
-        nxt = _vertical(placements, cur, dy)
+        ahead = [p for p in placements if (p.row - cur.row) * dy > 0]
     elif dx != 0:
-        nxt = _horizontal(placements, cur, dx)
+        ahead = [p for p in placements if (p.x - cur.x) * dx > 0]
     else:
-        nxt = None
-    return nxt.node.id if nxt is not None else current_id
-
-
-def _vertical(placements: List[Placement], cur: Placement, dy: int) -> Optional[Placement]:
-    same_col = [p for p in placements if p.col == cur.col]
-    # Nearest node in the same column in the direction of travel.
-    ahead = [p for p in same_col if (p.row - cur.row) * dy > 0]
-    if ahead:
-        return min(ahead, key=lambda p: abs(p.row - cur.row))
-    # Leaving the column: trunk <-> branches.
-    branches = [p for p in placements if p.col in (LEFT, RIGHT)]
-    trunk = [p for p in placements if p.col == CENTER]
-    if dy > 0 and cur.col == CENTER and branches:
-        # Off the bottom of the trunk into the topmost branch node.
-        return min(branches, key=lambda p: (p.row, p.col))
-    if dy < 0 and cur.col in (LEFT, RIGHT) and trunk:
-        # Off the top of a branch back to the bottom of the trunk.
-        return max(trunk, key=lambda p: p.row)
-    return None
-
-
-def _horizontal(placements: List[Placement], cur: Placement, dx: int) -> Optional[Placement]:
-    # The nearest node anywhere to the side of travel, preferring the same depth
-    # (so a branch step crosses straight to its opposite number, skipping the
-    # empty trunk lane below the fork).
-    side = [p for p in placements if (p.col - cur.col) * dx > 0]
-    if not side:
-        return None
-    return min(side, key=lambda p: (abs(p.row - cur.row), abs(p.col - cur.col)))
+        return current_id
+    if not ahead:
+        return current_id
+    # Both axes rank by nearest row, then nearest column — so a vertical step lands
+    # on the closest node straight below/above, and a horizontal step crosses to
+    # the nearest node on (or nearest to) the same row.
+    nxt = min(ahead, key=lambda p: (abs(p.row - cur.row), abs(p.x - cur.x)))
+    return nxt.node.id

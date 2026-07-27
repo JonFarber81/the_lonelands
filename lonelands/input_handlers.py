@@ -5,7 +5,8 @@ import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 
-from lonelands import actions, character, color, events, overworld_map, path_tree, perks
+from lonelands import (actions, character, color, events, overworld_map,
+                       path_icons, path_tree, perks)
 from lonelands.events import CENTER, KeySym, Modifier
 from lonelands.tile_glyphs import graphic_char
 from lonelands.render_functions import endurance_color
@@ -212,6 +213,10 @@ class MainGameEventHandler(EventHandler):
             self.engine.message_log.add_message(
                 f"{node.active.name} is not ready{why}.", color.impossible)
             return None
+        # Targeted deeds (Shadowstep/Snare/Pinning) open a targeting handler;
+        # untargeted ones fire at once.
+        if node.active.targeted:
+            return begin_active(self.engine, node)
         return ActivateAbilityAction(self.engine.player, node.id)
 
     def _begin_ranged(self) -> Optional[BaseEventHandler]:
@@ -347,6 +352,161 @@ class RangedTargetHandler(LockOnHandler):
         if self.engine.player.fighter is None or self.engine.player.fighter._dead:
             return GameOverEventHandler(self.engine)
         return MainGameEventHandler(self.engine)
+
+
+class PinningTargetHandler(LockOnHandler):
+    """Lock-on that pins the chosen foe in place (the Hidden Path's Pinning).
+    Only foes within the deed's reach are offered."""
+
+    prompt = "Pin a foe"
+
+    def __init__(self, engine: "Engine", node_id: str):
+        self.node_id = node_id
+        super().__init__(engine)
+
+    def _gather_targets(self) -> List["Actor"]:
+        reach = perks.ALL_NODES[self.node_id].active.reach
+        p = self.engine.player
+        return [f for f in super()._gather_targets()
+                if actions.king_dist(p.x, p.y, f.x, f.y) <= reach]
+
+    def on_target(self, target: "Actor") -> Optional[BaseEventHandler]:
+        self.handle_action(
+            actions.PinningAction(self.engine.player, self.node_id, target))
+        return MainGameEventHandler(self.engine)
+
+
+# ===========================================================================
+# Tile targeting — pick an empty tile within reach (Shadowstep / Snare, #77)
+# ===========================================================================
+class TileTargetHandler(EventHandler):
+    """Move a reticle over open tiles within a deed's reach and confirm one. The
+    cursor starts on the nearest legal tile; arrow keys nudge it, Enter fires,
+    Esc cancels. Subclasses say what confirming does (:meth:`on_confirm`)."""
+
+    prompt = "Choose a tile"
+
+    def __init__(self, engine: "Engine", node_id: str):
+        super().__init__(engine)
+        self.node_id = node_id
+        self.reach = perks.ALL_NODES[node_id].active.reach
+        self.cx, self.cy = self._initial_tile()
+        engine.event_handler = self
+
+    def _initial_tile(self) -> Tuple[int, int]:
+        p = self.engine.player
+        gm = self.engine.game_map
+        best, best_d = (p.x, p.y), 999
+        for x in range(max(0, p.x - self.reach), min(gm.width, p.x + self.reach + 1)):
+            for y in range(max(0, p.y - self.reach), min(gm.height, p.y + self.reach + 1)):
+                if self._valid(x, y):
+                    d = actions.king_dist(p.x, p.y, x, y)
+                    if d < best_d:
+                        best, best_d = (x, y), d
+        return best
+
+    def _valid(self, x: int, y: int) -> bool:
+        # The same legal-tile predicate the resolving Action enforces, plus the
+        # subclass's extra rule (e.g. no snare already laid there).
+        p = self.engine.player
+        return (actions.tile_targetable(self.engine.game_map, p.x, p.y, x, y,
+                                        self.reach)
+                and self._extra_valid(x, y))
+
+    def _extra_valid(self, x: int, y: int) -> bool:
+        return True
+
+    def any_valid(self) -> bool:
+        return self._valid(self.cx, self.cy)
+
+    def on_render(self, console) -> None:
+        self.engine.render(console)
+        ok = self._valid(self.cx, self.cy)
+        console.rgb["bg"][self.cx, self.cy] = (
+            color.needs_target if ok else color.impossible)
+        console.rgb["fg"][self.cx, self.cy] = color.near_black
+        console.draw_rect(x=0, y=0, width=MAP_WIDTH, height=1, ch=ord(" "),
+                          bg=(0x24, 0x1E, 0x12))
+        console.print(x=1, y=0, string=f" {self.prompt} "[: MAP_WIDTH - 2],
+                      fg=color.needs_target)
+        console.print(x=1, y=MAP_HEIGHT - 1,
+                      string="[arrows] aim  [Enter] confirm  [Esc] cancel",
+                      fg=color.gray)
+
+    def on_render_native(self, display) -> None:
+        self.engine.render_hud(display, banner=False)
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        key = event.sym
+        if key == KeySym.ESCAPE:
+            return self._cancel()
+        if key in MOVE_KEYS:
+            dx, dy = MOVE_KEYS[key]
+            gm = self.engine.game_map
+            nx, ny = self.cx + dx, self.cy + dy
+            if gm.in_bounds(nx, ny):
+                self.cx, self.cy = nx, ny
+            return None
+        if key in CONFIRM_KEYS:
+            if not self._valid(self.cx, self.cy):
+                self.engine.message_log.add_message(
+                    "You cannot target that tile.", color.impossible)
+                return None
+            return self.on_confirm()
+        return None
+
+    def _cancel(self) -> BaseEventHandler:
+        self.engine.event_handler = MainGameEventHandler(self.engine)
+        return self.engine.event_handler
+
+    def on_confirm(self) -> Optional[BaseEventHandler]:
+        raise NotImplementedError()
+
+
+class ShadowstepTargetHandler(TileTargetHandler):
+    prompt = "Shadowstep — pick a tile"
+
+    def on_confirm(self) -> Optional[BaseEventHandler]:
+        self.handle_action(actions.ShadowstepAction(
+            self.engine.player, self.node_id, (self.cx, self.cy)))
+        return MainGameEventHandler(self.engine)
+
+
+class SnareTargetHandler(TileTargetHandler):
+    prompt = "Snare — pick a tile"
+
+    def _extra_valid(self, x: int, y: int) -> bool:
+        return (x, y) not in self.engine.game_map.traps
+
+    def on_confirm(self) -> Optional[BaseEventHandler]:
+        self.handle_action(actions.SnareAction(
+            self.engine.player, self.node_id, (self.cx, self.cy)))
+        return MainGameEventHandler(self.engine)
+
+
+def begin_active(engine: "Engine", node) -> Optional[BaseEventHandler]:
+    """Route a ready owned active: untargeted deeds return None (the caller fires
+    the ActivateAbilityAction), while dash/place-tile/root deeds open a targeting
+    handler. If nothing can be targeted, report why and hand back a fresh main
+    handler (as ``_begin_ranged`` does) so ``engine.event_handler`` isn't left
+    on the discarded targeting handler."""
+    spec = node.active
+    if spec.kind == "root":
+        h = PinningTargetHandler(engine, node.id)
+        if h.target is None:
+            engine.message_log.add_message(
+                "There is no foe in reach to pin.", color.impossible)
+            return MainGameEventHandler(engine)
+        return h
+    if spec.kind in ("dash", "place_tile"):
+        h = (ShadowstepTargetHandler if spec.kind == "dash"
+             else SnareTargetHandler)(engine, node.id)
+        if not h.any_valid():
+            engine.message_log.add_message(
+                "There is no open ground within reach.", color.impossible)
+            return MainGameEventHandler(engine)
+        return h
+    return None  # an untargeted active — caller fires ActivateAbilityAction
 
 
 class GameOverEventHandler(EventHandler):
@@ -714,22 +874,55 @@ class PathsHandler(AskUserHandler):
         placements = path_tree.layout(path)
         rows = max((p.row for p in placements), default=0) + 1
         rowstep = max(1, (bottom - top) // max(1, rows))
-        box_w = int(inner.w / 3 * 0.84)
-        box_h = min(rowstep - ui.pad // 3, int(ui.line * 3.2))
+
+        # Card width is uniform. Cards are centred at ``inner.x + box_w/2 +
+        # x*usable`` where ``usable = inner.w - box_w``, so the pixel gap between
+        # the tightest same-row pair (Ambush's forked children, ``dx`` apart) is
+        # ``dx*usable``. Size the card to leave a fixed gutter inside that:
+        #   box_w = dx*(inner.w - box_w) - gutter  ->  solve for box_w.
+        by_row: dict = {}
+        for p in placements:
+            by_row.setdefault(p.row, []).append(p.x)
+        dx = min((b - a for xs in by_row.values() if len(xs) > 1
+                  for a, b in zip(sorted(xs), sorted(xs)[1:])), default=1.0)
+        gutter = ui.pad
+        box_w = int((dx * inner.w - gutter) / (1 + dx))
+        box_w = max(int(inner.w * 0.14), min(box_w, int(inner.w * 0.32)))
+        box_h = min(rowstep - ui.pad // 3, int(ui.line * 4.6))
+        usable = inner.w - box_w
 
         def centre(p):
-            cx = inner.x + int((p.col + 0.5) * inner.w / 3)
+            cx = inner.x + box_w // 2 + int(p.x * usable)
             cy = top + p.row * rowstep + rowstep // 2
             return cx, cy
 
         at = {p.node.id: p for p in placements}
-        # Prereq edges first, so the boxes sit on top of them.
+        # Orthogonal prereq connectors, drawn first so cards sit on top. Each
+        # parent drops a stem to a bus between the rows, the bus spans its
+        # children, and a riser drops to each child — no diagonals, ever.
+        kids_of: dict = {}
         for p in placements:
-            parent = at.get(p.node.parent)
-            if parent is not None:
-                x1, y1 = centre(parent)
-                x2, y2 = centre(p)
-                ui.connector(x1, y1 + box_h // 2, x2, y2 - box_h // 2, color.rule)
+            if p.node.parent in at:
+                kids_of.setdefault(p.node.parent, []).append(p)
+        for pid, kids in kids_of.items():
+            px, py = centre(at[pid])
+            child_xy = [centre(k) for k in kids]
+            child_top = min(cy for _, cy in child_xy) - box_h // 2
+            bus_y = (py + box_h // 2 + child_top) // 2
+            ui.connector(px, py + box_h // 2, px, bus_y, color.rule)
+            xs = [px] + [cx for cx, _ in child_xy]
+            ui.connector(min(xs), bus_y, max(xs), bus_y, color.rule)
+            for cx, _ in child_xy:
+                ui.connector(cx, bus_y, cx, child_top, color.rule)
+        # A trunk stem joins consecutive parentless roots (the Long Watch's two
+        # trunk deeds), so the shared stem reads as one column, not floating boxes.
+        stem = sorted((p for p in placements if p.node.parent is None),
+                      key=lambda p: p.row)
+        for a, b in zip(stem, stem[1:]):
+            if b.row - a.row == 1 and abs(a.x - b.x) < 1e-6:
+                ax, ay = centre(a)
+                bx, by = centre(b)
+                ui.connector(ax, ay + box_h // 2, bx, by - box_h // 2, color.rule)
         for p in placements:
             cx, cy = centre(p)
             self._draw_node(ui, p.node, cx - box_w // 2, cy - box_h // 2,
@@ -744,27 +937,28 @@ class PathsHandler(AskUserHandler):
         if maxed:
             # A one-and-done active reads "learned"; a maxed passive shows its cap.
             badge = "learned" if node.active else f"rank {rank}/{node.max_rank}"
-            border, name_col, badge_col = (
-                color.ranger_green, color.ranger_green, color.ranger_green)
+            border, name_col, badge_col, icon_col = (
+                color.ranger_green,) * 4
         elif buyable:
             # Affordable now — the gold "highlighted" state, whether a first buy
             # or a rank-up on a node already owned.
             verb = "rank up" if rank > 0 else "buy"
-            border, name_col, badge, badge_col = (
+            border, name_col, badge, badge_col, icon_col = (
                 color.section_head, color.tier_value,
-                f"{verb} · {node.cost}pp", color.hope_gain)
+                f"{verb} · {node.cost}pp", color.hope_gain, color.section_head)
         elif rank > 0:
             # Owned but not rankable right now (capped elsewhere or unaffordable).
-            border, name_col, badge, badge_col = (
+            border, name_col, badge, badge_col, icon_col = (
                 color.ranger_green, color.ranger_green,
-                f"rank {rank}/{node.max_rank}", color.ranger_green)
+                f"rank {rank}/{node.max_rank}", color.ranger_green, color.ranger_green)
         elif self._chooser():
-            border, name_col, badge, badge_col = (
-                color.frame_bright, color.tier_body, f"{node.cost}pp", color.tier_label)
+            border, name_col, badge, badge_col, icon_col = (
+                color.frame_bright, color.tier_body, f"{node.cost}pp",
+                color.tier_label, color.frame_bright)
         else:
-            border, name_col, badge, badge_col = (
+            border, name_col, badge, badge_col, icon_col = (
                 color.rule, color.tier_label, self._locked_reason(hero, node),
-                color.tier_label)
+                color.tier_label, color.tier_label)
 
         fill = (*color.bar_accent, 120) if selected else None
         if selected:
@@ -772,17 +966,28 @@ class PathsHandler(AskUserHandler):
         ui.outline(x, y, w, h, border, fill=fill, width=3 if selected else 2)
 
         cx = x + w // 2
-        name = ("* " if node.capstone else "") + node.name
-        ui.text_center(cx, y + ui.pad // 4, ui.truncate(name, w - ui.pad, ui.small),
-                       name_col, ui.small)
+        # Text rows first (name / optional pips / badge), then the icon crowns the
+        # card in whatever height is left — so a rankable node's three rows always
+        # fit inside the border rather than the icon crowding the badge out.
+        rows = [(("* " if node.capstone else "") + node.name, name_col)]
         pips = self._pips(node, rank).strip()
-        yy = y + ui.pad // 4 + ui.small.get_linesize()
         if pips:
-            ui.text_center(cx, yy, pips,
-                           color.ranger_green if rank else color.tier_label, ui.small)
-            yy += ui.small.get_linesize()
-        ui.text_center(cx, y + h - ui.small.get_linesize() - ui.pad // 5,
-                       ui.truncate(badge, w - ui.pad, ui.small), badge_col, ui.small)
+            rows.append((pips, color.ranger_green if rank else color.tier_label))
+        rows.append((badge, badge_col))
+        ls = ui.small.get_linesize()
+        top_pad = ui.pad // 4
+        text_h = len(rows) * ls
+        icon_size = int(max(ui.line, min(w * 0.36, h * 0.42,
+                                         h - text_h - top_pad - ui.pad // 5)))
+        path_icons.draw(ui.screen, node, cx, y + top_pad + icon_size // 2,
+                        icon_size, icon_col)
+        text_top = y + top_pad + icon_size
+        text_bot = y + h - ui.pad // 5
+        gap = max(0, (text_bot - text_top - text_h) // max(1, len(rows) - 1))
+        ry = text_top
+        for text, col in rows:
+            ui.text_center(cx, ry, ui.truncate(text, w - ui.pad, ui.small), col, ui.small)
+            ry += ls + gap
 
     # --- input ------------------------------------------------------------
     def _buy_cursor(self) -> None:
@@ -929,6 +1134,10 @@ class AbilitiesHandler(AskUserHandler):
             self.engine.message_log.add_message(
                 f"{pk.active.name} is not ready.", color.impossible)
             return None
+        if pk.active.targeted:
+            # Hand off to the targeting handler (which falls back to the main
+            # handler itself when there is nothing in reach to target).
+            return begin_active(self.engine, pk)
         self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
         return MainGameEventHandler(self.engine)
 

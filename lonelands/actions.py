@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from lonelands import color
@@ -11,6 +12,43 @@ from lonelands.exceptions import Impossible
 if TYPE_CHECKING:
     from lonelands.engine import Engine
     from lonelands.entity import Actor, Entity, Item
+    from lonelands.game_map import GameMap
+
+
+# --- Hidden Path traps (Snare) --------------------------------------------
+@dataclass
+class Trap:
+    """A snare laid on a tile by the Hidden Path's Trapper. The first foe to
+    step onto it springs it: it takes ``damage`` (a dice spec, rolled at trigger)
+    and is rooted for ``root_rounds`` rounds, then the trap is spent. The hero
+    who set it (and other townsfolk) pass over harmlessly."""
+
+    x: int
+    y: int
+    damage: str = "1d6"
+    root_rounds: int = 2
+    char: str = "^"
+
+
+def _spring_trap(engine: "Engine", actor: "Actor") -> None:
+    """Spring a Snare under ``actor`` if one is laid on its tile: roll the trap's
+    damage, root the foe, spend the trap, and log the catch when it's in sight."""
+    trap = engine.game_map.traps.pop((actor.x, actor.y), None)
+    if trap is None:
+        return
+    tf = actor.fighter
+    if tf is None or tf.dead:
+        return
+    dmg = max(1, roll_damage(trap.damage))
+    tf.take_damage(dmg)
+    if tf.dead:
+        return  # the snare finished it; die() already logged the slaying
+    tf.apply_root(trap.root_rounds)
+    if engine.game_map.visible[actor.x, actor.y]:
+        engine.message_log.add_message(
+            f"The {actor.name} springs a hidden snare — {dmg} endurance, and held fast!",
+            color.enemy_atk,
+        )
 
 
 # --- Shared combat helpers ------------------------------------------------
@@ -19,17 +57,21 @@ def resolve_ambush(hero, target_fighter) -> Tuple[bool, int, int]:
     strike against an unmarked foe (one still at full Endurance) lands with
     advantage and bonus damage. Returns ``(is_ambush, advantage, bonus_damage)``.
 
-    Advantage is +1 only when a node actually grants it, so a bonus-damage-only
-    ambush still counts as an ambush (its flavour and damage) without a second
-    die. A foe (no Hero) never ambushes."""
+    A **primed** ambush (Shadowstep/Vanish) fires against *any* foe, fresh or
+    not — the blink or vanish has set up the unseen strike. Advantage is +1 only
+    when a node grants it (or an ambush is primed), so a bonus-damage-only ambush
+    still counts as an ambush (its flavour and damage) without a second die. A
+    foe (no Hero) never ambushes."""
     if hero is None:
         return False, 0, 0
     bonus = hero.node_bonus("ambush_bonus_damage")
-    is_ambush = bool(
+    primed = getattr(hero, "ambush_primed", False)
+    fresh_opener = (
         target_fighter.endurance >= target_fighter.max_endurance
         and (hero.ambush_advantage or bonus)
     )
-    advantage = 1 if (is_ambush and hero.ambush_advantage) else 0
+    is_ambush = bool(primed or fresh_opener)
+    advantage = 1 if (is_ambush and (hero.ambush_advantage or primed)) else 0
     return is_ambush, advantage, bonus
 
 
@@ -86,6 +128,11 @@ class ActionWithDirection(Action):
 
 class MovementAction(ActionWithDirection):
     def perform(self) -> None:
+        f = getattr(self.entity, "fighter", None)
+        if f is not None and f.is_rooted:
+            # Held fast by a Snare/Pinning — the foe strains but cannot move (the
+            # Engine ticks the root down each round). The AI catches this and waits.
+            raise Impossible("Held fast, it cannot move.")
         dest_x, dest_y = self.dest_xy
         gm = self.engine.game_map
         if not gm.in_bounds(dest_x, dest_y):
@@ -104,6 +151,10 @@ class MovementAction(ActionWithDirection):
         if gm.get_blocking_entity_at(dest_x, dest_y):
             raise Impossible("Something bars the way.")
         self.entity.move(self.dx, self.dy)
+        # A foe that steps onto a laid Snare springs it (the hero and townsfolk
+        # pass over harmlessly).
+        if self.entity is not self.engine.player and is_hostile_actor(self.entity):
+            _spring_trap(self.engine, self.entity)
         # Only the player overhears ambient barks, and only on their own steps
         # (foes move through this same action). Throttled inside barks.emit.
         if self.entity is self.engine.player:
@@ -171,6 +222,7 @@ class MeleeAction(ActionWithDirection):
             dmg += ambush_dmg
         if hero is not None:
             dmg += hero.consume_primed()  # Swift Wrath: spend a primed next-hit
+            hero.consume_ambush_prime()   # Shadowstep/Vanish: the unseen strike lands
         result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
         tf.take_damage(dmg)
 
@@ -182,8 +234,9 @@ class MeleeAction(ActionWithDirection):
             atk_color,
         )
 
-        # Crits (and heavy foes) leave the target bleeding.
-        stacks = (CRIT_BLEED if crit else 0) + af.bleed_on_hit
+        # Crits (and heavy foes) leave the target bleeding; the Hidden Path's
+        # Poisoned Blade envenoms every hero blow the same way.
+        stacks = (CRIT_BLEED if crit else 0) + af.bleed_on_hit + af.melee_bleed
         if stacks and tf.endurance > 0:
             tf.apply_bleed(stacks)
             engine.message_log.add_message(
@@ -219,9 +272,16 @@ def _spend_one_arrow(stack: "Item", actor: "Actor") -> None:
         actor.inventory.remove(stack)
 
 
+def king_dist(x1: int, y1: int, x2: int, y2: int) -> int:
+    """Grid (king-move / Chebyshev) distance between two tiles — the metric a
+    Shot's range falloff and every Path deed's reach use. Shared with the
+    targeting handlers in :mod:`lonelands.input_handlers`."""
+    return max(abs(x1 - x2), abs(y1 - y2))
+
+
 def _chebyshev(a: "Actor", b: "Actor") -> int:
-    """Grid (king-move) distance — the metric a Shot's range falloff uses."""
-    return max(abs(a.x - b.x), abs(a.y - b.y))
+    """King-move distance between two actors."""
+    return king_dist(a.x, a.y, b.x, b.y)
 
 
 def is_hostile_actor(actor: "Actor") -> bool:
@@ -325,6 +385,8 @@ class RangedAttackAction(Action):
             dmg += roll_damage(af.ranged_damage)  # the Critical carries a second roll
         if ambush:
             dmg += ambush_dmg
+        if hero is not None:
+            hero.consume_ambush_prime()   # Shadowstep/Vanish: the unseen shot lands
         result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
         tf.take_damage(dmg)
 
@@ -440,6 +502,119 @@ class ActivateAbilityAction(Action):
         if message is None:
             raise Impossible("That ability is not ready.")
         self.engine.message_log.add_message(message, color.hope_gain)
+
+
+# --- Hidden Path targeted deeds (ADR 0011, #77) ---------------------------
+# Shadowstep/Disengage (blink to a tile), Snare (lay a trap), Pinning (root a
+# foe). Each is picked with a targeting handler, resolves here with map access,
+# and charges its cooldown via the Hero. All count as the player's turn.
+def _ready_active(entity: "Actor", node_id: str):
+    """The hero and the ready active node for ``node_id`` — raising Impossible if
+    the deed isn't the hero's, isn't owned, or isn't off cooldown."""
+    hero = getattr(entity, "hero", None)
+    if hero is None or not hero.ability_ready(node_id):
+        raise Impossible("That deed is not ready.")
+    from lonelands import perks
+    node = perks.ALL_NODES.get(node_id)
+    if node is None or node.active is None:
+        raise Impossible("That deed is not ready.")
+    return hero, node
+
+
+def tile_targetable(gm: "GameMap", ox: int, oy: int, x: int, y: int,
+                    reach: int) -> bool:
+    """Whether ``(x, y)`` is a legal blink/snare destination from ``(ox, oy)``:
+    on the map, a *different* tile within ``reach``, in sight, and open (walkable
+    and unblocked). The single predicate the targeting reticle
+    (:class:`input_handlers.TileTargetHandler`) and the resolving Actions share,
+    so what counts as a legal tile can't drift between them."""
+    return (
+        gm.in_bounds(x, y)
+        and (x, y) != (ox, oy)
+        and king_dist(ox, oy, x, y) <= reach
+        and bool(gm.visible[x, y])
+        and bool(gm.tiles["walkable"][x, y])
+        and gm.get_blocking_entity_at(x, y) is None
+    )
+
+
+def _tile_reachable(engine: "Engine", actor: "Actor", x: int, y: int,
+                    reach: int) -> None:
+    """Backstop guard for a resolving blink/snare (the targeting reticle already
+    pre-validates with the same :func:`tile_targetable` predicate). Raises
+    Impossible when the tile isn't a legal target."""
+    if not tile_targetable(engine.game_map, actor.x, actor.y, x, y, reach):
+        raise Impossible("You cannot reach that spot.")
+
+
+class _TileTargetedAction(Action):
+    """A deed aimed at a chosen tile (Shadowstep/Disengage's blink, Snare's laid
+    trap): it carries the firing node and the target tile."""
+
+    def __init__(self, entity: "Actor", node_id: str, target_xy: Tuple[int, int]):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target_xy = target_xy
+
+
+class ShadowstepAction(_TileTargetedAction):
+    """Blink to a chosen empty tile within reach (Shadowstep/Disengage). If the
+    deed primes an ambush, the next strike lands unseen. A full turn."""
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        spec = node.active
+        x, y = self.target_xy
+        _tile_reachable(self.engine, self.entity, x, y, spec.reach)
+        self.entity.x, self.entity.y = x, y
+        if spec.primes_ambush:
+            hero.prime_ambush()
+        hero.begin_cooldown(self.node_id)
+        tail = " — you ready an unseen strike." if spec.primes_ambush else "."
+        self.engine.message_log.add_message(
+            f"You slip through the shadows{tail}", color.hope_gain)
+
+
+class SnareAction(_TileTargetedAction):
+    """Lay a Snare trap on a chosen tile within reach (a full turn)."""
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        spec = node.active
+        x, y = self.target_xy
+        _tile_reachable(self.engine, self.entity, x, y, spec.reach)
+        if (x, y) in self.engine.game_map.traps:
+            raise Impossible("A snare is already laid there.")
+        self.engine.game_map.traps[(x, y)] = Trap(
+            x, y, damage=spec.magnitude, root_rounds=spec.duration)
+        hero.begin_cooldown(self.node_id)
+        self.engine.message_log.add_message(
+            "You set a hidden snare among the shadows.", color.hope_gain)
+
+
+class PinningAction(Action):
+    """Root a chosen visible foe within reach for the deed's duration (a full
+    turn)."""
+
+    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target = target
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        spec = node.active
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to pin.")
+        if _chebyshev(target, self.entity) > spec.reach:
+            raise Impossible("That foe is too far to pin.")
+        if not self.engine.game_map.visible[target.x, target.y]:
+            raise Impossible("You cannot see that foe.")
+        target.fighter.apply_root(spec.duration)
+        hero.begin_cooldown(self.node_id)
+        self.engine.message_log.add_message(
+            f"You pin the {target.name} where it stands!", color.hope_gain)
 
 
 class TakeInteractAction(Action):

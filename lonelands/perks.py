@@ -77,14 +77,42 @@ class ActiveSpec:
                         Cooldown starts at once.
       * ``"stance"`` — grant ``soak`` extra Soak for ``duration`` rounds.
                         Cooldown starts at once.
+      * ``"dash"``   — the Hidden Path blink (Shadowstep/Disengage): step to a
+                        chosen empty tile within ``reach``. If ``primes_ambush``
+                        the next strike lands as an ambush (see the melee flow).
+                        Needs a **target tile** — resolved in an Action.
+      * ``"place_tile"`` — lay a Snare trap on a chosen tile within ``reach``:
+                        the first foe to step onto it is hurt (``magnitude`` dice)
+                        and rooted for ``duration`` rounds. Needs a target tile.
+      * ``"root"``   — pin a chosen visible foe within ``reach`` in place for
+                        ``duration`` rounds (Pinning). Needs a **target foe**.
+      * ``"vanish"`` — the Trapper capstone (untargeted): slip into shadow —
+                        your next strike is a guaranteed ambush and every deed is
+                        readied. Scoped to the existing ambush trigger (ADR 0011;
+                        a true unseen state waits on a stealth/visibility layer).
+
+    The ``dash``/``place_tile``/``root`` kinds are **targeted** — the hotbar
+    routes them through a targeting handler, and an Action (with map access)
+    resolves the effect and starts the cooldown, rather than :meth:`Hero.
+    activate_ability`, which handles only the untargeted kinds.
     """
 
     name: str
     kind: str
     cooldown: int = 0           # player-turns before it may be used again
-    magnitude: str = "0"        # dice spec for wrath/heal effects
+    magnitude: str = "0"        # dice spec for wrath/heal/trap effects
     soak: int = 0               # stance: extra Soak while active
-    duration: int = 0           # stance: rounds the effect persists
+    duration: int = 0           # stance/root/trap: rounds the effect persists
+    reach: int = 0              # dash/place_tile/root: target range in tiles
+    primes_ambush: bool = False  # dash: the blink sets up an ambush strike
+
+    # The targeted kinds resolve in an Action against a chosen tile/foe.
+    TARGETED = frozenset({"dash", "place_tile", "root"})
+
+    @property
+    def targeted(self) -> bool:
+        """Whether firing this active needs a target tile/foe picked first."""
+        return self.kind in self.TARGETED
 
 
 @dataclass(frozen=True)
@@ -120,6 +148,9 @@ class Node:
     # --- ambush (read by MeleeAction on a first strike) -------------------
     ambush_advantage: bool = False   # advantage on the opening blow vs a fresh foe
     ambush_bonus_damage: int = 0     # flat extra damage on that opening blow
+
+    # --- Poisoned Blade (read by MeleeAction on any landed hit) -----------
+    melee_bleed: int = 0             # Bleed stacks the hero's melee hits inflict
 
     # --- low-Endurance rally trigger (read live by Fighter) ---------------
     # Unused by the ported placeholder trees; kept for a future Kindled Heart.
@@ -220,27 +251,56 @@ PATHS: List[Path] = [
     Path(
         "hidden_path", "The Hidden Path",
         "Stealth and ambush — the Ranger who strikes from the shadows.",
-        {"ambush": "Ambush", "shadow": "Shadow"},
+        {"assassin": "Assassin", "trapper": "Trapper"},
         [
-            # --- trunk ---
+            # --- trunk: stealth, the ambush opener, and light footwork --------
             Node("hp_stealth", "hidden_path", "trunk", "Silent Tread",
                  "You move as a shadow among shadows. +2 Stealth per rank. (stealth)",
                  cost=1, tier=1, max_rank=3, stealth_bonus=2),
-            # --- Ambush branch ---
-            Node("hp_ambush", "hidden_path", "ambush", "Ambush",
+            Node("hp_ambush", "hidden_path", "trunk", "Ambush",
                  "Your opening blow against an unmarked foe strikes with "
                  "advantage and +2 damage.",
-                 cost=1, tier=2, parent="hp_stealth",
+                 cost=1, tier=1, parent="hp_stealth",
                  ambush_advantage=True, ambush_bonus_damage=2),
-            Node("hp_deathblow", "hidden_path", "ambush", "Deathblow",
+            Node("hp_evasion", "hidden_path", "trunk", "Evasion",
+                 "Quick feet and quicker senses. +1 Defence per rank.",
+                 cost=1, tier=1, max_rank=2, parent="hp_stealth", defence_bonus=1),
+            # --- Assassin branch (burst melee) --------------------------------
+            Node("hp_shadowstep", "hidden_path", "assassin", "Shadowstep",
+                 "Blink through the shadows to a nearby tile; your next strike "
+                 "lands as an ambush.",
+                 cost=1, tier=2, parent="hp_ambush",
+                 active=ActiveSpec("Shadowstep", "dash", cooldown=5, reach=4,
+                                   primes_ambush=True)),
+            Node("hp_poison", "hidden_path", "assassin", "Poisoned Blade",
+                 "Your blade drips venom: every melee hit leaves the foe bleeding.",
+                 cost=1, tier=2, parent="hp_ambush", melee_bleed=1),
+            Node("hp_deathblow", "hidden_path", "assassin", "Deathblow",
                  "The unseen strike is a killing one. Advantage and +6 damage on "
                  "an ambush.",
-                 cost=2, tier=3, capstone=True, parent="hp_ambush",
+                 cost=2, tier=3, capstone=True, parent="hp_poison",
                  ambush_advantage=True, ambush_bonus_damage=6),
-            # --- Shadow branch ---
-            Node("hp_shadow", "hidden_path", "shadow", "Shadowstep",
-                 "You slip aside as the blow falls. +1 Defence.",
-                 cost=1, tier=2, parent="hp_stealth", defence_bonus=1),
+            # --- Trapper branch (control) -------------------------------------
+            Node("hp_snare", "hidden_path", "trapper", "Snare",
+                 "Lay a hidden snare on a nearby tile; the first foe onto it is "
+                 "hurt (1d6) and rooted for 2 rounds.",
+                 cost=1, tier=2, parent="hp_evasion",
+                 active=ActiveSpec("Snare", "place_tile", cooldown=5, reach=3,
+                                   magnitude="1d6", duration=2)),
+            Node("hp_pinning", "hidden_path", "trapper", "Pinning",
+                 "Pin a foe in sight where it stands — it cannot move for a round.",
+                 cost=1, tier=3, parent="hp_snare",
+                 active=ActiveSpec("Pinning", "root", cooldown=5, reach=6,
+                                   duration=1)),
+            Node("hp_disengage", "hidden_path", "trapper", "Disengage",
+                 "Slip out of reach: blink to a nearby tile, breaking away clean.",
+                 cost=1, tier=3, parent="hp_pinning",
+                 active=ActiveSpec("Disengage", "dash", cooldown=4, reach=3)),
+            Node("hp_vanish", "hidden_path", "trapper", "Vanish",
+                 "Melt into shadow: your next strike is a sure ambush and every "
+                 "deed is readied anew.",
+                 cost=2, tier=3, capstone=True, parent="hp_disengage",
+                 active=ActiveSpec("Vanish", "vanish", cooldown=8)),
         ],
     ),
 ]
