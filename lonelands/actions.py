@@ -12,6 +12,7 @@ from lonelands.exceptions import Impossible
 if TYPE_CHECKING:
     from lonelands.engine import Engine
     from lonelands.entity import Actor, Entity, Item
+    from lonelands.game_map import GameMap
 
 
 # --- Hidden Path traps (Snare) --------------------------------------------
@@ -271,9 +272,16 @@ def _spend_one_arrow(stack: "Item", actor: "Actor") -> None:
         actor.inventory.remove(stack)
 
 
+def king_dist(x1: int, y1: int, x2: int, y2: int) -> int:
+    """Grid (king-move / Chebyshev) distance between two tiles — the metric a
+    Shot's range falloff and every Path deed's reach use. Shared with the
+    targeting handlers in :mod:`lonelands.input_handlers`."""
+    return max(abs(x1 - x2), abs(y1 - y2))
+
+
 def _chebyshev(a: "Actor", b: "Actor") -> int:
-    """Grid (king-move) distance — the metric a Shot's range falloff uses."""
-    return max(abs(a.x - b.x), abs(a.y - b.y))
+    """King-move distance between two actors."""
+    return king_dist(a.x, a.y, b.x, b.y)
 
 
 def is_hostile_actor(actor: "Actor") -> bool:
@@ -513,31 +521,45 @@ def _ready_active(entity: "Actor", node_id: str):
     return hero, node
 
 
+def tile_targetable(gm: "GameMap", ox: int, oy: int, x: int, y: int,
+                    reach: int) -> bool:
+    """Whether ``(x, y)`` is a legal blink/snare destination from ``(ox, oy)``:
+    on the map, a *different* tile within ``reach``, in sight, and open (walkable
+    and unblocked). The single predicate the targeting reticle
+    (:class:`input_handlers.TileTargetHandler`) and the resolving Actions share,
+    so what counts as a legal tile can't drift between them."""
+    return (
+        gm.in_bounds(x, y)
+        and (x, y) != (ox, oy)
+        and king_dist(ox, oy, x, y) <= reach
+        and bool(gm.visible[x, y])
+        and bool(gm.tiles["walkable"][x, y])
+        and gm.get_blocking_entity_at(x, y) is None
+    )
+
+
 def _tile_reachable(engine: "Engine", actor: "Actor", x: int, y: int,
                     reach: int) -> None:
-    """Guard a chosen blink/snare tile: on the map, in sight, open (walkable and
-    unblocked), and within ``reach`` tiles. Raises Impossible on any failure."""
-    gm = engine.game_map
-    if not gm.in_bounds(x, y):
-        raise Impossible("That lies beyond the map.")
-    if max(abs(x - actor.x), abs(y - actor.y)) > reach:
-        raise Impossible("That is too far.")
-    if not gm.visible[x, y]:
-        raise Impossible("You cannot see that spot.")
-    if not gm.tiles["walkable"][x, y]:
-        raise Impossible("The way there is blocked.")
-    if gm.get_blocking_entity_at(x, y) is not None or (x, y) == (actor.x, actor.y):
-        raise Impossible("There is no room there.")
+    """Backstop guard for a resolving blink/snare (the targeting reticle already
+    pre-validates with the same :func:`tile_targetable` predicate). Raises
+    Impossible when the tile isn't a legal target."""
+    if not tile_targetable(engine.game_map, actor.x, actor.y, x, y, reach):
+        raise Impossible("You cannot reach that spot.")
 
 
-class ShadowstepAction(Action):
-    """Blink to a chosen empty tile within reach (Shadowstep/Disengage). If the
-    deed primes an ambush, the next strike lands unseen. A full turn."""
+class _TileTargetedAction(Action):
+    """A deed aimed at a chosen tile (Shadowstep/Disengage's blink, Snare's laid
+    trap): it carries the firing node and the target tile."""
 
     def __init__(self, entity: "Actor", node_id: str, target_xy: Tuple[int, int]):
         super().__init__(entity)
         self.node_id = node_id
         self.target_xy = target_xy
+
+
+class ShadowstepAction(_TileTargetedAction):
+    """Blink to a chosen empty tile within reach (Shadowstep/Disengage). If the
+    deed primes an ambush, the next strike lands unseen. A full turn."""
 
     def perform(self) -> None:
         hero, node = _ready_active(self.entity, self.node_id)
@@ -553,13 +575,8 @@ class ShadowstepAction(Action):
             f"You slip through the shadows{tail}", color.hope_gain)
 
 
-class SnareAction(Action):
+class SnareAction(_TileTargetedAction):
     """Lay a Snare trap on a chosen tile within reach (a full turn)."""
-
-    def __init__(self, entity: "Actor", node_id: str, target_xy: Tuple[int, int]):
-        super().__init__(entity)
-        self.node_id = node_id
-        self.target_xy = target_xy
 
     def perform(self) -> None:
         hero, node = _ready_active(self.entity, self.node_id)
@@ -590,8 +607,7 @@ class PinningAction(Action):
         target = self.target
         if target is None or target.fighter is None or target.fighter.dead:
             raise Impossible("There is nothing there to pin.")
-        if max(abs(target.x - self.entity.x),
-               abs(target.y - self.entity.y)) > spec.reach:
+        if _chebyshev(target, self.entity) > spec.reach:
             raise Impossible("That foe is too far to pin.")
         if not self.engine.game_map.visible[target.x, target.y]:
             raise Impossible("You cannot see that foe.")

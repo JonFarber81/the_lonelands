@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional
 
 import numpy as np
 
-from lonelands import tile_types
+from lonelands import color, tile_types
 from lonelands.entity import Actor, Item
 from lonelands.tile_glyphs import graphic_char
 
@@ -82,7 +82,7 @@ class GameMap:
         for (tx, ty), trap in self.traps.items():
             if self.visible[tx, ty]:
                 console.print(x=tx, y=ty, string=graphic_char(trap.char),
-                              fg=(0x86, 0x6A, 0x3C))
+                              fg=color.snare_c)
 
         entities_sorted = sorted(
             self.entities, key=lambda x: x.render_order.value

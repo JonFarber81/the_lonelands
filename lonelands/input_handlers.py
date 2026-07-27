@@ -367,7 +367,7 @@ class PinningTargetHandler(LockOnHandler):
         reach = perks.ALL_NODES[self.node_id].active.reach
         p = self.engine.player
         return [f for f in super()._gather_targets()
-                if max(abs(f.x - p.x), abs(f.y - p.y)) <= reach]
+                if actions.king_dist(p.x, p.y, f.x, f.y) <= reach]
 
     def on_target(self, target: "Actor") -> Optional[BaseEventHandler]:
         self.handle_action(
@@ -399,23 +399,18 @@ class TileTargetHandler(EventHandler):
         for x in range(max(0, p.x - self.reach), min(gm.width, p.x + self.reach + 1)):
             for y in range(max(0, p.y - self.reach), min(gm.height, p.y + self.reach + 1)):
                 if self._valid(x, y):
-                    d = max(abs(x - p.x), abs(y - p.y))
+                    d = actions.king_dist(p.x, p.y, x, y)
                     if d < best_d:
                         best, best_d = (x, y), d
         return best
 
     def _valid(self, x: int, y: int) -> bool:
-        gm = self.engine.game_map
+        # The same legal-tile predicate the resolving Action enforces, plus the
+        # subclass's extra rule (e.g. no snare already laid there).
         p = self.engine.player
-        return (
-            gm.in_bounds(x, y)
-            and (x, y) != (p.x, p.y)
-            and max(abs(x - p.x), abs(y - p.y)) <= self.reach
-            and gm.visible[x, y]
-            and bool(gm.tiles["walkable"][x, y])
-            and gm.get_blocking_entity_at(x, y) is None
-            and self._extra_valid(x, y)
-        )
+        return (actions.tile_targetable(self.engine.game_map, p.x, p.y, x, y,
+                                        self.reach)
+                and self._extra_valid(x, y))
 
     def _extra_valid(self, x: int, y: int) -> bool:
         return True
@@ -489,28 +484,28 @@ class SnareTargetHandler(TileTargetHandler):
 
 
 def begin_active(engine: "Engine", node) -> Optional[BaseEventHandler]:
-    """Route a ready owned active: untargeted deeds fire at once (as an Action),
-    while dash/place-tile/root deeds open a targeting handler. Returns the next
-    handler, or None to stay put after reporting there is nothing to target."""
+    """Route a ready owned active: untargeted deeds return None (the caller fires
+    the ActivateAbilityAction), while dash/place-tile/root deeds open a targeting
+    handler. If nothing can be targeted, report why and hand back a fresh main
+    handler (as ``_begin_ranged`` does) so ``engine.event_handler`` isn't left
+    on the discarded targeting handler."""
     spec = node.active
-    if spec.kind == "dash":
-        h = ShadowstepTargetHandler(engine, node.id)
-    elif spec.kind == "place_tile":
-        h = SnareTargetHandler(engine, node.id)
-    elif spec.kind == "root":
+    if spec.kind == "root":
         h = PinningTargetHandler(engine, node.id)
         if h.target is None:
             engine.message_log.add_message(
                 "There is no foe in reach to pin.", color.impossible)
-            return None
+            return MainGameEventHandler(engine)
         return h
-    else:
-        return None  # an untargeted active — caller fires ActivateAbilityAction
-    if not h.any_valid():
-        engine.message_log.add_message(
-            "There is no open ground within reach.", color.impossible)
-        return None
-    return h
+    if spec.kind in ("dash", "place_tile"):
+        h = (ShadowstepTargetHandler if spec.kind == "dash"
+             else SnareTargetHandler)(engine, node.id)
+        if not h.any_valid():
+            engine.message_log.add_message(
+                "There is no open ground within reach.", color.impossible)
+            return MainGameEventHandler(engine)
+        return h
+    return None  # an untargeted active — caller fires ActivateAbilityAction
 
 
 class GameOverEventHandler(EventHandler):
@@ -1094,8 +1089,9 @@ class AbilitiesHandler(AskUserHandler):
                 f"{pk.active.name} is not ready.", color.impossible)
             return None
         if pk.active.targeted:
-            # Hand off to the targeting handler (or stay if nothing to target).
-            return begin_active(self.engine, pk) or MainGameEventHandler(self.engine)
+            # Hand off to the targeting handler (which falls back to the main
+            # handler itself when there is nothing in reach to target).
+            return begin_active(self.engine, pk)
         self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
         return MainGameEventHandler(self.engine)
 

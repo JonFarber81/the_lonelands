@@ -212,9 +212,15 @@ hero rolls; a foe never rolls (the dice tray stays the player's).
   adds bonus damage.
 - **Soak** — damage subtracted by **heavy armour** when a hit lands (mitigation,
   as opposed to Defence's avoidance).
-- **Bleed** — a status a Critical or a heavy foe may inflict: damage over time /
-  a penalty. *(The only remnant of the old Wound mechanic; there is no second
-  death track.)*
+- **Bleed** — a status a Critical, a heavy foe, or the Hidden Path's **Poisoned
+  Blade** may inflict: damage over time / a penalty. *(The only remnant of the
+  old Wound mechanic; there is no second death track.)*
+- **Root** — a status that holds a fighter **fast in place** for a round or two:
+  it cannot move (though it may still strike an adjacent foe), ticked down once
+  per round. Inflicted by the Hidden Path's **Snare** and **Pinning**.
+- **Snare** — a **trap tile** laid by the Hidden Path's Trapper. The first foe
+  to step onto it is hurt and **Rooted**, then the snare is spent; the Ranger and
+  townsfolk pass over it harmlessly. *(The **place-tile** primitive — ADR 0011.)*
 - **Endurance** — the single HP pool; grows with level. **0 Endurance = death.**
 - **Difficulty** — a per-run tier chosen on the title screen (**Merciful**,
   **Wayfarer**, **Grim**) that scales **only the damage the player takes** —
