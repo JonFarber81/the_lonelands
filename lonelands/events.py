@@ -134,6 +134,11 @@ class BaseEventHandler:
     def on_render(self, console) -> None:
         raise NotImplementedError()
 
+    def on_render_native(self, display) -> None:
+        """Draw a pixel-space overlay (native menus, Phase 3) on top of the
+        blitted console grid. Default: nothing — grid-only handlers (the map
+        view, HUD, targeting) don't override it."""
+
     def ev_keydown(self, event: KeyDown) -> "Optional[BaseEventHandler]":
         return None
 

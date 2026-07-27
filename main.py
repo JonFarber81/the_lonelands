@@ -26,8 +26,10 @@ def main() -> None:
     try:
         while True:
             console.clear()
-            handler.on_render(console)
-            disp.present(console)
+            handler.on_render(console)          # the cell-grid layer (map + HUD)
+            disp.blit_console(console)
+            handler.on_render_native(disp)       # native pixel overlay (menus)
+            disp.flip()
 
             try:
                 # Block for the next event (no busy loop), then drain the rest

@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pygame
 
-from lonelands import config, events, fonts
+from lonelands import config, events, fonts, ui
 
 # An RGB colour as the renderers pass it (a bare 3-tuple, matching tcod).
 Color = Tuple[int, int, int]
@@ -164,6 +164,8 @@ class Display:
         )
         pygame.display.set_caption(title)
         self._load_glyphs()
+        # The pixel-space UI layer for native menus (Phase 3); rebuilt on resize.
+        self.ui = ui.UI(self.screen, self.win_w, self.win_h)
 
     # --- glyph cache -------------------------------------------------------
     def _load_glyphs(self) -> None:
@@ -190,7 +192,16 @@ class Display:
 
     # --- painting ----------------------------------------------------------
     def present(self, console: Console) -> None:
-        """Blit ``console`` to the window and flip.
+        """Blit the console grid and flip. (Native overlays, when a handler has
+        them, go between :meth:`blit_console` and :meth:`flip` — see main.py.)"""
+        self.blit_console(console)
+        self.flip()
+
+    def flip(self) -> None:
+        pygame.display.flip()
+
+    def blit_console(self, console: Console) -> None:
+        """Blit ``console``'s cell grid to the window (no flip).
 
         Backgrounds go down in a single upscaled-array blit, and glyphs in one
         batched ``blits`` call over only the inked cells — so there is no
@@ -219,7 +230,6 @@ class Display:
                 sequence.append((glyph, (ox + gx * cw, oy + gy * ch)))
         if sequence:
             screen.blits(sequence, doreturn=False)
-        pygame.display.flip()
 
     # --- window / resize ---------------------------------------------------
     def resize(self, win_w: int, win_h: int) -> None:
@@ -237,6 +247,9 @@ class Display:
         if (cw, ch) != (self.cell_w, self.cell_h):
             self.cell_w, self.cell_h = cw, ch
             self._load_glyphs()
+        # The new screen surface and window size need a fresh UI (fonts scale
+        # to the window height).
+        self.ui = ui.UI(self.screen, win_w, win_h)
 
     # --- event translation -------------------------------------------------
     def translate(self, event: "pygame.event.Event") -> "Optional[object]":
