@@ -85,6 +85,7 @@ class Fighter(BaseComponent):
         self.corpse_char = corpse_char
         self.loot = loot
         self.bleed = 0  # remaining Bleed stacks
+        self.rooted = 0  # rounds held fast in place (Hidden Path Snare/Pinning)
         self._dead = False
 
     # --- Vitals -----------------------------------------------------------
@@ -210,6 +211,13 @@ class Fighter(BaseComponent):
         return hero.node_bonus("melee_damage_bonus") if hero is not None else 0
 
     @property
+    def melee_bleed(self) -> int:
+        """Bleed stacks this fighter's melee hits inflict from Path nodes (the
+        Hidden Path's Poisoned Blade). 0 for a foe or a hero without the node."""
+        hero = getattr(self.parent, "hero", None)
+        return hero.node_bonus("melee_bleed") if hero is not None else 0
+
+    @property
     def damage(self) -> Union[int, str]:
         weapon = self._weapon
         return weapon.damage if weapon is not None else self.base_damage
@@ -297,6 +305,23 @@ class Fighter(BaseComponent):
         before = self._endurance
         self.take_damage(BLEED_DAMAGE)
         return before - self._endurance
+
+    @property
+    def is_rooted(self) -> bool:
+        """Held fast in place (a Hidden Path Snare/Pinning) — cannot move this
+        round, though it may still strike an adjacent foe."""
+        return self.rooted > 0 and not self._dead
+
+    def apply_root(self, rounds: int) -> None:
+        """Root this fighter for ``rounds`` rounds (taking the longer of any
+        current and the new hold). Ticked down once per round by the Engine."""
+        if rounds > 0:
+            self.rooted = max(self.rooted, rounds)
+
+    def tick_root(self) -> None:
+        """Wear a root down by one round (called once per round by the Engine)."""
+        if self.rooted > 0:
+            self.rooted -= 1
 
     def die(self) -> None:
         engine = self.engine

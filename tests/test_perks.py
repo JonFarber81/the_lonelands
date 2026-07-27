@@ -202,15 +202,15 @@ def test_a_deeper_tier_is_gated_by_points_spent_in_the_path():
 
 def test_a_node_needs_its_parent_owned_even_past_the_tier_gate():
     hero = _hero_actor(path_points=9, path="hidden_path").hero
-    # Spend two points elsewhere in the trunk so the tier-2 gate is satisfied.
-    _buy_all(hero, "hp_stealth", "hp_stealth")
-    assert hero.points_in_path == 2
-    deathblow = N["hp_deathblow"]                       # capstone, parent hp_ambush
-    # Even with points to spare, the capstone stays locked until its parent chain
-    # is owned.
-    assert not hero.can_buy(deathblow)
-    assert hero.buy_node(N["hp_ambush"])               # the parent
+    # Spend points in the trunk so the tier gate is satisfied with points to spare.
+    _buy_all(hero, "hp_stealth", "hp_ambush", "hp_evasion")
     assert hero.points_in_path == 3
+    deathblow = N["hp_deathblow"]                       # capstone, parent hp_poison
+    # Even with points to spare, the capstone stays locked until its parent chain
+    # (Ambush -> Poisoned Blade) is owned.
+    assert not hero.can_buy(deathblow)
+    assert hero.buy_node(N["hp_poison"])               # the capstone's parent
+    assert hero.has_node("hp_poison")
 
 
 # ---------------------------------------------------------------------------

@@ -58,7 +58,16 @@ class Engine:
                     entity.ai.perform()
                 except Impossible:
                     pass
+        self._tick_roots()
         self.turn_count += 1
+
+    def _tick_roots(self) -> None:
+        """Wear down every fighter's root by one round, after the foes have had
+        their (possibly held-fast) turn. A Snare/Pinning set on the player's turn
+        thus holds a foe through exactly the enemy phase it was cast against."""
+        for actor in list(self.game_map.actors):
+            if actor.fighter is not None:
+                actor.fighter.tick_root()
 
     def _tick_bleed(self) -> None:
         """Bleed damage-over-time on every living fighter, once per round."""

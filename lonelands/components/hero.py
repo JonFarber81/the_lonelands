@@ -65,6 +65,7 @@ class Hero(BaseComponent):
         # for a number of rounds.
         self._node_cooldowns: Dict[str, int] = {}
         self._primed = set()                # ids of primed next-hit actives (Wrath)
+        self._ambush_primed = False         # next strike is a sure ambush (Shadowstep/Vanish)
         self._stance_soak = 0               # extra Soak from an active stance
         self._stance_rounds = 0             # rounds the stance persists
         # True on a turn spent *setting* a timer (activating a deed or landing a
@@ -255,7 +256,46 @@ class Hero(BaseComponent):
             self._node_cooldowns[node_id] = spec.cooldown
             self._timers_touched_this_turn = True
             return f"You set your feet — {spec.name}! (+{spec.soak} Soak)"
+        if spec.kind == "vanish":
+            # The Trapper capstone: slip into shadow, ready every deed, and set up
+            # a sure ambush. Clear cooldowns first, then start Vanish's own.
+            self._node_cooldowns.clear()
+            self._primed.clear()
+            self.prime_ambush()
+            self._node_cooldowns[node_id] = spec.cooldown
+            self._timers_touched_this_turn = True
+            return "You melt into shadow — your next strike will fall unseen."
         return None
+
+    # --- Targeted actives (dash/place-tile/root) resolve in an Action ------
+    # They need the map and a chosen tile/foe, so the Action does the work and
+    # calls back here to charge the cooldown, rather than activate_ability.
+    def begin_cooldown(self, node_id: str) -> None:
+        """Put a (just-resolved targeted) active on cooldown for its authored
+        span, and mark this turn as one that *set* a timer so it isn't also
+        ticked down by ``end_player_turn``."""
+        node = perks.ALL_NODES.get(node_id)
+        if node is None or node.active is None:
+            return
+        self._node_cooldowns[node_id] = node.active.cooldown
+        self._timers_touched_this_turn = True
+
+    # --- Ambush prime (Shadowstep / Vanish) -------------------------------
+    def prime_ambush(self) -> None:
+        """Set up a **sure** ambush: the next landed strike counts as an ambush
+        (advantage + the hero's ambush damage) even against a wary foe. Spent by
+        the melee/ranged flow when that strike lands (``consume_ambush_prime``)."""
+        self._ambush_primed = True
+        self._timers_touched_this_turn = True
+
+    @property
+    def ambush_primed(self) -> bool:
+        """Whether a sure-ambush strike is set up and waiting (Shadowstep/Vanish)."""
+        return self._ambush_primed
+
+    def consume_ambush_prime(self) -> None:
+        """Clear a primed sure-ambush (called when the primed strike lands)."""
+        self._ambush_primed = False
 
     def is_primed(self, node_id: str) -> bool:
         """Whether ``node_id``'s next-hit active is primed and waiting to spend."""

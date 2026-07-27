@@ -41,6 +41,12 @@ class GameMap:
         return self
 
     @property
+    def traps(self) -> dict:
+        """Hidden Path Snares laid on this map, keyed by ``(x, y)`` (ADR 0011,
+        #77). Lazily created so a map unpickled from an older save still has one."""
+        return self.__dict__.setdefault("_traps", {})
+
+    @property
     def actors(self) -> Iterator[Actor]:
         yield from (
             e for e in self.entities if isinstance(e, Actor)
@@ -71,6 +77,12 @@ class GameMap:
             choicelist=[self.tiles["light"], self.tiles["dark"]],
             default=tile_types.SHROUD,
         )
+
+        # Laid Snares sit under the entities: a small glyph on a visible tile.
+        for (tx, ty), trap in self.traps.items():
+            if self.visible[tx, ty]:
+                console.print(x=tx, y=ty, string=graphic_char(trap.char),
+                              fg=(0x86, 0x6A, 0x3C))
 
         entities_sorted = sorted(
             self.entities, key=lambda x: x.render_order.value
