@@ -120,6 +120,29 @@ class QuestLog:
                 q.advance()
                 self._progress_msg(q, engine)
 
+    def notify_talk(self, name: str, engine, node: Optional[str] = None,
+                    opening: bool = False) -> None:
+        """Advance quests fulfilled by speaking with a named NPC — the talk
+        mirror of notify_kill/notify_event. The dialog handler calls this as a
+        conversation opens (opening=True) and again as each node is entered,
+        passing the node id.
+
+        A quest may pin a specific `talk_node`, advancing whenever that node is
+        reached. With none pinned it is a plain "go speak to Y", which counts
+        once — at the hello — so that walking a tree of nodes in one visit does
+        not rack up progress the player never earned."""
+        for q in self.quests.values():
+            if q.state != QuestState.ACTIVE or getattr(q, "talk_target", None) != name:
+                continue
+            want_node = getattr(q, "talk_node", None)
+            if want_node is None:
+                if not opening:
+                    continue
+            elif want_node != node:
+                continue
+            q.advance()
+            self._progress_msg(q, engine)
+
     @staticmethod
     def _held_item(engine, item_name: str):
         """The player's pack slot matching item_name, or None."""
