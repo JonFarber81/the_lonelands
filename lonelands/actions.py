@@ -220,6 +220,7 @@ class MeleeAction(ActionWithDirection):
             dmg += roll_damage(af.damage)  # the Critical carries a second roll
         if ambush:
             dmg += ambush_dmg
+        dmg += marked_bonus(hero, tf)     # Hunter's Mark: bonus vs the marked foe
         if hero is not None:
             dmg += hero.consume_primed()  # Swift Wrath: spend a primed next-hit
             hero.consume_ambush_prime()   # Shadowstep/Vanish: the unseen strike lands
@@ -284,6 +285,11 @@ def _chebyshev(a: "Actor", b: "Actor") -> int:
     return king_dist(a.x, a.y, b.x, b.y)
 
 
+def _sign(n: int) -> int:
+    """-1, 0, or +1 — the per-axis step toward a target (a line/backstep ray)."""
+    return (n > 0) - (n < 0)
+
+
 def is_hostile_actor(actor: "Actor") -> bool:
     """Whether ``actor`` is a living combatant (not a townsfolk) — a valid mark
     for a Shot and the thing whose adjacency spoils one. Callers exclude the
@@ -317,11 +323,91 @@ def _maybe_recover_arrow(engine: "Engine", target: "Actor") -> None:
     content.arrows.spawn(engine.game_map, target.x, target.y)
 
 
+def marked_bonus(hero, target_fighter) -> int:
+    """Extra damage the hero deals to a **marked** foe (Far Shot's Hunter's Mark
+    — a status + context-conditional). 0 for a foe attacker or an unmarked
+    target."""
+    if hero is None or target_fighter is None or not target_fighter.marked:
+        return 0
+    return hero.node_bonus("marked_damage")
+
+
+def resolve_shot(engine: "Engine", attacker: "Actor", target: "Actor", *,
+                 aimed: bool = False, recover: bool = True) -> None:
+    """Resolve a single arrow from ``attacker`` at ``target`` (ADR 0006): the d20
+    core keyed off Wits, range falloff, point-blank Disadvantage, the shared
+    Hidden Path ambush, and Hunter's Mark bonus damage. **Spends no ammo** — the
+    caller does (one draw may loose several arrows, e.g. Multishot). ``aimed``
+    forces a guaranteed Critical (Aimed Shot). No Bleed on a Shot Critical."""
+    af = attacker.fighter
+    tf = target.fighter
+    if tf is None or tf.dead:
+        return
+    is_player = attacker is engine.player
+    hero = getattr(attacker, "hero", None)
+
+    distance = _chebyshev(attacker, target)
+    penalty = af.range_penalty(distance)
+
+    # A foe at your elbow spoils the aim (Disadvantage); the Hidden Path ambush
+    # lends Advantage. The two fold into one signed advantage int.
+    adjacent = _has_adjacent_hostile(engine, attacker)
+    ambush, ambush_adv, ambush_dmg = resolve_ambush(hero, tf)
+    advantage = ambush_adv + (-1 if adjacent else 0)
+
+    # A Shot Crits only on a natural 20 — Swift Wrath's widened melee crit does
+    # not carry to the bow (ADR 0006), so the default crit_face stands.
+    result = roll_check(af.ranged_attack_bonus - penalty, tf.defence,
+                        advantage=advantage)
+    engine.note_roll(result, attacker)  # feeds the dice tray (player rolls only)
+
+    who = "You" if is_player else f"The {attacker.name}"
+    target_name = "you" if target is engine.player else f"the {target.name}"
+    loose = "loose" if is_player else "looses"
+    strike = "strike" if is_player else "strikes"
+    atk_color = color.player_atk if is_player else color.enemy_atk
+
+    # Aimed Shot lands a sure Critical even on a wayward roll (never on a Fumble).
+    crit = result.is_crit or (aimed and not result.is_fumble)
+    if not (crit or result.is_success):
+        verb = "the arrow flies wild" if result.is_fumble else "miss"
+        engine.message_log.add_message(
+            f"{who} {loose} an arrow at {target_name} but {verb}.",
+            color.sauron_eye if result.is_fumble else color.gray,
+        )
+        if recover:
+            _maybe_recover_arrow(engine, target)
+        return
+
+    # A hit: roll the bow's damage (+ any Far Shot damage perk), subtract Soak —
+    # a clean shot always stings for 1+. No pierce, no Bleed.
+    raw = roll_damage(af.ranged_damage) + af.ranged_damage_bonus
+    dmg = max(1, raw - tf.soak)
+    if crit:
+        dmg += roll_damage(af.ranged_damage)  # the Critical carries a second roll
+    if ambush:
+        dmg += ambush_dmg
+    dmg += marked_bonus(hero, tf)             # Hunter's Mark: bonus vs the marked foe
+    if hero is not None:
+        hero.consume_ambush_prime()   # Shadowstep/Vanish: the unseen shot lands
+    result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
+    tf.take_damage(dmg)
+
+    flavour = " A CRITICAL shot!" if crit else ""
+    if ambush:
+        flavour += " From the shadows!"
+    engine.message_log.add_message(
+        f"{who} {loose} an arrow and {strike} {target_name} for {dmg} endurance.{flavour}",
+        atk_color,
+    )
+    if recover:
+        _maybe_recover_arrow(engine, target)
+
+
 class RangedAttackAction(Action):
-    """Loose an arrow at a chosen foe (ADR 0006): the d20 core keyed off Wits,
-    with a per-bow effective range and falloff beyond it, Disadvantage at point-
-    blank, the shared Hidden Path ambush, and no Bleed on a Critical. Costs a
-    full turn and spends one arrow; half of spent arrows are recoverable."""
+    """Loose an arrow at a chosen foe (ADR 0006): a full turn, one arrow spent.
+    The single-shot resolution lives in :func:`resolve_shot`, shared with the Far
+    Shot volley deeds (Multishot/Piercing Shot/Harrying Shot)."""
 
     def __init__(self, entity: "Actor", target: "Actor"):
         super().__init__(entity)
@@ -340,64 +426,162 @@ class RangedAttackAction(Action):
         if ammo is None:
             raise Impossible("Your quiver is empty.")
 
-        tf = target.fighter
-        is_player = attacker is engine.player
-        hero = getattr(attacker, "hero", None)
-
         _spend_one_arrow(ammo, attacker)  # an arrow is spent, hit or miss
+        hero = getattr(attacker, "hero", None)
+        aimed = hero.consume_aimed_shot() if hero is not None else False
+        resolve_shot(engine, attacker, target, aimed=aimed)
 
-        distance = _chebyshev(attacker, target)
-        penalty = af.range_penalty(distance)
 
-        # A foe at your elbow spoils the aim (Disadvantage); the Hidden Path
-        # ambush lends Advantage. The two fold into one signed advantage int.
-        adjacent = _has_adjacent_hostile(engine, attacker)
-        ambush, ambush_adv, ambush_dmg = resolve_ambush(hero, tf)
-        advantage = ambush_adv + (-1 if adjacent else 0)
+# --- Far Shot volley & mark deeds (ADR 0011, #75) -------------------------
+# Multishot/Arrow Storm (arc), Piercing Shot (line), Harrying Shot (fire + hop
+# back), Hunter's Mark (mark a foe). Each is picked with a lock-on handler and
+# resolved here with map access; a bow and an arrow are spent, and the deed's
+# cooldown is charged. All count as the player's turn.
+def _spend_shot_ammo(engine: "Engine", entity: "Actor") -> None:
+    """Guard a Far Shot deed on a readied bow and a nocked arrow, then spend one
+    (the single special draw). Raises Impossible with neither."""
+    af = entity.fighter
+    if af is None or not af.has_ranged_weapon:
+        raise Impossible("You have no bow readied.")
+    ammo = _ammo_stack(entity)
+    if ammo is None:
+        raise Impossible("Your quiver is empty.")
+    _spend_one_arrow(ammo, entity)
 
-        # A Shot Crits only on a natural 20 — Swift Wrath's widened melee crit
-        # does not carry to the bow (ADR 0006), so the default crit_face stands.
-        result = roll_check(af.ranged_attack_bonus - penalty, tf.defence,
-                            advantage=advantage)
-        engine.note_roll(result, attacker)  # feeds the dice tray (player rolls only)
 
-        who = "You" if is_player else f"The {attacker.name}"
-        target_name = "you" if target is engine.player else f"the {target.name}"
-        loose = "loose" if is_player else "looses"
-        strike = "strike" if is_player else "strikes"
-        atk_color = color.player_atk if is_player else color.enemy_atk
+def _hostiles_in_sight(engine: "Engine", exclude: "Actor"):
+    """Every living non-friendly fighter the player can see (not ``exclude``)."""
+    gm = engine.game_map
+    return [a for a in gm.actors
+            if a is not exclude and is_hostile_actor(a) and gm.visible[a.x, a.y]]
 
-        crit = result.is_crit
-        if not (crit or result.is_success):
-            verb = "the arrow flies wild" if result.is_fumble else "miss"
-            engine.message_log.add_message(
-                f"{who} {loose} an arrow at {target_name} but {verb}.",
-                color.sauron_eye if result.is_fumble else color.gray,
-            )
-            _maybe_recover_arrow(engine, target)
-            return
 
-        # A hit: roll the bow's damage (+ any Far Shot damage perk), subtract
-        # Soak — a clean shot always stings for 1+. No pierce, no Bleed.
-        raw = roll_damage(af.ranged_damage) + af.ranged_damage_bonus
-        dmg = max(1, raw - tf.soak)
-        if crit:
-            dmg += roll_damage(af.ranged_damage)  # the Critical carries a second roll
-        if ambush:
-            dmg += ambush_dmg
-        if hero is not None:
-            hero.consume_ambush_prime()   # Shadowstep/Vanish: the unseen shot lands
-        result.damage = dmg  # surfaced in the dice tray (same object note_roll kept)
-        tf.take_damage(dmg)
+class MultishotAction(Action):
+    """Loose a spread (Multishot / Arrow Storm): a Shot at the marked foe and at
+    every other foe within the deed's ``radius`` tiles of it. One arrow, one
+    turn."""
 
-        flavour = " A CRITICAL shot!" if crit else ""
-        if ambush:
-            flavour += " From the shadows!"
+    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target = target
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        engine = self.engine
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to shoot.")
+        _spend_shot_ammo(engine, self.entity)
+        radius = node.active.radius
+        # The mark first, then the spread around it — nearest-first so the log
+        # reads outward from the centre.
+        foes = [target] + sorted(
+            (a for a in _hostiles_in_sight(engine, self.entity)
+             if a is not target and king_dist(target.x, target.y, a.x, a.y) <= radius),
+            key=lambda a: king_dist(target.x, target.y, a.x, a.y))
         engine.message_log.add_message(
-            f"{who} {loose} an arrow and {strike} {target_name} for {dmg} endurance.{flavour}",
-            atk_color,
-        )
-        _maybe_recover_arrow(engine, target)
+            f"You loose a spread of arrows!", color.player_atk)
+        for foe in foes:
+            resolve_shot(engine, self.entity, foe, recover=False)
+        hero.begin_cooldown(self.node_id)
+
+
+class PiercingShotAction(Action):
+    """A shaft that passes clean through (Piercing Shot): a Shot at every foe on
+    the line from the hero through the chosen foe, out to the deed's reach. One
+    arrow, one turn."""
+
+    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target = target
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        engine = self.engine
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to shoot.")
+        _spend_shot_ammo(engine, self.entity)
+        ox, oy = self.entity.x, self.entity.y
+        stepx = _sign(target.x - ox)
+        stepy = _sign(target.y - oy)
+        reach = node.active.reach
+        gm = engine.game_map
+        engine.message_log.add_message(
+            "You loose a piercing shaft!", color.player_atk)
+        # Walk the ray outward, striking each foe standing on it (the wall behind
+        # the last foe stops nothing — the reach cap does).
+        for step in range(1, reach + 1):
+            x, y = ox + stepx * step, oy + stepy * step
+            if not gm.in_bounds(x, y):
+                break
+            foe = gm.get_actor_at(x, y)
+            if foe is not None and is_hostile_actor(foe):
+                resolve_shot(engine, self.entity, foe, recover=False)
+        hero.begin_cooldown(self.node_id)
+
+
+class HarryingShotAction(Action):
+    """Fire and fade (Harrying Shot): a Shot at the chosen foe, then a hop one
+    tile straight back from it if that ground is open. One arrow, one turn."""
+
+    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target = target
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        engine = self.engine
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to shoot.")
+        _spend_shot_ammo(engine, self.entity)
+        resolve_shot(engine, self.entity, target)
+        # Hop one tile directly away from the foe, if that ground is clear.
+        gm = engine.game_map
+        me = self.entity
+        bx = me.x - _sign(target.x - me.x)
+        by = me.y - _sign(target.y - me.y)
+        if ((bx, by) != (me.x, me.y) and gm.in_bounds(bx, by)
+                and gm.tiles["walkable"][bx, by]
+                and gm.get_blocking_entity_at(bx, by) is None):
+            me.x, me.y = bx, by
+            engine.message_log.add_message(
+                "You loose and fade back a step.", color.hope_gain)
+        hero.begin_cooldown(self.node_id)
+
+
+class HuntersMarkAction(Action):
+    """Mark a chosen visible foe within reach (Hunter's Mark): it takes bonus
+    damage from your every hit until another is marked. Marks one foe at a time,
+    so the previous mark is cleared first. A full turn."""
+
+    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
+        super().__init__(entity)
+        self.node_id = node_id
+        self.target = target
+
+    def perform(self) -> None:
+        hero, node = _ready_active(self.entity, self.node_id)
+        engine = self.engine
+        target = self.target
+        if target is None or target.fighter is None or target.fighter.dead:
+            raise Impossible("There is nothing there to mark.")
+        if _chebyshev(target, self.entity) > node.active.reach:
+            raise Impossible("That foe is too far to mark.")
+        if not engine.game_map.visible[target.x, target.y]:
+            raise Impossible("You cannot see that foe.")
+        # Only one mark at a time — clear any existing mark first.
+        for a in engine.game_map.actors:
+            if a.fighter is not None:
+                a.fighter.marked = False
+        target.fighter.marked = True
+        hero.begin_cooldown(self.node_id)
+        engine.message_log.add_message(
+            f"You mark the {target.name} as your quarry!", color.hope_gain)
 
 
 class BumpAction(ActionWithDirection):

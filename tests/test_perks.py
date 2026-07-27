@@ -186,18 +186,19 @@ def test_an_active_is_one_and_done():
 # Points-in-Path tier gate (Diablo-2 style) + parent-edges
 # ---------------------------------------------------------------------------
 def test_a_deeper_tier_is_gated_by_points_spent_in_the_path():
-    hero = _hero_actor(path_points=9, path="far_shot").hero
-    fletcher = N["fs_fletcher"]                         # tier 2, parent fs_aim
-    assert perks.points_for_tier(2) == 2
-    # One point in Path (fs_aim rank 1): parent owned, but the tier gate isn't met.
-    assert hero.buy_node(N["fs_aim"])
-    assert hero.points_in_path == 1
-    assert not hero.can_buy(fletcher)                   # needs 2 points in Path
-    # A second point reaches the gate; now the tier-2 node is buyable.
-    assert hero.buy_node(N["fs_aim"])
-    assert hero.points_in_path == 2
-    assert hero.can_buy(fletcher)
-    assert hero.buy_node(fletcher)
+    hero = _hero_actor(path_points=12, path="far_shot").hero
+    pierce = N["fs_pierce"]                             # tier 3 (gate 4), parent fs_harry
+    assert perks.points_for_tier(3) == 4
+    # Walk the Volley branch toward Piercing Shot; at three points in Path the
+    # tier-3 gate is not yet open even once the chain reaches it.
+    _buy_all(hero, "fs_aim", "fs_footwork", "fs_multishot")
+    assert hero.points_in_path == 3
+    assert not hero.can_buy(pierce)                     # short of the tier-3 gate (4)
+    # A fourth point (Harrying Shot, Piercing's parent) reaches the gate.
+    assert hero.buy_node(N["fs_harry"])
+    assert hero.points_in_path == 4
+    assert hero.can_buy(pierce)
+    assert hero.buy_node(pierce)
 
 
 def test_a_node_needs_its_parent_owned_even_past_the_tier_gate():
@@ -218,12 +219,12 @@ def test_a_node_needs_its_parent_owned_even_past_the_tier_gate():
 # ---------------------------------------------------------------------------
 def test_capstone_gated_by_points_in_path_and_its_parent():
     hero = _hero_actor(path_points=12, path="far_shot").hero
-    deadeye = N["fs_deadeye"]                           # tier 3, cost 2, parent fs_fletcher
+    deadeye = N["fs_deadeye"]                           # tier 3, cost 2, parent fs_aimed
     assert deadeye.capstone and deadeye.cost == 2
     assert perks.points_for_tier(3) == 4
-    _buy_all(hero, "fs_aim", "fs_aim", "fs_fletcher")   # 3 points in Path
+    _buy_all(hero, "fs_aim", "fs_fletcher", "fs_mark")  # 3 points in Path
     assert not hero.can_buy(deadeye)                    # short of the tier-3 gate (4)
-    assert hero.buy_node(N["fs_fletcher"])             # 4 points in Path now
+    assert hero.buy_node(N["fs_aimed"])                # 4 points; capstone's parent
     assert hero.can_buy(deadeye)
     assert hero.buy_node(deadeye)
     assert hero.has_node("fs_deadeye")

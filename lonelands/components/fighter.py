@@ -86,6 +86,7 @@ class Fighter(BaseComponent):
         self.loot = loot
         self.bleed = 0  # remaining Bleed stacks
         self.rooted = 0  # rounds held fast in place (Hidden Path Snare/Pinning)
+        self.marked = False  # Far Shot's Hunter's Mark — bonus damage vs this foe
         self._dead = False
 
     # --- Vitals -----------------------------------------------------------
