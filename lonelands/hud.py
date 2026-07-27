@@ -76,7 +76,6 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
     ui.text(ix, cy, p.name, color.tier_value, ui.bold)
     cy += ui.line
     ui.text(ix, cy, hero.culture, color.ranger_green, ui.small)
-    ui.text_right(inner.right, cy, f"{hero.calling} · Solo", color.tier_label, ui.small)
     cy += step + ui.pad // 3
 
     # Vitals — the always-on bars.

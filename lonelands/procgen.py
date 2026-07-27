@@ -271,9 +271,9 @@ def generate_bree(engine) -> GameMap:
     ferny = story.bree.make_ferny()
     ferny.spawn(gm, 15, 33)          # Bill Ferny, loitering outside his house
 
-    # the hubbub: ~10 wandering Bystanders, seeded through the common room and
-    # inn-yard, free to drift out into the streets (CONTEXT.md).
-    for patron in story.bree.make_patrons(10):
+    # the hubbub: a couple of wandering Bystanders, seeded through the common
+    # room and inn-yard, free to drift out into the streets (CONTEXT.md).
+    for patron in story.bree.make_patrons(3):
         spot = _free_tile(gm, [(7, 14, 6, 13), (7, 14, 15, 19)])
         if spot is not None:
             patron.spawn(gm, *spot)
