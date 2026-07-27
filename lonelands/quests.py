@@ -121,6 +121,47 @@ class QuestLog:
                 self._progress_msg(q, engine)
 
     @staticmethod
+    def _held_item(engine, item_name: str):
+        """The player's pack slot matching item_name, or None."""
+        for item in engine.player.inventory.items:
+            if item.name == item_name:
+                return item
+        return None
+
+    def _deliverable(self, npc_name: str, engine):
+        """The (quest, held_item) a hand-over to npc_name could fire right now,
+        or None: an ACTIVE delivery quest that wants its item couriered to this
+        NPC, with that item in the player's pack. Shared by can_deliver (which
+        only asks *whether*) and notify_delivery (which acts on it)."""
+        for q in self.quests.values():
+            if (q.state == QuestState.ACTIVE
+                    and getattr(q, "deliver_to", None) == npc_name
+                    and getattr(q, "deliver_item", None)):
+                item = self._held_item(engine, q.deliver_item)
+                if item is not None:
+                    return q, item
+        return None
+
+    def can_deliver(self, npc_name: str, engine) -> bool:
+        """True when the player could hand a quest item to this NPC now — used to
+        `show` the hand-over dialog option only when the hand-over is possible."""
+        return self._deliverable(npc_name, engine) is not None
+
+    def notify_delivery(self, npc_name: str, engine) -> bool:
+        """Hand a carried item to the NPC being spoken to: consume it from the
+        pack and advance the matching delivery quest (the courier mirror of
+        notify_kill/notify_event). Returns True if a hand-over fired. Callers
+        fire rewards with the usual turn_in once the quest is READY."""
+        match = self._deliverable(npc_name, engine)
+        if match is None:
+            return False
+        quest, item = match
+        engine.player.inventory.remove(item)
+        quest.advance()
+        self._progress_msg(quest, engine)
+        return True
+
+    @staticmethod
     def _progress_msg(q: Quest, engine) -> None:
         if q.state == QuestState.READY:
             engine.message_log.add_message(

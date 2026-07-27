@@ -24,10 +24,24 @@ class FakeMessageLog:
         self.messages.append(text)
 
 
+class FakeItem:
+    def __init__(self, name):
+        self.name = name
+
+
+class FakeInventory:
+    def __init__(self, items=None):
+        self.items = list(items or [])
+
+    def remove(self, item):
+        self.items.remove(item)
+
+
 class FakeEngine:
-    def __init__(self, hero=None):
+    def __init__(self, hero=None, items=None):
         self.message_log = FakeMessageLog()
-        self.player = type("P", (), {"hero": hero})()
+        self.player = type("P", (), {"hero": hero,
+                                     "inventory": FakeInventory(items)})()
 
 
 def make_quest(**kw):
@@ -161,3 +175,108 @@ def test_turn_in_twice_is_a_noop_the_second_time():
     log.turn_in("q", engine)
     assert log.turn_in("q", engine) is False
     assert hero.xp == 10  # not awarded twice
+
+
+# --- Delivery / courier objectives -----------------------------------------
+
+def make_delivery_quest(**kw):
+    q = make_quest(quest_id="courier", title="The Parcel",
+                   objective="carry the parcel to Bree", target_count=1, **kw)
+    q.deliver_item = "dwarf-trader's parcel"
+    q.deliver_to = "Barliman"
+    return q
+
+
+def test_can_deliver_only_when_active_and_item_held():
+    log = QuestLog()
+    q = make_delivery_quest()
+    log.register(q)
+    parcel = FakeItem("dwarf-trader's parcel")
+
+    # UNSTARTED: never deliverable, even holding the item
+    assert log.can_deliver("Barliman", FakeEngine(items=[parcel])) is False
+    log.start("courier")
+    # ACTIVE but empty-handed
+    assert log.can_deliver("Barliman", FakeEngine()) is False
+    # ACTIVE and carrying it
+    assert log.can_deliver("Barliman", FakeEngine(items=[parcel])) is True
+
+
+def test_can_deliver_only_for_the_named_recipient():
+    log = QuestLog()
+    q = make_delivery_quest()  # deliver_to = "Barliman"
+    log.register(q)
+    log.start("courier")
+    parcel = FakeItem("dwarf-trader's parcel")
+    engine = FakeEngine(items=[parcel])
+
+    # holding the item, but speaking to the wrong NPC
+    assert log.can_deliver("Halbarad", engine) is False
+    assert log.can_deliver("Barliman", engine) is True
+
+
+def test_notify_delivery_consumes_item_and_advances():
+    log = QuestLog()
+    q = make_delivery_quest()
+    log.register(q)
+    log.start("courier")
+    parcel = FakeItem("dwarf-trader's parcel")
+    engine = FakeEngine(items=[parcel])
+
+    assert log.notify_delivery("Barliman", engine) is True
+    assert parcel not in engine.player.inventory.items  # consumed
+    assert q.state == QuestState.READY  # target_count=1 -> ready to report
+
+
+def test_notify_delivery_fails_without_the_item():
+    log = QuestLog()
+    q = make_delivery_quest()
+    log.register(q)
+    log.start("courier")
+    engine = FakeEngine()  # empty pack
+
+    assert log.notify_delivery("Barliman", engine) is False
+    assert q.state == QuestState.ACTIVE  # unchanged
+
+
+def test_notify_delivery_ignores_the_wrong_recipient():
+    log = QuestLog()
+    q = make_delivery_quest()
+    log.register(q)
+    log.start("courier")
+    parcel = FakeItem("dwarf-trader's parcel")
+    engine = FakeEngine(items=[parcel])
+
+    assert log.notify_delivery("Halbarad", engine) is False
+    assert parcel in engine.player.inventory.items  # not consumed
+    assert q.state == QuestState.ACTIVE
+
+
+def test_notify_delivery_requires_active_quest():
+    log = QuestLog()
+    q = make_delivery_quest()
+    log.register(q)  # still UNSTARTED
+    parcel = FakeItem("dwarf-trader's parcel")
+    assert log.notify_delivery("Barliman", FakeEngine(items=[parcel])) is False
+
+
+def test_delivery_then_turn_in_fires_rewards():
+    log = QuestLog()
+    q = make_delivery_quest(xp_reward=30)
+    log.register(q)
+    log.start("courier")
+    parcel = FakeItem("dwarf-trader's parcel")
+    engine = FakeEngine(hero=FakeHero(), items=[parcel])
+
+    log.notify_delivery("Barliman", engine)  # -> READY, parcel gone
+    assert log.turn_in("courier", engine) is True  # reward still keyed by quest id
+    assert q.state == QuestState.DONE
+    assert engine.player.hero.xp == 30
+
+
+def test_delivery_descriptor_survives_pickling():
+    import pickle
+    q = make_delivery_quest()
+    restored = pickle.loads(pickle.dumps(q))
+    assert restored.deliver_item == "dwarf-trader's parcel"
+    assert restored.deliver_to == "Barliman"
