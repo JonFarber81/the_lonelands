@@ -148,7 +148,7 @@ not just the count, is what makes settled country feel different from the Dark.
 Our own system (de-coupled from The One Ring — see ADR 0005). Every action
 resolves the same way; combat is that same primitive.
 
-- **Check** — a single roll resolving an action: `d20 + attribute (+ perk/gear)`
+- **Check** — a single roll resolving an action: `d20 + attribute (+ node/gear)`
   compared to a **Target Number**. *(Replaces the former "Test".)*
 - **Target Number (TN)** — the value a Check's total must **meet or beat** to
   succeed.
@@ -167,21 +167,37 @@ The hero is a single **Ranger of the North** (flavour identity, not a stat).
   (melee hit/damage, HP, athletics) · **Wits** (ranged, Defence, stealth,
   senses) · **Will** (morale, social, healing, Path abilities). *(Replaces the
   TOR Strength/Heart/Wits attributes; there are no skills or weapon
-  proficiencies — specialisation lives in perks.)*
+  proficiencies — specialisation lives in nodes.)*
 - **Level** — rises **often** from XP (see Trade & loot). Each level grants an
-  automatic **+HP** and, periodically, **+to-hit**; every few levels it also
-  grants a **perk point**.
-- **Perk** — a bought, permanent upgrade: a passive bonus or an active ability
-  (actives run on **charges** or **cooldowns**; there is no spendable resource
-  pool). *(Replaces buying skill/proficiency ranks.)*
-- **Path** — one of five themed trees a perk belongs to, each a *style* of
-  Ranger with its own feel: **the Long Watch** (endure/protect), **the Swift
-  Wrath** (melee offence), **the Far Shot** (marksman), **the Hidden Path**
-  (stealth/ambush), **the Kindled Heart** (spirit/defiance). A Ranger **blends
-  freely** across Paths; a **capstone** (a Path's deepest perk) needs real
-  investment in that Path.
-- **Perk point** — the currency spent to buy a perk. Deeper perks in a Path
-  require prior perks *in that Path*.
+  automatic **+HP** and, periodically, **+to-hit**; from **level 2** every level
+  also grants a **Path point**.
+- **Path** — the Ranger's **committed discipline**: her class, chosen once and
+  walked for the whole game. **Level 1 is pathless**; at **level 2** the player
+  browses every Path in full, then **commits to one behind a permanent
+  confirm** — every Path point thereafter goes only into that Path's tree.
+  There are three for now — **the Long Watch** (Tank), **the Hidden Path**
+  (Stealth), **the Far Shot** (Ranged); more will follow (a spirit/defiance
+  **Kindled Heart** is deferred). *(Supersedes the old five Paths a Ranger
+  "blended freely" across — ADR 0011.)*
+  _Avoid_: class, tree (a Path *has* a tree; it is not "a tree")
+- **Node** — a single buyable upgrade on a Path's tree: a passive bonus, an
+  active ability, or a special attack (actives run on **charges**/**cooldowns**;
+  there is no spendable resource pool). *(Renames the old "Perk".)*
+  _Avoid_: perk, skill, talent
+- **Trunk / Branch** — a Path's tree is a shared **trunk** that forks into two
+  **branches** (e.g. the Long Watch's **Warden** and **Reaver**). Branches are
+  **point-gated, never mutually exclusive**; one character fills only ~⅔ of a
+  tree, so *which* branches you favour personalise the build.
+- **Rank** — a passive node bought **more than once**, each rank adding to its
+  effect (shown as pips, e.g. Iron Skin I→III). Active nodes are **learned
+  once** and scale via other nodes, not by re-buying.
+- **Capstone** — a branch's deepest node, gated behind real investment in that
+  branch/Path.
+- **Path point** — the currency spent to buy a node or a rank (a capstone costs
+  more). *(Renames the old "perk point".)* A deeper **tier** unlocks only once
+  enough Path points have been sunk into *this* Path (the **points-in-Path
+  gate**).
+  _Avoid_: perk point, skill point
 
 ## Combat
 
@@ -189,7 +205,7 @@ The hero is a single **Ranger of the North** (flavour identity, not a stat).
 hero rolls; a foe never rolls (the dice tray stays the player's).
 
 - **Attack bonus** — what the hero adds to the attack d20 (attribute + level +
-  perks + weapon).
+  nodes + weapon).
 - **Defence** — the TN an attacker's roll must meet to hit. Raised by **light
   armour and shields** (dodge/parry), by Wits, and by level.
 - **Damage** — rolled from the weapon (e.g. `2d6+2`) on a hit; a **Critical**
@@ -220,7 +236,7 @@ ranged is a deliberate, aimed act.
 - **Arrow** — the ammunition a bow spends. A fungible **Stack** in the pack; each
   **Shot** spends one, and an empty quiver refuses to fire. A share of spent
   arrows are **recoverable** — left on the target's tile to be picked up.
-- **Shot** — one ranged attack: `d20 + Wits + level + ranged perks + bow − range
+- **Shot** — one ranged attack: `d20 + Wits + level + ranged nodes + bow − range
   penalty vs Defence`, then `bow damage − soak` on a hit. A **Critical** still
   hits and adds damage, but a Shot's Critical opens **no Bleed** (Bleed stays a
   melee/heavy-foe signature). Costs the hero a full turn. *(The hero rolls; the
@@ -314,7 +330,7 @@ unreadable).
   gold caption like `ATTRIBUTES`). Header-plus-rule divides a panel into
   chapters without the weight of a Filled bar.
 - **Stateful colour** — a Value that changes hue to report state, used *only*
-  where the colour drives a decision: Endurance (green→amber→red), Perk points
+  where the colour drives a decision: Endurance (green→amber→red), Path points
   (gold when spendable), Weary/Bleeding warnings, coins (gold). Every other
   Value glows neutral. Colour carries meaning, never decoration.
 - **Scrim** — the dimming of the map and sidebar (to ~35–40% brightness) while
@@ -322,5 +338,5 @@ unreadable).
 - **Glance vs. deep view** — the **sidebar** is the always-on *glance* (vitals,
   conditions, a one-line stat summary); a popup like the **character sheet** is
   the deliberate *deep view* (attributes with what they govern, the full Paths
-  breakdown, lineage, perks). The deep view is self-contained — it never makes
+  breakdown, lineage, nodes). The deep view is self-contained — it never makes
   the player rely on the glance.

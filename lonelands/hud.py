@@ -107,8 +107,8 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
 
     # Advancement.
     cy = ui.section(ix, cy, iw, "ADVANCEMENT")
-    ui.text(ix, cy, "Perk points", color.tier_label, ui.small)
-    pp = hero.perk_points
+    ui.text(ix, cy, "Path points", color.tier_label, ui.small)
+    pp = hero.path_points
     ui.text_right(inner.right, cy, str(pp),
                   color.hope_gain if pp else color.tier_body, ui.small)
     cy += step

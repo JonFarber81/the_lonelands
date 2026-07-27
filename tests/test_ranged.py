@@ -31,6 +31,13 @@ def make_world():
     return engine, gm, player
 
 
+def grant(hero, *node_ids):
+    """Grant node ownership directly (rank 1), bypassing purchase gating — these
+    tests exercise the derived-stat plumbing, not the buy flow."""
+    for nid in node_ids:
+        hero.nodes[nid] = max(1, hero.nodes.get(nid, 0))
+
+
 def arm(player, bow=None, arrows: int = 10):
     """Equip a bow in the ranged slot and stock the quiver."""
     bow = copy.deepcopy(bow if bow is not None else content.shortbow)
@@ -237,11 +244,11 @@ def test_a_ranged_crit_hits_hard_but_opens_no_bleed():
     assert "CRITICAL shot" in last_message(engine)
 
 
-def test_swift_wrath_widened_crit_does_not_carry_to_the_bow():
+def test_reaver_widened_crit_does_not_carry_to_the_bow():
     engine, gm, player = make_world()
     arm(player)
     # Reaver's Instinct widens melee crit to 19-20; a Shot still crits only on 20.
-    player.hero.perks.add("sw_reaver")
+    grant(player.hero, "lw_reaver")
     foe = spawn_foe(gm, content.cave_goblin, 6)
     foe.fighter.base_defence = 99
     # A natural 19: a melee crit under Reaver's, but a ranged miss.
@@ -254,29 +261,29 @@ def test_swift_wrath_widened_crit_does_not_carry_to_the_bow():
 
 # --- The Far Shot Path feeds the Shot --------------------------------------
 
-def test_far_shot_perks_add_ranged_to_hit_and_damage():
+def test_far_shot_nodes_add_ranged_to_hit_and_damage():
     _, _, player = make_world()
     arm(player)
     hero = player.hero
     base_hit = player.fighter.ranged_attack_bonus
-    hero.perks.update({"fs_aim", "fs_fletcher"})  # +1 hit, +1 damage
+    grant(hero, "fs_aim", "fs_fletcher")  # +1 hit, +1 damage
     assert player.fighter.ranged_attack_bonus == base_hit + 1
     assert player.fighter.ranged_damage_bonus == 1
-    hero.perks.add("fs_deadeye")  # +2 hit, +2 damage
+    grant(hero, "fs_deadeye")  # +2 hit, +2 damage
     assert player.fighter.ranged_attack_bonus == base_hit + 3
     assert player.fighter.ranged_damage_bonus == 3
 
 
 # --- Ambush: the shared helper, applied to a Shot ---------------------------
 
-def test_the_shared_ambush_helper_reads_hidden_path_perks():
+def test_the_shared_ambush_helper_reads_hidden_path_nodes():
     _, _, player = make_world()
     hero = player.hero
     foe = content.cave_goblin.spawn(GameMap(Engine(player), 5, 5), 1, 1)
-    # No perks: no ambush.
+    # No nodes: no ambush.
     assert resolve_ambush(hero, foe.fighter) == (False, 0, 0)
-    # Ambush perk: advantage + bonus damage against a fresh foe.
-    hero.perks.add("hp_ambush")
+    # Ambush node: advantage + bonus damage against a fresh foe.
+    grant(hero, "hp_ambush")
     is_ambush, adv, bonus = resolve_ambush(hero, foe.fighter)
     assert is_ambush and adv == 1 and bonus == 2
     # A bloodied foe cannot be ambushed.
@@ -290,7 +297,7 @@ def test_ambush_bonus_damage_lands_on_a_shot():
     flat_bow = copy.deepcopy(content.shortbow)
     flat_bow.equippable.damage = 0
     arm(player, bow=flat_bow)
-    player.hero.perks.add("hp_ambush")  # advantage + 2 bonus damage
+    grant(player.hero, "hp_ambush")  # advantage + 2 bonus damage
     foe = spawn_foe(gm, content.cave_goblin, 6)  # at full Endurance -> ambushable
     foe.fighter.base_defence = 2
     foe.fighter.base_soak = 0

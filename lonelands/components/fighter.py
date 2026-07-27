@@ -186,26 +186,28 @@ class Fighter(BaseComponent):
         bonus = eq.soak_bonus if eq else 0
         hero = getattr(self.parent, "hero", None)
         if hero is not None:
-            # Long Watch/Kindled Heart perks: flat Soak, a live low-HP rally, and
-            # an active defensive stance.
-            bonus += hero.perk_bonus("soak_bonus")
+            # Long Watch nodes: flat Soak (Iron Skin) and an active defensive
+            # stance (Hold the Line). The rally term is dormant — no ported node
+            # grants it yet (a future Kindled Heart Path will).
+            bonus += hero.node_bonus("soak_bonus")
             bonus += hero.rally_soak_bonus()
             bonus += hero.stance_soak
         return self.base_soak + bonus
 
     @property
     def crit_face(self) -> int:
-        """The lowest natural d20 face that scores a Critical (normally 20; a
-        Swift Wrath capstone widens the range downward). Read by MeleeAction."""
+        """The lowest natural d20 face that scores a Critical (normally 20; the
+        Long Watch's Reaver capstone widens the range downward). Read by
+        MeleeAction."""
         hero = getattr(self.parent, "hero", None)
-        widen = hero.perk_bonus("crit_range") if hero is not None else 0
+        widen = hero.node_bonus("crit_range") if hero is not None else 0
         return 20 - max(0, widen)
 
     @property
     def melee_damage_bonus(self) -> int:
-        """Flat damage added to this fighter's melee blows (Swift Wrath)."""
+        """Flat damage added to this fighter's melee blows (the Reaver branch)."""
         hero = getattr(self.parent, "hero", None)
-        return hero.perk_bonus("melee_damage_bonus") if hero is not None else 0
+        return hero.node_bonus("melee_damage_bonus") if hero is not None else 0
 
     @property
     def damage(self) -> Union[int, str]:

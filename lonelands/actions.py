@@ -19,12 +19,12 @@ def resolve_ambush(hero, target_fighter) -> Tuple[bool, int, int]:
     strike against an unmarked foe (one still at full Endurance) lands with
     advantage and bonus damage. Returns ``(is_ambush, advantage, bonus_damage)``.
 
-    Advantage is +1 only when a perk actually grants it, so a bonus-damage-only
+    Advantage is +1 only when a node actually grants it, so a bonus-damage-only
     ambush still counts as an ambush (its flavour and damage) without a second
     die. A foe (no Hero) never ambushes."""
     if hero is None:
         return False, 0, 0
-    bonus = hero.perk_bonus("ambush_bonus_damage")
+    bonus = hero.node_bonus("ambush_bonus_damage")
     is_ambush = bool(
         target_fighter.endurance >= target_fighter.max_endurance
         and (hero.ambush_advantage or bonus)
@@ -422,21 +422,21 @@ class EquipAction(Action):
 
 
 class ActivateAbilityAction(Action):
-    """Fire one of the hero's Path actives (Paths & perks, issue #38).
+    """Fire one of the hero's Path actives (a node's active — ADR 0011).
 
     A heal/stance resolves at once; a "wrath"-style active primes the hero's next
     melee hit. Either way this counts as the player's turn, so cooldowns tick and
     foes act afterwards. Impossible if the ability isn't ready."""
 
-    def __init__(self, entity: "Actor", perk_id: str):
+    def __init__(self, entity: "Actor", node_id: str):
         super().__init__(entity)
-        self.perk_id = perk_id
+        self.node_id = node_id
 
     def perform(self) -> None:
         hero = getattr(self.entity, "hero", None)
-        if hero is None or not hero.ability_ready(self.perk_id):
+        if hero is None or not hero.ability_ready(self.node_id):
             raise Impossible("That ability is not ready.")
-        message = hero.activate_ability(self.perk_id)
+        message = hero.activate_ability(self.node_id)
         if message is None:
             raise Impossible("That ability is not ready.")
         self.engine.message_log.add_message(message, color.hope_gain)
