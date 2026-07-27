@@ -379,3 +379,99 @@ def test_talk_descriptor_survives_pickling():
     restored = pickle.loads(pickle.dumps(q))
     assert restored.talk_target == "Woodsman"
     assert restored.talk_node == "secret"
+
+
+# --- Travel-to objectives ---------------------------------------------------
+
+def make_travel_quest(coord=(1, 0), level=None, **kw):
+    kw.setdefault("target_count", 1)
+    q = make_quest(quest_id="journey", title="East to the Forsaken Inn",
+                   objective="journey east into the Bree-land", **kw)
+    q.travel_target = coord
+    if level is not None:
+        q.travel_level = level
+    return q
+
+
+def test_notify_arrival_advances_matching_quest_only():
+    log = QuestLog()
+    east = make_travel_quest(coord=(1, 0))
+    other = make_quest(quest_id="o", title="Other")
+    other.travel_target = (2, 0)
+    log.register(east)
+    log.register(other)
+    log.start("journey")
+    log.start("o")
+
+    log.notify_arrival((1, 0), FakeEngine())
+    assert east.state == QuestState.READY
+    assert other.progress == 0
+
+
+def test_notify_arrival_ignores_unstarted_quest():
+    log = QuestLog()
+    q = make_travel_quest()
+    log.register(q)  # still UNSTARTED
+    log.notify_arrival((1, 0), FakeEngine())
+    assert q.progress == 0
+    assert q.state == QuestState.UNSTARTED
+
+
+def test_notify_arrival_ignores_the_wrong_coord():
+    log = QuestLog()
+    q = make_travel_quest(coord=(1, 0))
+    log.register(q)
+    log.start("journey")
+    log.notify_arrival((2, 0), FakeEngine())
+    assert q.progress == 0
+
+
+def test_notify_arrival_is_idempotent_on_re_entry():
+    log = QuestLog()
+    q = make_travel_quest(coord=(1, 0))  # target_count=1
+    log.register(q)
+    log.start("journey")
+
+    log.notify_arrival((1, 0), FakeEngine())
+    assert q.state == QuestState.READY
+    # Re-entering the same Region can't double-count: the quest is no longer
+    # ACTIVE, so a second arrival is a no-op.
+    log.notify_arrival((1, 0), FakeEngine())
+    assert q.progress == 1
+    assert q.state == QuestState.READY
+
+
+def test_notify_arrival_matches_the_named_level():
+    log = QuestLog()
+    # A quest pinned to the first deep (Level -1) of a Region.
+    q = make_travel_quest(coord=(-1, 0), level=-1)
+    log.register(q)
+    log.start("journey")
+
+    # Arriving on that Region's Surface (Level 0) doesn't count...
+    log.notify_arrival((-1, 0), FakeEngine(), level_index=0)
+    assert q.progress == 0
+    # ...descending into the pinned Level does.
+    log.notify_arrival((-1, 0), FakeEngine(), level_index=-1)
+    assert q.state == QuestState.READY
+
+
+def test_notify_arrival_defaults_to_the_surface():
+    log = QuestLog()
+    q = make_travel_quest(coord=(1, 0))  # no travel_level -> Surface
+    log.register(q)
+    log.start("journey")
+    # A Level arrival at the same coord but a deep doesn't satisfy a plain
+    # (Surface) travel-to.
+    log.notify_arrival((1, 0), FakeEngine(), level_index=-1)
+    assert q.progress == 0
+    log.notify_arrival((1, 0), FakeEngine())
+    assert q.state == QuestState.READY
+
+
+def test_travel_descriptor_survives_pickling():
+    import pickle
+    q = make_travel_quest(coord=(1, 0), level=-1)
+    restored = pickle.loads(pickle.dumps(q))
+    assert restored.travel_target == (1, 0)
+    assert restored.travel_level == -1
