@@ -37,7 +37,7 @@ class KeySym(enum.IntEnum):
     y = 121; z = 122
 
     # Number row
-    N1 = 49; N2 = 50; N3 = 51; N9 = 57
+    N1 = 49; N2 = 50; N3 = 51; N4 = 52; N5 = 53; N9 = 57
 
     # Punctuation (the shifted names GREATER/LESS/QUESTION are kept for the
     # constants the handlers reference; on a US layout the keydown actually

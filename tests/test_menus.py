@@ -71,11 +71,93 @@ def test_popup_dialog_shop_render(env):
 
 
 def test_paths_screen_fits_panel(env):
-    # The densest screen: all three Paths + their nodes must fit (regression on
-    # the adaptive prop_fit sizing). Rendering without exception exercises the
-    # truncation and fit paths.
+    # The committed Path's tree renders (boxes, prereq edges, pips, state).
     _, _, engine = env
     _render(env, ih.PathsHandler(engine))
+
+
+def test_path_chooser_and_confirm_render(env):
+    # A fresh, pathless hero opens the level-2 chooser; the tabbed tree browse
+    # and the permanent-choice confirm both render without error.
+    disp, console, _ = env
+    fresh = setup_game.new_game()
+    fresh.update_fov()
+    ph = ih.PathsHandler(fresh)
+    assert ph._chooser()                       # pathless -> chooser mode
+    _render((disp, console, fresh), ph)
+    ph.view_idx = 2                            # browse to a different tree
+    ph.cursor_id = perks.PATHS[2].nodes[0].id
+    _render((disp, console, fresh), ph)
+    _render((disp, console, fresh), ph._commit_viewed())  # the confirm modal
+
+
+def test_chooser_commit_is_a_permanent_choice():
+    # Acceptance (#74): commit throws a confirm; confirming locks the Path
+    # permanently and drops into that committed tree.
+    from lonelands import events
+    engine = setup_game.new_game()
+    engine.player.hero.path_points += 1
+    ph = ih.PathsHandler(engine)
+    ph.view_idx = 1                            # the Far Shot
+    ph.cursor_id = perks.PATHS[1].nodes[0].id
+    confirm = ph.ev_keydown(events.KeyDown(sym=ih.KeySym.RETURN, mod=0))
+    assert isinstance(confirm, ih.ConfirmHandler)
+    result = confirm.on_confirm()              # answer "yes"
+    hero = engine.player.hero
+    assert hero.path == "far_shot"
+    assert isinstance(result, ih.PathsHandler) and not result._chooser()
+    assert hero.commit_path("long_watch") is False   # no second commit
+
+
+def test_chooser_arrows_switch_paths():
+    # While pathless, ←/→ (and Tab) switch which Path is browsed — matching the
+    # on-screen hint — rather than moving the node cursor.
+    from lonelands import events
+    engine = setup_game.new_game()
+    ph = ih.PathsHandler(engine)
+    assert ph._chooser() and ph.view_idx == 0
+    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.RIGHT, mod=0))
+    assert ph.view_idx == 1
+    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.LEFT, mod=0))
+    assert ph.view_idx == 0
+    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.TAB, mod=0))
+    assert ph.view_idx == 1
+
+
+def test_tree_cursor_walks_and_buys():
+    # Arrow keys walk the tree; Enter buys the cursor node in committed mode.
+    from lonelands import events
+    engine = setup_game.new_game()
+    hero = engine.player.hero
+    hero.path_points += 3
+    hero.commit_path("long_watch")
+    ph = ih.PathsHandler(engine)
+    assert ph.cursor_id == "lw_endure"         # first trunk node
+    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.DOWN, mod=0))
+    assert ph.cursor_id == "lw_wind"           # walked down the trunk
+    ph.cursor_id = "lw_endure"
+    ph.ev_keydown(events.KeyDown(sym=ih.KeySym.RETURN, mod=0))
+    assert hero.has_node("lw_endure")          # bought at the cursor
+
+
+def test_hotbar_fires_a_ready_deed_and_renders(env):
+    # Owned actives auto-bind to keys 1–5; the number fires, an empty slot no-ops,
+    # and the sidebar hotbar renders (ADR 0011, #74).
+    from lonelands import events
+    from lonelands.actions import ActivateAbilityAction
+    disp, console, _ = env
+    engine = setup_game.new_game()
+    engine.update_fov()
+    hero = engine.player.hero
+    hero.path_points += 2
+    hero.commit_path("long_watch")
+    hero.buy_node(perks.ALL_NODES["lw_wind"])        # Second Wind -> slot 1
+    assert [n.id for n in hero.hotbar()] == ["lw_wind"]
+    mgh = ih.MainGameEventHandler(engine)
+    action = mgh.ev_keydown(events.KeyDown(sym=ih.KeySym.N1, mod=0))
+    assert isinstance(action, ActivateAbilityAction) and action.node_id == "lw_wind"
+    assert mgh.ev_keydown(events.KeyDown(sym=ih.KeySym.N5, mod=0)) is None  # empty slot
+    _render((disp, console, engine), ih.MainGameEventHandler(engine))
 
 
 def test_prop_fit_rows_fit_available_height(env):

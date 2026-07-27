@@ -183,6 +183,21 @@ class UI:
         """A thin dim horizontal rule."""
         pygame.draw.line(self.screen, color.rule, (x, y), (x + w, y))
 
+    def connector(self, x1: int, y1: int, x2: int, y2: int, col: Color, width: int = 1) -> None:
+        """A straight line — the Path tree's prereq edges (ADR 0011)."""
+        pygame.draw.line(self.screen, col, (x1, y1), (x2, y2), width)
+
+    def outline(self, x: int, y: int, w: int, h: int, border: Color,
+                fill: Optional[Tuple[int, ...]] = None, width: int = 2,
+                radius: int = 8) -> None:
+        """A rounded box — a Path-tree node's labelled card. ``fill`` may carry an
+        alpha (RGBA) for a translucent interior; ``border`` is drawn opaque."""
+        surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        if fill is not None:
+            pygame.draw.rect(surf, fill, (0, 0, w, h), border_radius=radius)
+        pygame.draw.rect(surf, border, (0, 0, w, h), width=width, border_radius=radius)
+        self.screen.blit(surf, (x, y))
+
     def prop_fit(self, n_lines: int, max_h: int) -> "Tuple[pygame.font.Font, int]":
         """A proportional font (and its row step) sized so ``n_lines`` fit
         ``max_h`` pixels — for dense lists (the Paths screen) that must not spill

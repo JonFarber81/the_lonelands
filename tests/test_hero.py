@@ -101,6 +101,30 @@ def test_add_xp_ignores_nonpositive():
     assert hero.xp_total == 0
 
 
+# --- The active hotbar (Phase 2, ADR 0011) ----------------------------------
+
+def test_hotbar_lists_owned_actives_in_declaration_order():
+    hero = _hero_actor().hero
+    hero.path = "long_watch"
+    # Own two actives (plus a passive), "bought" in reverse declaration order.
+    hero.nodes = {"lw_wrath": 1, "lw_wind": 1, "lw_endure": 3}
+    ids = [n.id for n in hero.hotbar()]
+    # Declaration order (lw_wind before lw_wrath); the passive is not on the bar.
+    assert ids == ["lw_wind", "lw_wrath"]
+
+
+def test_hotbar_caps_at_the_slot_count():
+    hero = _hero_actor().hero
+    hero.path = "long_watch"
+    hero.nodes = {"lw_wind": 1, "lw_wrath": 1, "lw_hold": 1}
+    assert len(hero.hotbar(size=2)) == 2
+
+
+def test_hotbar_is_empty_while_pathless():
+    hero = _hero_actor().hero
+    assert hero.hotbar() == []
+
+
 # --- The authored player starts sane ---------------------------------------
 
 def test_make_player_uses_the_new_attribute_names():

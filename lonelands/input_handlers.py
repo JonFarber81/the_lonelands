@@ -5,7 +5,7 @@ import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 
-from lonelands import actions, character, color, events, overworld_map, perks
+from lonelands import actions, character, color, events, overworld_map, path_tree, perks
 from lonelands.events import CENTER, KeySym, Modifier
 from lonelands.tile_glyphs import graphic_char
 from lonelands.render_functions import endurance_color
@@ -48,6 +48,10 @@ CONFIRM_KEYS = {KeySym.RETURN, KeySym.KP_ENTER}
 # which double as letter accelerators in the node and ability lists.
 _CURSOR_UP = {KeySym.UP, KeySym.KP_8}
 _CURSOR_DOWN = {KeySym.DOWN, KeySym.KP_2}
+_CURSOR_LEFT = {KeySym.LEFT, KeySym.KP_4}
+_CURSOR_RIGHT = {KeySym.RIGHT, KeySym.KP_6}
+# The number-row keys 1..5 that fire hotbar deeds (ADR 0011 Phase 2).
+_HOTBAR_KEYS = (KeySym.N1, KeySym.N2, KeySym.N3, KeySym.N4, KeySym.N5)
 
 
 # ===========================================================================
@@ -180,6 +184,8 @@ class MainGameEventHandler(EventHandler):
             return PathsHandler(self.engine)
         if key == KeySym.a:
             return AbilitiesHandler(self.engine)
+        if key in _HOTBAR_KEYS:
+            return self._fire_hotbar(_HOTBAR_KEYS.index(key))
         if key == KeySym.q:
             return QuestScreenHandler(self.engine)
         if key == KeySym.m:
@@ -189,6 +195,24 @@ class MainGameEventHandler(EventHandler):
         if key == KeySym.ESCAPE:
             return EscapeMenuHandler(self.engine)
         return None
+
+    def _fire_hotbar(self, slot: int) -> Optional[Action]:
+        """Fire the active bound to hotbar slot ``slot`` (0-based; keys 1–5,
+        ADR 0011). An empty or not-ready slot just reports why and costs no turn."""
+        hero = self.engine.player.hero
+        bar = hero.hotbar()
+        if slot >= len(bar):
+            self.engine.message_log.add_message(
+                "No deed is bound to that key.", color.impossible)
+            return None
+        node = bar[slot]
+        if not hero.ability_ready(node.id):
+            cd = hero.cooldown_left(node.id)
+            why = f" ({cd} to ready)" if cd > 0 else ""
+            self.engine.message_log.add_message(
+                f"{node.active.name} is not ready{why}.", color.impossible)
+            return None
+        return ActivateAbilityAction(self.engine.player, node.id)
 
     def _begin_ranged(self) -> Optional[BaseEventHandler]:
         """Enter lock-on firing mode (ADR 0006). Refuses with no bow readied or
@@ -538,24 +562,23 @@ class CharacterScreenHandler(AskUserHandler):
 
         # PATH — the committed Path's tree (pathless until level 2).
         y = ui.section(x, y, iw, "PATH")
+        ui.text(x, y, "Path", color.tier_label)
+        pname = perks.PATHS_BY_ID[hero.path].name if hero.path else "Pathless"
+        ui.text(x + ui.measure("Path  ")[0], y, pname,
+                color.ranger_green if hero.path else color.tier_label)
+        y += ui.line
         if hero.path is None:
-            ui.text(x, y, "Pathless — commit to a Path at level 2.",
-                    color.tier_label)
+            ui.text(x, y, "Commit to a Path at level 2 (press p).",
+                    color.tier_label, ui.small)
             y += ui.line
         else:
-            for path in perks.PATHS:
-                committed = path.id == hero.path
-                # Ranks bought / nodes reachable in this Path.
-                ranks = sum(hero.rank_of(n.id) for n in path.nodes)
-                caps = sum(n.max_rank for n in path.nodes)
-                if not committed and ranks == 0:
-                    continue
-                name_col = color.ranger_green if committed else color.tier_label
-                ui.text(x, y, path.name + (" (committed)" if committed else ""),
-                        name_col)
-                ui.text(c2, y, f"{ranks}/{caps}",
-                        color.tier_value if ranks else color.tier_label)
-                y += ui.line
+            path = perks.PATHS_BY_ID[hero.path]
+            ranks = sum(hero.rank_of(n.id) for n in path.nodes)   # ranks bought
+            caps = sum(n.max_rank for n in path.nodes)             # ranks reachable
+            ui.text(x, y, "Nodes taken", color.tier_label)
+            ui.text(x + ui.measure("Nodes taken  ")[0], y, f"{ranks}/{caps}",
+                    color.tier_value if ranks else color.tier_label)
+            y += ui.line
 
         ui.hint(display.win_w // 2, inner.bottom - ui.small.get_linesize(),
                 "p Path & nodes · a abilities · Esc close")
@@ -572,165 +595,285 @@ class CharacterScreenHandler(AskUserHandler):
 # Paths & nodes (ADR 0011)
 # ===========================================================================
 class PathsHandler(AskUserHandler):
-    """Buy nodes along a committed Path's tree (ADR 0011). Level 1 is pathless;
-    the deliberate level-2 browse-and-commit chooser is Phase 2 (#74). Here, as a
-    Phase-1 stopgap, your **first purchase commits your Path** — every node
-    thereafter must be that Path's. Each node gets a letter; press it to buy the
-    next rank when it is affordable and both the points-in-Path tier gate and its
-    parent-edge are met. Capstones (marked ``*``) cost 2."""
+    """The Path tree screen (ADR 0011, Phase 2 — #74), drawn as a top-down tree:
+    a shared **trunk** at the top forking into two **branches**, tiers
+    descending, nodes as labelled boxes joined by prereq lines. Ranked passives
+    show pips (filled ``•`` per bought rank); state is read off colour — owned
+    (green), buyable now (gold), locked (dim, with the reason).
+
+    While **pathless** the screen is the level-2 **chooser**: every Path is
+    browsable (``Tab`` / ``←``/``→`` switch trees), fully readable before
+    deciding; ``Enter`` throws a permanent-choice confirm and, on yes, commits
+    and drops into that tree to spend the first point. Once **committed** it
+    shows only that Path's tree, and ``Enter`` buys or ranks the cursor node.
+
+    Arrow keys walk between connected nodes (:mod:`lonelands.path_tree`)."""
 
     def __init__(self, engine: "Engine"):
         super().__init__(engine)
-        self.cursor = 0
+        hero = engine.player.hero
+        # In chooser mode the player browses each Path in turn; once committed
+        # the view is pinned to the committed Path.
+        self.view_idx = self._committed_idx(hero) if hero.path else 0
+        self.cursor_id = self._viewed_path().nodes[0].id
 
-    def _node_list(self) -> List["perks.Node"]:
-        return [n for path in perks.PATHS for n in path.nodes]
-
+    # --- which Path is on screen ------------------------------------------
     @staticmethod
-    def _buyable(hero, node) -> bool:
-        """Whether ``node`` can be bought right now — directly if the Path is
-        committed, or as the Path-committing first buy if still pathless."""
+    def _committed_idx(hero) -> int:
+        return next((i for i, p in enumerate(perks.PATHS) if p.id == hero.path), 0)
+
+    def _chooser(self) -> bool:
+        return self.engine.player.hero.path is None
+
+    def _viewed_path(self) -> "perks.Path":
+        hero = self.engine.player.hero
         if hero.path is not None:
-            return hero.can_buy(node)
-        # Pathless: a legal first buy is a tier-1 root the hero can afford.
-        return (node.cost <= hero.path_points
-                and perks.tier_unlocked(node, 0)
-                and perks.parent_met(node, ()))
+            return perks.PATHS_BY_ID[hero.path]
+        return perks.PATHS[self.view_idx % len(perks.PATHS)]
+
+    def _cursor_node(self) -> "perks.Node":
+        path = self._viewed_path()
+        return perks.ALL_NODES.get(self.cursor_id) or path.nodes[0]
+
+    def _clamp_cursor(self) -> None:
+        """Keep the cursor on a node of the Path currently shown."""
+        path = self._viewed_path()
+        if perks.ALL_NODES.get(self.cursor_id, None) not in path.nodes:
+            self.cursor_id = path.nodes[0].id
+
+    # --- pip suffix -------------------------------------------------------
+    @staticmethod
+    def _pips(node, rank) -> str:
+        """A pip string for a rankable node — filled ``•`` for bought ranks, faint
+        ``·`` for the rest (``••·``); empty for a one-and-done active. (Filled/open
+        circles aren't in the UI face, so bullet + middot stand in.)"""
+        if node.max_rank <= 1:
+            return ""
+        return "• " * rank + "· " * (node.max_rank - rank)
 
     @staticmethod
     def _locked_reason(hero, node) -> str:
-        if hero.path is not None and node.path != hero.path:
-            return "other Path"
         if hero.path_points < node.cost:
             return "need pts"
         if not perks.tier_unlocked(node, hero.points_in_path):
-            return f"needs {perks.points_for_tier(node.tier)} in Path"
+            return f"need {perks.points_for_tier(node.tier)} in Path"
         if not perks.parent_met(node, hero.nodes.keys()):
-            return "parent needed"
-        return "-"
+            parent = perks.ALL_NODES.get(node.parent)
+            return f"need {parent.name}" if parent else "locked"
+        return "locked"
 
+    # --- render -----------------------------------------------------------
     def on_render_native(self, display) -> None:
         super().on_render_native(display)  # scrimmed HUD backdrop
         ui = display.ui
         hero = self.engine.player.hero
-        self.cursor = max(0, min(self.cursor, len(self._node_list()) - 1))
+        self._clamp_cursor()
         w, h = int(display.win_w * 0.84), int(display.win_h * 0.94)
         r = ui.centered(w, h)
-        inner = ui.panel(r.x, r.y, r.w, r.h, "Paths of the Ranger")
-        x, iw, y = inner.x, inner.w, inner.y
-        ui.text(x, y, "Path points", color.tier_label)
-        px = x + ui.measure("Path points  ")[0]
-        px += ui.text(px, y, str(hero.path_points),
-                      color.hope_gain if hero.path_points else color.tier_body)
-        if hero.path is None:
-            note = "* capstone · your first buy commits your Path"
+        title = "Choose your Path" if self._chooser() else "Paths of the Ranger"
+        inner = ui.panel(r.x, r.y, r.w, r.h, title)
+        top = self._render_header(ui, inner, hero)
+        footer_y = inner.bottom - ui.small.get_linesize()
+        self._render_tree(ui, inner, top, footer_y - ui.pad // 2, hero)
+        if self._chooser():
+            hint = "↑/↓ read · ←/→ or Tab switch Path · Enter walk this Path · Esc close"
         else:
-            note = f"* capstone · committed: {perks.PATHS_BY_ID[hero.path].name}"
-        ui.text(px + ui.pad, y, note, color.tier_label, ui.small)
-        y += ui.line
-        # A dense list: size a proportional font so every Path fits the panel
-        # (2 lines of chrome per Path — header + blurb — plus one per node).
-        total_nodes = sum(len(p.nodes) for p in perks.PATHS)
-        n_lines = len(perks.PATHS) * 2 + total_nodes + 1
-        # Reserve the footer row and the per-Path breathing gaps so prop_fit
-        # sizes the rows to genuinely fit inside the panel.
-        gaps = len(perks.PATHS) * (ui.pad // 4)
-        avail = inner.bottom - y - ui.line - gaps
-        font, step = ui.prop_fit(n_lines, avail)
-        c_name = x + font.size("(a)*  ")[0]
-        c_tier = x + int(iw * 0.30)
-        c_stat = x + int(iw * 0.40)
-        c_desc = x + int(iw * 0.56)
-        idx = 0
-        for path in perks.PATHS:
-            dim = hero.path is not None and path.id != hero.path
-            head_col = color.tier_label if dim else color.section_head
-            ui.text(x, y, path.name.upper(), head_col, font)
-            ui.hrule(x, y + step - 2, iw)
-            y += step
-            ui.text(x, y, path.blurb, color.tier_label, font)
-            y += step
-            for node in path.nodes:
-                sel = idx == self.cursor
-                rank = hero.rank_of(node.id)
-                pips = self._pips(node, rank)
-                if rank >= node.max_rank and rank > 0:
-                    status, scol, name_col = "maxed", color.ranger_green, color.ranger_green
-                elif rank > 0 and self._buyable(hero, node):
-                    status, scol = f"RANK UP ({node.cost}pp)", color.selected
-                    name_col = color.tier_value if sel else color.tier_body
-                elif rank > 0:
-                    status, scol, name_col = "owned", color.ranger_green, color.ranger_green
-                elif self._buyable(hero, node):
-                    status, scol = f"BUY ({node.cost}pp)", color.selected
-                    name_col = color.tier_value if sel else color.tier_body
-                else:
-                    status, scol = self._locked_reason(hero, node), color.tier_label
-                    name_col = color.tier_value if sel else color.tier_body
-                if sel:
-                    ui.selection(x - ui.pad // 2, y, iw + ui.pad, step)
-                tag = "*" if node.capstone else " "
-                ui.text(x, y, f"({chr(ord('a') + idx)}){tag}", color.tier_label, font)
-                ui.text(c_name, y, node.name + pips, name_col, font)
-                branch = "trunk" if node.branch == "trunk" else path.branches.get(node.branch, node.branch)
-                ui.text(c_tier, y, f"T{node.tier} {branch}", color.tier_label, font)
-                ui.text(c_stat, y, status, scol, font)
-                ui.text(c_desc, y, ui.truncate(node.desc, inner.right - c_desc, font),
-                        color.tier_body if sel else color.tier_label, font)
-                y += step
-                idx += 1
-            y += ui.pad // 4
-        ui.hint(display.win_w // 2, inner.bottom - ui.small.get_linesize(),
-                "up/down move · Enter buy · a-t buy · Esc close")
+            hint = "arrows move · Enter buy/rank · Esc close"
+        ui.hint(display.win_w // 2, footer_y, hint)
 
-    @staticmethod
-    def _pips(node, rank) -> str:
-        """A pip suffix for a rankable node (e.g. ``" ●●○"``); empty for a
-        one-and-done active."""
-        if node.max_rank <= 1:
-            return ""
-        return " " + "●" * rank + "○" * (node.max_rank - rank)
+    def _render_header(self, ui, inner, hero) -> int:
+        """Path-points line plus the tab bar (chooser) or the committed name.
+        Returns the y where the tree may start."""
+        x, y = inner.x, inner.y
+        ui.text(x, y, "Path points", color.tier_label, ui.small)
+        px = x + ui.small.size("Path points  ")[0]
+        ui.text(px, y, str(hero.path_points),
+                color.hope_gain if hero.path_points else color.tier_body, ui.small)
+        blurb = self._viewed_path().blurb
+        ui.text_right(inner.right, y, ui.truncate(blurb, inner.w // 2, ui.small),
+                      color.tier_label, ui.small)
+        y += ui.small.get_linesize() + ui.pad // 4
+        if self._chooser():
+            # A tab bar of all three Paths; the viewed one is lit.
+            tx = x
+            for i, path in enumerate(perks.PATHS):
+                lit = i == self.view_idx % len(perks.PATHS)
+                label = f" {path.name} "
+                wlab = ui.body.size(label)[0]
+                if lit:
+                    ui.selection(tx, y, wlab, ui.line)
+                ui.text(tx, y, label, color.selected if lit else color.tier_label, ui.body)
+                tx += wlab + ui.pad
+        else:
+            ui.text(x, y, f"Committed — {self._viewed_path().name}",
+                    color.ranger_green, ui.body)
+        return y + ui.line + ui.pad // 3
 
-    def _buy(self, node) -> None:
-        hero = self.engine.player.hero
+    def _render_tree(self, ui, inner, top, bottom, hero) -> None:
+        path = self._viewed_path()
+        placements = path_tree.layout(path)
+        rows = max((p.row for p in placements), default=0) + 1
+        rowstep = max(1, (bottom - top) // max(1, rows))
+        box_w = int(inner.w / 3 * 0.84)
+        box_h = min(rowstep - ui.pad // 3, int(ui.line * 3.2))
+
+        def centre(p):
+            cx = inner.x + int((p.col + 0.5) * inner.w / 3)
+            cy = top + p.row * rowstep + rowstep // 2
+            return cx, cy
+
+        at = {p.node.id: p for p in placements}
+        # Prereq edges first, so the boxes sit on top of them.
+        for p in placements:
+            parent = at.get(p.node.parent)
+            if parent is not None:
+                x1, y1 = centre(parent)
+                x2, y2 = centre(p)
+                ui.connector(x1, y1 + box_h // 2, x2, y2 - box_h // 2, color.rule)
+        for p in placements:
+            cx, cy = centre(p)
+            self._draw_node(ui, p.node, cx - box_w // 2, cy - box_h // 2,
+                            box_w, box_h, hero)
+
+    def _draw_node(self, ui, node, x, y, w, h, hero) -> None:
         rank = hero.rank_of(node.id)
-        if rank > 0 and rank >= node.max_rank:
+        maxed = rank >= node.max_rank and rank > 0
+        buyable = (not self._chooser()) and hero.can_buy(node)
+        selected = node.id == self.cursor_id
+
+        if maxed:
+            # A one-and-done active reads "learned"; a maxed passive shows its cap.
+            badge = "learned" if node.active else f"rank {rank}/{node.max_rank}"
+            border, name_col, badge_col = (
+                color.ranger_green, color.ranger_green, color.ranger_green)
+        elif buyable:
+            # Affordable now — the gold "highlighted" state, whether a first buy
+            # or a rank-up on a node already owned.
+            verb = "rank up" if rank > 0 else "buy"
+            border, name_col, badge, badge_col = (
+                color.section_head, color.tier_value,
+                f"{verb} · {node.cost}pp", color.hope_gain)
+        elif rank > 0:
+            # Owned but not rankable right now (capped elsewhere or unaffordable).
+            border, name_col, badge, badge_col = (
+                color.ranger_green, color.ranger_green,
+                f"rank {rank}/{node.max_rank}", color.ranger_green)
+        elif self._chooser():
+            border, name_col, badge, badge_col = (
+                color.frame_bright, color.tier_body, f"{node.cost}pp", color.tier_label)
+        else:
+            border, name_col, badge, badge_col = (
+                color.rule, color.tier_label, self._locked_reason(hero, node),
+                color.tier_label)
+
+        fill = (*color.bar_accent, 120) if selected else None
+        if selected:
+            border = color.selected
+        ui.outline(x, y, w, h, border, fill=fill, width=3 if selected else 2)
+
+        cx = x + w // 2
+        name = ("* " if node.capstone else "") + node.name
+        ui.text_center(cx, y + ui.pad // 4, ui.truncate(name, w - ui.pad, ui.small),
+                       name_col, ui.small)
+        pips = self._pips(node, rank).strip()
+        yy = y + ui.pad // 4 + ui.small.get_linesize()
+        if pips:
+            ui.text_center(cx, yy, pips,
+                           color.ranger_green if rank else color.tier_label, ui.small)
+            yy += ui.small.get_linesize()
+        ui.text_center(cx, y + h - ui.small.get_linesize() - ui.pad // 5,
+                       ui.truncate(badge, w - ui.pad, ui.small), badge_col, ui.small)
+
+    # --- input ------------------------------------------------------------
+    def _buy_cursor(self) -> None:
+        hero = self.engine.player.hero
+        node = self._cursor_node()
+        rank = hero.rank_of(node.id)
+        if rank >= node.max_rank and rank > 0:
             self.engine.message_log.add_message(
-                f"You have mastered that already ({node.name}).", color.invalid)
+                f"You have mastered {node.name} already.", color.invalid)
             return
-        # Stopgap commit: a first buy while pathless locks the Path permanently.
-        if hero.path is None:
-            if not self._buyable(hero, node):
-                self.engine.message_log.add_message(
-                    f"You cannot take {node.name} yet.", color.impossible)
-                return
-            hero.commit_path(node.path)
-            self.engine.message_log.add_message(
-                f"You commit to {perks.PATHS_BY_ID[node.path].name}. There is no "
-                "turning back.", color.xp_filled)
         if hero.buy_node(node):
             self.engine.message_log.add_message(
                 f"You take up {node.name}. {node.desc}", color.xp_filled)
         else:
             self.engine.message_log.add_message(
-                f"You cannot take {node.name} yet.", color.impossible)
+                f"You cannot take {node.name} yet — {self._locked_reason(hero, node)}.",
+                color.impossible)
+
+    def _commit_viewed(self) -> Optional[BaseEventHandler]:
+        """Throw the permanent-choice confirm for the Path on screen."""
+        path = self._viewed_path()
+
+        def go() -> BaseEventHandler:
+            self.engine.player.hero.commit_path(path.id)
+            self.engine.message_log.add_message(
+                f"You commit to {path.name}. There is no turning back.",
+                color.xp_filled)
+            return PathsHandler(self.engine)
+
+        return ConfirmHandler(
+            self.engine,
+            f"This is permanent — walk the Path of {path.name}?",
+            on_confirm=go, cancel_to=self)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        rows = self._node_list()
-        if event.sym in _CURSOR_UP:
-            self.cursor = (self.cursor - 1) % len(rows)
+        # While pathless, ←/→/Tab switch which Path is browsed (so the cursor
+        # keys ←/→ can't also walk the tree — only ↑/↓ do in the chooser). Once
+        # committed there's one tree, and all four arrows walk it.
+        if self._chooser() and event.sym in ({KeySym.TAB} | _CURSOR_LEFT | _CURSOR_RIGHT):
+            step = -1 if event.sym in _CURSOR_LEFT else 1
+            self.view_idx = (self.view_idx + step) % len(perks.PATHS)
+            self.cursor_id = self._viewed_path().nodes[0].id
             return None
-        if event.sym in _CURSOR_DOWN:
-            self.cursor = (self.cursor + 1) % len(rows)
+        delta = {**{k: (0, -1) for k in _CURSOR_UP}, **{k: (0, 1) for k in _CURSOR_DOWN},
+                 **{k: (-1, 0) for k in _CURSOR_LEFT}, **{k: (1, 0) for k in _CURSOR_RIGHT}}
+        if event.sym in delta:
+            dx, dy = delta[event.sym]
+            placements = path_tree.layout(self._viewed_path())
+            self.cursor_id = path_tree.move(placements, self.cursor_id, dx, dy)
             return None
         if event.sym in CONFIRM_KEYS:
-            self._buy(rows[self.cursor])
-            return None
-        index = event.sym - KeySym.a
-        if 0 <= index < len(rows):
-            self._buy(rows[index])
+            if self._chooser():
+                return self._commit_viewed()
+            self._buy_cursor()
             return None
         return super().ev_keydown(event)
+
+
+class ConfirmHandler(AskUserHandler):
+    """A small yes/no modal. ``on_confirm`` is a zero-arg callable returning the
+    handler to move to on **yes**; ``cancel_to`` is returned on **no**/Esc
+    (defaults to the main game). Used for the Path's permanent-choice confirm."""
+
+    def __init__(self, engine: "Engine", prompt: str, on_confirm,
+                 cancel_to: Optional[BaseEventHandler] = None):
+        super().__init__(engine)
+        self.prompt = prompt
+        self.on_confirm = on_confirm
+        self.cancel_to = cancel_to
+
+    def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
+        ui = display.ui
+        w = int(display.win_w * 0.46)
+        lines = ui.wrap(self.prompt, w - ui.pad * 3, ui.body)
+        h = ui.pad * 3 + ui.head.get_linesize() + len(lines) * ui.line + ui.line
+        r = ui.centered(w, int(h))
+        inner = ui.panel(r.x, r.y, r.w, r.h, "A permanent choice")
+        y = inner.y
+        for line in lines:
+            ui.text(inner.x, y, line, color.tier_value, ui.body)
+            y += ui.line
+        ui.hint(display.win_w // 2, inner.bottom - ui.small.get_linesize(),
+                "[Y] yes, walk it    [N] not yet")
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        if event.sym == KeySym.y:
+            return self.on_confirm()
+        if event.sym in (KeySym.n, KeySym.ESCAPE):
+            return self.cancel_to if self.cancel_to is not None else self.on_exit()
+        return None
 
 
 class AbilitiesHandler(AskUserHandler):
@@ -849,7 +992,8 @@ g          pick up what lies underfoot
 i          use or equip from your pack
 d          set down an item
 c          your character sheet
-p          your Path's tree — spend Path points on nodes
+p          your Path's tree — at level 2 choose a Path, then spend points on it
+1-5        loose an active deed from your hotbar (see a)
 a          your active deeds (abilities on cooldown/charge)
 q          your errands and tidings
 M          the Overworld Map — all of Eriador at a glance

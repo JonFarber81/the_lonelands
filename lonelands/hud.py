@@ -131,6 +131,29 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
         ui.text(half + ui.small.size("Load  ")[0], cyy, vb, color.tier_value, ui.small)
     cy += 2 * step + ui.pad // 3
 
+    # Deeds — the active hotbar (ADR 0011). Owned actives auto-bind to keys 1–5,
+    # each with its charge/cooldown state; hidden until the first is learned.
+    bar = hero.hotbar()
+    if bar:
+        cy = ui.section(ix, cy, iw, "DEEDS")
+        keyw = ui.small.size("9  ")[0]
+        for i, node in enumerate(bar):
+            cd = hero.cooldown_left(node.id)
+            if hero.is_primed(node.id):
+                state, scol = "primed", color.hope_gain
+            elif cd > 0:
+                state, scol = f"cd {cd}", color.tier_label
+            else:
+                state, scol = "ready", color.health_recovered
+            ui.text(ix, cy, str(i + 1), color.section_head, ui.small)
+            ui.text(ix + keyw, cy,
+                    ui.truncate(node.active.name, iw - keyw - ui.small.size(state)[0] - ui.pad,
+                                ui.small),
+                    color.tier_body, ui.small)
+            ui.text_right(inner.right, cy, state, scol, ui.small)
+            cy += step
+        cy += ui.pad // 3
+
     # Errands.
     cy = ui.section(ix, cy, iw, "ERRANDS")
     actives = engine.quest_log.active_quests()

@@ -210,6 +210,14 @@ class Hero(BaseComponent):
         """Owned nodes that carry an active ability."""
         return [n for n in self.owned_nodes() if n.active is not None]
 
+    def hotbar(self, size: int = 5) -> List["perks.Node"]:
+        """The owned actives auto-bound to number keys ``1``–``size`` (ADR 0011),
+        in a **stable declaration order** so a deed keeps its slot regardless of
+        the order the nodes were bought (or a save reload). Capped at ``size``."""
+        order = {nid: i for i, nid in enumerate(perks.ALL_NODES)}
+        ranked = sorted(self.actives(), key=lambda n: order.get(n.id, 0))
+        return ranked[:size]
+
     def ability_ready(self, node_id: str) -> bool:
         """A ready active is owned, off cooldown, and not already primed."""
         node = perks.ALL_NODES.get(node_id)
