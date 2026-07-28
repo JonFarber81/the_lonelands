@@ -35,6 +35,20 @@ _AUTHORED_SURFACES: Dict[Coord, Callable[["Engine"], GameMap]] = {
     (-2, 1): procgen.generate_old_forest,       # the awake, ill-disposed wood
     (-1, 1): procgen.generate_sarn_ford,        # the Brandywine ford, Ranger post
     (0, 1): procgen.generate_south_downs,       # low downs south of the Road
+    # Cluster 1 — The Shire & the green west (issue #16).
+    (-7, 0): procgen.generate_grey_havens,      # Mithlond, the elven haven on the Gulf
+    (-6, 0): procgen.generate_white_towers,     # Emyn Beraid, the three white towers
+    (-5, 0): procgen.generate_far_downs,        # the Shire's green western downs
+    (-4, 0): procgen.generate_michel_delving,   # chief Shire town; the Mathom-house
+    (-3, -1): procgen.generate_hobbiton,        # the Hill and Bag End
+    (-2, -1): procgen.generate_brandywine_bridge,  # the stone bridge onto the Road
+    (-5, 1): procgen.generate_tower_hills,      # Emyn Beraid's green marches
+    # Cluster 3 — The Lone-lands & the East-Road corridor (issue #18).
+    (2, -2): procgen.generate_weather_hills,    # the ridge north from Weathertop
+    (4, -1): procgen.generate_last_bridge,      # the Mitheithel bridge; last sure crossing
+    (5, -1): procgen.generate_trollshaws,       # troll-country wooded rock
+    (7, -1): procgen.generate_fords_of_bruinen,  # the guarded Bruinen crossing (gateway)
+    (6, 0): procgen.generate_rivendell,         # Imladris, the Last Homely House
 }
 
 # Cells whose deeps are authored this pass (ADR 0003 re-home): the barrow-wight
