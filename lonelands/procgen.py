@@ -403,6 +403,27 @@ def patches(gm: GameMap, tile, count: int, radius: int, chance: float) -> None:
         patch(gm, tile, cx, cy, radius, chance)
 
 
+def river(gm: GameMap, col: int, *, half: int = 2, banks=None,
+          bank_chance: float = 0.28) -> int:
+    """A straight north-south river down column `col`, `2*half+1` tiles wide,
+    optionally fringed with a ragged line of `banks` tiles (willows, alders)
+    crowding each shore. Returns `col` so a caller can lay its crossing at the
+    same column. The water paints over whatever terrain is there; a road threaded
+    across it later fords the water rather than drowning (`_lay_road`). Shared by
+    the river-crossing set-pieces (Brandywine, the Hoarwell, the Bruinen)."""
+    for y in range(gm.height):
+        for dx in range(-half, half + 1):
+            x = col + dx
+            if gm.in_bounds(x, y):
+                gm.tiles[x, y] = tile_types.water
+    if banks is not None:
+        for y in range(gm.height):
+            for x in (col - half - 1, col + half + 1):
+                if gm.in_bounds(x, y) and rng.random() < bank_chance:
+                    gm.tiles[x, y] = banks
+    return col
+
+
 ROAD_BUFFER = 4    # keep-away radius (Chebyshev) around road tiles (ADR 0007)
 _BRIGAND_ROAD_BIAS = 0.65   # chance a brigand aims for the road — a gentle bias,
                             # not a hard rule (ADR 0007): they still turn up off-road
@@ -731,9 +752,7 @@ def generate_sarn_ford(engine) -> GameMap:
     scatter(gm, tile_types.tree, 0.05)
 
     river_x, ford_y = gm.width // 2, gm.height // 2
-    for y in range(gm.height):                      # the Brandywine, three wide
-        for dx in range(-1, 2):
-            gm.tiles[river_x + dx, y] = tile_types.water
+    river(gm, river_x, half=1)                      # the Brandywine, three wide
     for dx in range(-2, 3):                         # the ford (stony shallows)
         gm.tiles[river_x + dx, ford_y] = tile_types.bridge
     for x in list(range(river_x - 7, river_x - 1)) + list(range(river_x + 3, river_x + 9)):
@@ -843,6 +862,294 @@ def generate_breeland(engine) -> GameMap:
     gm.entry_xy = nearest_walkable(gm, 3, ROAD_ROW)   # arriving from Bree in the west
     gm.start_xy = gm.entry_xy
     return gm
+
+
+# ---------------------------------------------------------------------------
+# Cluster 1 — The Shire & the green west (issue #16). Pastoral Free-Lands: the
+# Grey Havens on the Gulf of Lune, the White Towers of Emyn Beraid, the Shire
+# towns of Michel Delving and Hobbiton, the Brandywine Bridge onto the Road, and
+# the green downs of the Far Downs and Tower Hills. Terrain by *place*, mostly
+# from the toolkit, each sealed by `_finish_surface` (borders, roads, and the
+# near-empty Free-band beast roll — the settled west is quiet).
+# ---------------------------------------------------------------------------
+def generate_grey_havens(engine) -> GameMap:
+    """Grey Havens (-7,0): Mithlond, the elven haven on the Gulf of Lune. The
+    Sea already laps the map on three sides (the diegetic Sea border); here the
+    Gulf floods the whole western half, grey stone quays reach out into it, and
+    the tall houses of the Firstborn stand along the east shore about a white
+    ship at the wharf — the western sea-gateway (ships west, later)."""
+    cell = overworld.cell((-7, 0))
+    gm = _open_surface(engine, cell)
+    gm.name = "The Grey Havens (Mithlond)"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.14)
+
+    # The Gulf of Lune floods the western half; the land is the eastern shore.
+    shore = gm.width // 2
+    for y in range(gm.height):
+        edge = shore + rng.randint(-2, 2)           # a ragged tide-line
+        gm.tiles[0:edge, y] = T.water
+
+    # three stone quays reaching out into the water from the shore
+    for qy in (gm.height // 2 - 8, gm.height // 2, gm.height // 2 + 8):
+        for x in range(shore - 6, shore + 2):
+            if gm.in_bounds(x, qy):
+                gm.tiles[x, qy] = T.cobble
+    gm.tiles[shore - 6:shore - 3, gm.height // 2] = T.bridge   # a white ship at the wharf
+
+    # the tall houses of the Elves, ranked along the east shore above the quays
+    for b in [(shore + 3, 8, shore + 9, 13, (shore + 3, 10)),
+              (shore + 12, 12, shore + 18, 17, (shore + 12, 14)),
+              (shore + 4, 26, shore + 10, 31, (shore + 4, 28)),
+              (shore + 13, 28, shore + 19, 33, (shore + 13, 30))]:
+        building(gm, *b)
+    return _finish_surface(gm, cell)
+
+
+def generate_white_towers(engine) -> GameMap:
+    """White Towers (-6,0): Emyn Beraid, the green hills west of the Far Downs
+    crowned by the three tall white towers of the Elves — Elostirion, tallest,
+    holding the palantír that looks only ever west to the Sea."""
+    cell = overworld.cell((-6, 0))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.18)
+    scatter(gm, tile_types.tree, 0.04)
+    patches(gm, tile_types.hill, 6, 4, 0.5)         # the green Tower Hills
+
+    # three white towers on a low ridge, Elostirion (the tallest, centre) apart
+    for tx, ty, r in [(20, 14, 2), (31, 12, 3), (42, 15, 2)]:
+        patch(gm, tile_types.hill, tx, ty, r + 1, 0.9)     # the hill it stands on
+        building(gm, tx - r, ty - r, tx + r, ty + r, door=(tx, ty + r))
+    return _finish_surface(gm, cell)
+
+
+def generate_far_downs(engine) -> GameMap:
+    """Far Downs (-5,0): the Shire's green western downs — close-cropped turf
+    heaped into low rolling hills, hedged fields, a few hedgerow trees."""
+    cell = overworld.cell((-5, 0))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.24)         # down-turf
+    patches(gm, tile_types.hill, 9, 4, 0.55)        # the rolling downs
+    scatter(gm, tile_types.tree, 0.04)              # hedgerow trees
+    return _finish_surface(gm, cell)
+
+
+def generate_michel_delving(engine) -> GameMap:
+    """Michel Delving (-4,0): the chief town of the Shire on the White Downs,
+    the largest of the hobbit-towns — a cluster of houses and smials about the
+    great **Mathom-house**, where the Shire keeps its hoard of oddments. The
+    Shire Road runs east from here toward Hobbiton and Bree."""
+    cell = overworld.cell((-4, 0))
+    gm = _open_surface(engine, cell)
+    T = tile_types
+    scatter(gm, T.grass_low, 0.16)
+    scatter(gm, T.tree, 0.04)
+    patches(gm, T.hill, 3, 3, 0.4)                  # the White Downs behind the town
+
+    # the Mathom-house: a large hall at the town's heart
+    building(gm, 26, 16, 37, 26, door=(31, 26))
+    for x in range(28, 36):                         # an inner partition — its long gallery
+        gm.tiles[x, 21] = T.building_wall
+    gm.tiles[31, 21] = T.door
+
+    # houses and smials ringing the green about it
+    for b in [(14, 12, 19, 16, (17, 16)),
+              (20, 9, 25, 13, (22, 13)),
+              (40, 13, 45, 17, (42, 17)),
+              (15, 28, 20, 32, (17, 28)),
+              (24, 30, 29, 34, (26, 30)),
+              (40, 27, 45, 31, (42, 31))]:
+        building(gm, *b)
+    for hx, hy in [(22, 18), (24, 18), (43, 22), (18, 22)]:   # a few round smial-doors
+        gm.tiles[hx, hy] = T.door
+        gm.tiles[hx + 1, hy] = T.floor
+    return _finish_surface(gm, cell)
+
+
+def generate_hobbiton(engine) -> GameMap:
+    """Hobbiton (-3,-1): the hobbit-town under **the Hill**, with **Bag End**'s
+    round green door dug into the Hill's south side above the Water. Smials pock
+    the slopes, and the Shire Road runs on east and south (`road_edges e, s`)."""
+    cell = overworld.cell((-3, -1))
+    gm = _open_surface(engine, cell)
+    T = tile_types
+    scatter(gm, T.grass_low, 0.16)
+    scatter(gm, T.tree, 0.05)
+
+    # the Hill: a great grassy rise in the NW quarter, hobbit-holes dug into it
+    hx0, hy0 = 8, 6
+    patch(gm, T.hill, hx0 + 8, hy0 + 6, 9, 0.75)
+    for dx, dy in [(0, 0), (5, 1), (10, 2), (3, 6), (8, 7), (13, 6),
+                   (6, 11), (11, 11)]:              # smial-doors ringing the Hill
+        sx, sy = hx0 + dx, hy0 + dy
+        if gm.in_bounds(sx, sy):
+            gm.tiles[sx, sy] = T.door
+            if gm.in_bounds(sx, sy + 1):
+                gm.tiles[sx, sy + 1] = T.floor
+    # Bag End, above the Water on the Hill's south side — its own round door
+    bx, by = hx0 + 8, hy0 + 12
+    gm.tiles[bx, by] = T.door
+    gm.tiles[bx, by + 1] = T.floor
+    gm.tiles[bx - 1:bx + 2, by - 1] = T.hill        # the green roof over Bag End
+
+    # the Water and the town below: a handful of houses and a mill by the stream
+    for x in range(0, gm.width):                    # the Water, running east
+        gm.tiles[x, 33 + (1 if (x % 8) < 4 else 0)] = T.water
+    gm.tiles[28:31, 33] = T.bridge                  # the bridge over the Water
+    for b in [(22, 20, 27, 24, (24, 24)),
+              (34, 18, 39, 22, (36, 22)),
+              (42, 24, 47, 28, (44, 28)),
+              (24, 26, 29, 30, (26, 26))]:          # the mill and houses
+        building(gm, *b)
+    return _finish_surface(gm, cell)
+
+
+def generate_brandywine_bridge(engine) -> GameMap:
+    """Brandywine Bridge (-2,-1): the great stone **Brandywine Bridge** where the
+    East Road crosses the river out of the Shire. The Brandywine runs the map
+    north-south; the Road threads east-west (`road_edges e, w`) over a broad
+    stone bridge, with the old Bridge Inn's gatehouse on the east bank."""
+    cell = overworld.cell((-2, -1))
+    gm = _open_surface(engine, cell)
+    T = tile_types
+    scatter(gm, T.grass_low, 0.16)
+    scatter(gm, T.tree, 0.05)
+
+    # the Brandywine, broad, running north-south down the map's middle
+    river_x = river(gm, gm.width // 2, half=2, banks=T.tree, bank_chance=0.3)
+
+    # the broad stone bridge carrying the Road across (three rows wide)
+    for dy in (-1, 0, 1):
+        for dx in range(-2, 3):
+            gm.tiles[river_x + dx, ROAD_ROW + dy] = T.bridge
+
+    # the old gatehouse on the east bank, above the bridgehead
+    building(gm, river_x + 5, ROAD_ROW - 6, river_x + 10, ROAD_ROW - 2,
+             door=(river_x + 5, ROAD_ROW - 4))
+    return _finish_surface(gm, cell)
+
+
+def generate_tower_hills(engine) -> GameMap:
+    """Tower Hills (-5,1): Emyn Beraid's green marches south-west of the Far
+    Downs — open rolling down-country under the towers, grassed hills and gorse,
+    the empty green edge of the Shire toward the Havens."""
+    cell = overworld.cell((-5, 1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.22)
+    patches(gm, tile_types.hill, 8, 4, 0.55)        # green rolling hills
+    scatter(gm, tile_types.tree, 0.03)              # a lone thorn or two
+    return _finish_surface(gm, cell)
+
+
+# ---------------------------------------------------------------------------
+# Cluster 3 — The Lone-lands & the East-Road corridor (issue #18). The road east
+# to Rivendell: the Weather Hills' ridge, the Last Bridge over the Hoarwell, the
+# troll-haunted Trollshaws, the guarded Fords of Bruinen, and Imladris itself.
+# Terrain rises from open scrubby Wild-Lands to wooded rocky Perilous country;
+# each anchor is sealed by `_finish_surface` (borders, roads, band beasts).
+# ---------------------------------------------------------------------------
+def generate_weather_hills(engine) -> GameMap:
+    """Weather Hills (2,-2): the bare ridge-line running north from Weathertop —
+    open scrubby moor heaped into stony hills and rocky knaps, the wind-scoured
+    spine of the lone-lands."""
+    cell = overworld.cell((2, -2))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.28)         # heath and scrub
+    patches(gm, tile_types.hill, 11, 4, 0.6)        # the stony ridge-line
+    scatter(gm, tile_types.tree, 0.03)              # a stunted thorn on the heights
+    return _finish_surface(gm, cell)
+
+
+def generate_last_bridge(engine) -> GameMap:
+    """Last Bridge (4,-1): the Mitheithel bridge on the East Road — the Road's
+    last sure crossing east of Bree. The Hoarwell runs the map north-south; the
+    Road threads east-west (`road_edges e, w`) over a weathered stone bridge."""
+    cell = overworld.cell((4, -1))
+    gm = _open_surface(engine, cell)
+    T = tile_types
+    scatter(gm, T.grass_low, 0.22)                  # scrubby lone-land verge
+    scatter(gm, T.tree, 0.04)
+
+    river_x = river(gm, gm.width // 2, half=2, banks=T.tree,   # the Hoarwell (Mitheithel)
+                    bank_chance=0.25)
+    for dy in (-1, 0, 1):                           # the last stone bridge
+        for dx in range(-2, 3):
+            gm.tiles[river_x + dx, ROAD_ROW + dy] = T.bridge
+    return _finish_surface(gm, cell)
+
+
+def generate_trollshaws(engine) -> GameMap:
+    """Trollshaws (5,-1): troll-country east of the Hoarwell — close wooded rock,
+    stone-strewn ridges under a dense wood where the stone-trolls have their
+    holes. The Road threads through (`road_edges e, w`); Perilous, so the beasts
+    roll runs high."""
+    cell = overworld.cell((5, -1))
+    gm = _open_surface(engine, cell)
+    scatter(gm, tile_types.grass_low, 0.14)
+    scatter(gm, tile_types.tree, 0.34)              # the close wood
+    patches(gm, tile_types.tree, 7, 4, 0.6)         # thickets
+    patches(gm, tile_types.hill, 6, 3, 0.7)         # stone-strewn rocky ridges
+    return _finish_surface(gm, cell)
+
+
+def generate_fords_of_bruinen(engine) -> GameMap:
+    """Fords of Bruinen (7,-1): the guarded crossing of the loud Bruinen, the
+    threshold of Rivendell under the Misty-Mountain wall. The river runs the map
+    north-south, forded at the Road; the wall stands to the north (diegetic
+    Mountain), and the eastward `gate` edge reads as the pass through to the
+    hidden valley. The Road enters west and turns south (`road_edges s, w`)."""
+    cell = overworld.cell((7, -1))
+    gm = _open_surface(engine, cell)
+    T = tile_types
+    scatter(gm, T.grass_low, 0.16)
+    scatter(gm, T.tree, 0.06)
+
+    river_x = river(gm, gm.width // 2, half=2)      # the loud Bruinen, running fast
+    for dx in range(-3, 4):                          # the ford (stony shallows)
+        gm.tiles[river_x + dx, ROAD_ROW] = T.bridge
+    patches(gm, T.hill, 5, 3, 0.6)                  # the broken rocky ground about it
+    return _finish_surface(gm, cell)
+
+
+def generate_rivendell(engine) -> GameMap:
+    """Rivendell (6,0): Imladris, the Last Homely House in its hidden cloven
+    valley — the loud Bruinen falling through a wooded gorge, and the House
+    itself, many-roomed, in the green heart of the vale. The eastern gateway
+    (beyond the mountains, later); the Road enters from the east (`road_edges e`)."""
+    cell = overworld.cell((6, 0))
+    gm = _open_surface(engine, cell)
+    gm.name = "Rivendell (Imladris), the Last Homely House"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.18)
+    scatter(gm, T.tree, 0.10)
+
+    # the valley walls: wooded rock heaped along the north and south rims
+    edge_belt(gm, T.tree, "n", 4, 0.7)
+    edge_belt(gm, T.tree, "s", 4, 0.7)
+    patches(gm, T.hill, 5, 3, 0.6)
+
+    # the Bruinen falling through the vale, west of the House, with a footbridge
+    river_x = river(gm, gm.width // 2 - 8, half=1, banks=T.tree, bank_chance=0.25)
+    for dx in range(-1, 2):
+        gm.tiles[river_x + dx, ROAD_ROW] = T.bridge
+
+    # the Last Homely House: a many-roomed hall on the vale's north side, its
+    # gate facing south onto the road. Seated high enough above ROAD_ROW that the
+    # threaded East Road (which bows up to `_ROAD_MEANDER` tiles) runs *up to* the
+    # gate, never through the halls.
+    hx0, hy0, hx1, hy1 = 34, 4, 52, 16
+    gate_x = (hx0 + hx1) // 2
+    building(gm, hx0, hy0, hx1, hy1, door=(gate_x, hy1))
+    for x in range(hx0 + 1, hx1):                    # an inner cross-wall — its halls
+        gm.tiles[x, 10] = T.building_wall
+    gm.tiles[gate_x, 10] = T.door
+    for y in range(hy0 + 1, 10):                     # a courtyard wing off the gate-hall
+        gm.tiles[gate_x, y] = T.building_wall
+    gm.tiles[gate_x, 7] = T.door
+    gm.tiles[hx0 + 3:hx1 - 3, 11:hy1] = T.floor
+    for y in range(hy1 + 1, ROAD_ROW):              # the path from the gate to the road
+        gm.tiles[gate_x, y] = T.road
+    return _finish_surface(gm, cell)
 
 
 # ---------------------------------------------------------------------------
