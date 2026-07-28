@@ -27,8 +27,8 @@ carrying:
   ``ranged_bonus`` / ``ranged_damage_bonus`` read by the Shot flow — ADR 0006,
   and ``stealth_bonus`` for the stealth layer not yet built)
 * ambush fields — a first-strike advantage / bonus damage the melee flow reads
-* rally fields — a low-Endurance trigger the Fighter reads live (unused by the
-  ported placeholder trees; kept for a future Kindled Heart Path)
+* rally fields — a low-Endurance trigger the Fighter reads live (the Long Watch's
+  Rally grants ``rally_atk_bonus``; ``rally_soak_bonus`` awaits a future node)
 * ``active`` — an optional :class:`ActiveSpec` for a charge/cooldown ability
 
 Gating (documented here, enforced in :meth:`Hero.can_buy`)
@@ -192,7 +192,8 @@ class Node:
     root_immune: bool = False        # cannot be rooted / knocked back (holds ground)
 
     # --- low-Endurance rally trigger (read live by Fighter) ---------------
-    # Unused by the ported placeholder trees; kept for a future Kindled Heart.
+    # The Long Watch's Rally grants rally_atk_bonus; rally_soak_bonus is unused
+    # until a future node (a Kindled Heart Path) grants it.
     rally_threshold: float = 0.0     # fires while endurance <= threshold * max
     rally_atk_bonus: int = 0
     rally_soak_bonus: int = 0

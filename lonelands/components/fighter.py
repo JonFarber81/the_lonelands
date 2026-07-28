@@ -190,9 +190,9 @@ class Fighter(BaseComponent):
         bonus = eq.soak_bonus if eq else 0
         hero = getattr(self.parent, "hero", None)
         if hero is not None:
-            # Long Watch nodes: flat Soak (Iron Skin) and an active defensive
-            # stance (Hold the Line). The rally term is dormant — no ported node
-            # grants it yet (a future Kindled Heart Path will).
+            # Long Watch nodes: flat Soak (Iron Skin), an active defensive stance
+            # (Hold the Line), and Unbroken's flat Soak. The rally-Soak term is
+            # dormant — Rally grants +to-hit, not Soak; a future node may add it.
             bonus += hero.node_bonus("soak_bonus")
             bonus += hero.rally_soak_bonus()
             bonus += hero.stance_soak

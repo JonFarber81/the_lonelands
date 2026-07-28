@@ -414,7 +414,7 @@ def resolve_shot(engine: "Engine", attacker: "Actor", target: "Actor", *,
             _maybe_recover_arrow(engine, target)
         return
 
-    # A hit: roll the bow's damage (+ any Far Shot damage perk), subtract Soak —
+    # A hit: roll the bow's damage (+ any Far Shot damage node), subtract Soak —
     # a clean shot always stings for 1+. No pierce, no Bleed.
     raw = roll_damage(af.ranged_damage) + af.ranged_damage_bonus
     dmg = max(1, raw - tf.soak)
@@ -472,7 +472,7 @@ class RangedAttackAction(Action):
 # back), Hunter's Mark (mark a foe). Each is picked with a lock-on handler and
 # resolved here with map access; a bow and an arrow are spent, and the deed's
 # cooldown is charged. All count as the player's turn.
-def _spend_shot_ammo(engine: "Engine", entity: "Actor") -> None:
+def _spend_shot_ammo(entity: "Actor") -> None:
     """Guard a Far Shot deed on a readied bow and a nocked arrow, then spend one
     (the single special draw). Raises Impossible with neither."""
     af = entity.fighter
@@ -491,23 +491,36 @@ def _hostiles_in_sight(engine: "Engine", exclude: "Actor"):
             if a is not exclude and is_hostile_actor(a) and gm.visible[a.x, a.y]]
 
 
-class MultishotAction(Action):
-    """Loose a spread (Multishot / Arrow Storm): a Shot at the marked foe and at
-    every other foe within the deed's ``radius`` tiles of it. One arrow, one
-    turn."""
+class _FoeDeedAction(Action):
+    """A Path deed aimed at a single chosen foe — the Far Shot volley and mark,
+    the Long Watch's Charge. Carries the firing node id and the target foe, and
+    shares the ready-check + still-there guard each such deed opens with."""
 
     def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
         super().__init__(entity)
         self.node_id = node_id
         self.target = target
 
-    def perform(self) -> None:
+    def _begin(self, verb: str):
+        """The hero and its ready active node, with the target re-validated (it
+        may have died between the lock-on and the strike). Raises Impossible if
+        the deed isn't ready or the foe is gone."""
         hero, node = _ready_active(self.entity, self.node_id)
-        engine = self.engine
         target = self.target
         if target is None or target.fighter is None or target.fighter.dead:
-            raise Impossible("There is nothing there to shoot.")
-        _spend_shot_ammo(engine, self.entity)
+            raise Impossible(f"There is nothing there to {verb}.")
+        return hero, node, target
+
+
+class MultishotAction(_FoeDeedAction):
+    """Loose a spread (Multishot / Arrow Storm): a Shot at the marked foe and at
+    every other foe within the deed's ``radius`` tiles of it. One arrow, one
+    turn."""
+
+    def perform(self) -> None:
+        hero, node, target = self._begin("shoot")
+        engine = self.engine
+        _spend_shot_ammo(self.entity)
         radius = node.active.radius
         # The mark first, then the spread around it — nearest-first so the log
         # reads outward from the centre.
@@ -516,29 +529,21 @@ class MultishotAction(Action):
              if a is not target and king_dist(target.x, target.y, a.x, a.y) <= radius),
             key=lambda a: king_dist(target.x, target.y, a.x, a.y))
         engine.message_log.add_message(
-            f"You loose a spread of arrows!", color.player_atk)
+            "You loose a spread of arrows!", color.player_atk)
         for foe in foes:
             resolve_shot(engine, self.entity, foe, recover=False)
         hero.begin_cooldown(self.node_id)
 
 
-class PiercingShotAction(Action):
+class PiercingShotAction(_FoeDeedAction):
     """A shaft that passes clean through (Piercing Shot): a Shot at every foe on
     the line from the hero through the chosen foe, out to the deed's reach. One
     arrow, one turn."""
 
-    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
-        super().__init__(entity)
-        self.node_id = node_id
-        self.target = target
-
     def perform(self) -> None:
-        hero, node = _ready_active(self.entity, self.node_id)
+        hero, node, target = self._begin("shoot")
         engine = self.engine
-        target = self.target
-        if target is None or target.fighter is None or target.fighter.dead:
-            raise Impossible("There is nothing there to shoot.")
-        _spend_shot_ammo(engine, self.entity)
+        _spend_shot_ammo(self.entity)
         ox, oy = self.entity.x, self.entity.y
         stepx = _sign(target.x - ox)
         stepy = _sign(target.y - oy)
@@ -558,22 +563,14 @@ class PiercingShotAction(Action):
         hero.begin_cooldown(self.node_id)
 
 
-class HarryingShotAction(Action):
+class HarryingShotAction(_FoeDeedAction):
     """Fire and fade (Harrying Shot): a Shot at the chosen foe, then a hop one
     tile straight back from it if that ground is open. One arrow, one turn."""
 
-    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
-        super().__init__(entity)
-        self.node_id = node_id
-        self.target = target
-
     def perform(self) -> None:
-        hero, node = _ready_active(self.entity, self.node_id)
+        hero, _node, target = self._begin("shoot")
         engine = self.engine
-        target = self.target
-        if target is None or target.fighter is None or target.fighter.dead:
-            raise Impossible("There is nothing there to shoot.")
-        _spend_shot_ammo(engine, self.entity)
+        _spend_shot_ammo(self.entity)
         resolve_shot(engine, self.entity, target)
         # Hop one tile directly away from the foe, if that ground is clear.
         gm = engine.game_map
@@ -589,22 +586,14 @@ class HarryingShotAction(Action):
         hero.begin_cooldown(self.node_id)
 
 
-class HuntersMarkAction(Action):
+class HuntersMarkAction(_FoeDeedAction):
     """Mark a chosen visible foe within reach (Hunter's Mark): it takes bonus
     damage from your every hit until another is marked. Marks one foe at a time,
     so the previous mark is cleared first. A full turn."""
 
-    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
-        super().__init__(entity)
-        self.node_id = node_id
-        self.target = target
-
     def perform(self) -> None:
-        hero, node = _ready_active(self.entity, self.node_id)
+        hero, node, target = self._begin("mark")
         engine = self.engine
-        target = self.target
-        if target is None or target.fighter is None or target.fighter.dead:
-            raise Impossible("There is nothing there to mark.")
         if _chebyshev(target, self.entity) > node.active.reach:
             raise Impossible("That foe is too far to mark.")
         if not engine.game_map.visible[target.x, target.y]:
@@ -623,22 +612,14 @@ class HuntersMarkAction(Action):
 # Charge (rush a foe and strike with bonus damage — a dash reused from the
 # Hidden Path's blink) and Sweeping Blow (one melee attack against every foe
 # pressed around you). Both count as the player's turn.
-class ChargeAction(Action):
+class ChargeAction(_FoeDeedAction):
     """Rush to a chosen foe within reach and strike it with bonus damage. Picked
     with a lock-on; resolves the dash here, then a real melee blow (so every
     passive — crit range, Executioner, on-hit Bleed — folds in as usual)."""
 
-    def __init__(self, entity: "Actor", node_id: str, target: "Actor"):
-        super().__init__(entity)
-        self.node_id = node_id
-        self.target = target
-
     def perform(self) -> None:
-        hero, node = _ready_active(self.entity, self.node_id)
+        hero, node, target = self._begin("charge")
         engine = self.engine
-        target = self.target
-        if target is None or target.fighter is None or target.fighter.dead:
-            raise Impossible("There is nothing there to charge.")
         me = self.entity
         reach = node.active.reach
         if _chebyshev(me, target) > reach:
@@ -675,7 +656,7 @@ class SweepAction(Action):
         self.node_id = node_id
 
     def perform(self) -> None:
-        hero, node = _ready_active(self.entity, self.node_id)
+        hero, _node = _ready_active(self.entity, self.node_id)
         engine = self.engine
         me = self.entity
         gm = engine.game_map
