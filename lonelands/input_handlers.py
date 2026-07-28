@@ -102,11 +102,6 @@ class PopupMessage(BaseEventHandler):
 
 
 class EventHandler(BaseEventHandler):
-    # SPIKE (#92): this handler and its subclasses draw the region map into the
-    # top-left viewport, so the sprite overlay applies. OverworldMapHandler,
-    # which paints the full-screen overworld instead, clears this.
-    renders_region_map = True
-
     def __init__(self, engine: "Engine"):
         self.engine = engine
 
@@ -351,12 +346,6 @@ class LockOnHandler(EventHandler):
         # The HUD, but without the location banner — the targeting prompt (drawn
         # on the grid in on_render) owns the map's top row while aiming.
         self.engine.render_hud(display, banner=False)
-        # In sprite mode the opaque tiles cover the console reticle, so redraw
-        # the aim marker in pixel space on top (a no-op in ASCII mode).
-        target = self.target
-        if config.SPRITES and target is not None:
-            vx, vy = self.engine.camera.world_to_view(target.x, target.y)
-            display.draw_reticle(vx, vy, ok=True)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -478,10 +467,6 @@ class TileTargetHandler(EventHandler):
 
     def on_render_native(self, display) -> None:
         self.engine.render_hud(display, banner=False)
-        # Redraw the tile reticle over the sprite layer (see LockOnHandler).
-        if config.SPRITES:
-            vx, vy = self.engine.camera.world_to_view(self.cx, self.cy)
-            display.draw_reticle(vx, vy, ok=self._valid(self.cx, self.cy))
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -1421,8 +1406,6 @@ class OverworldMapHandler(AskUserHandler):
     where it marks the Region overhead. Data and layout come from
     :mod:`lonelands.overworld_map`; this handler only blits and drives the cursor.
     """
-
-    renders_region_map = False  # SPIKE (#92): a full-screen atlas, not the viewport
 
     def __init__(self, engine: "Engine"):
         super().__init__(engine)
