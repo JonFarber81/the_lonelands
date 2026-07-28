@@ -53,8 +53,8 @@ def main() -> None:
                 pending.extend(pygame.event.get())
                 for pg_event in pending:
                     if pg_event.type == pygame.VIDEORESIZE:
-                        # Replaces tcod's change_tileset on resize: refit whole
-                        # cells and re-rasterize the glyph cache.
+                        # Refit whole cells to the new window and re-rasterise
+                        # the glyph atlas at the new cell size.
                         disp.resize(pg_event.w, pg_event.h)
                         continue
                     event = disp.translate(pg_event)

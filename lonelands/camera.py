@@ -4,13 +4,13 @@ A region is generated larger than the on-screen viewport (``REGION_*`` vs the
 viewport ``MAP_*`` in :mod:`lonelands.config`), so the map scrolls to keep the
 player near centre and tiles can be drawn larger. A :class:`Camera` is simply
 the top-left *world* tile currently shown; it converts between **world** tiles
-(what game logic and the map arrays use) and **view** cells (what the renderers
-draw into the console / blit as sprites).
+(what game logic and the map arrays use) and **view** cells (what the renderer
+draws into the console).
 
 The engine recomputes the camera each frame from the player's position (see
 :meth:`lonelands.engine.Engine.render`) and stores it on ``engine.camera`` so
-the map renderer, the sprite overlay, and the targeting reticles all share one
-consistent scroll offset.
+the map renderer and the targeting reticles all share one consistent scroll
+offset.
 """
 from __future__ import annotations
 
