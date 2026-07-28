@@ -947,8 +947,14 @@ class PathsHandler(AskUserHandler):
         title = "Choose your Path" if self._chooser() else "Paths of the Ranger"
         inner = ui.panel(r.x, r.y, r.w, r.h, title)
         top = self._render_header(ui, inner, hero)
-        footer_y = inner.bottom - ui.small.get_linesize()
-        self._render_tree(ui, inner, top, footer_y - ui.pad // 2, hero)
+        sls = ui.small.get_linesize()
+        footer_y = inner.bottom - sls
+        # A fixed two-line detail strip sits above the hint; the tree gives up
+        # its height (its width — which keeps forked siblings apart — is untouched).
+        strip_h = 2 * sls + ui.pad // 4
+        strip_y = footer_y - ui.pad // 2 - strip_h
+        self._render_tree(ui, inner, top, strip_y - ui.pad // 4, hero)
+        self._render_detail(ui, inner, strip_y, hero)
         if self._chooser():
             hint = "↑/↓ read · ←/→ or Tab switch Path · Enter walk this Path · Esc close"
         else:
@@ -982,6 +988,28 @@ class PathsHandler(AskUserHandler):
             ui.text(x, y, f"Committed — {self._viewed_path().name}",
                     color.ranger_green, ui.body)
         return y + ui.line + ui.pad // 3
+
+    def _render_detail(self, ui, inner, y, hero) -> None:
+        """The bottom detail strip for the cursor node (ADR 0011 legibility):
+        its name + the "what a point buys" framing on line 1, its full
+        description on line 2. Mode-aware — pathless it's pure reference (the
+        price only), committed it reads the live buy/rank/locked state."""
+        node = self._cursor_node()
+        rank = hero.rank_of(node.id)
+        committed = not self._chooser()
+        buyable = committed and hero.can_buy(node)
+        summary = perks.buy_summary(
+            node, rank, committed=committed, buyable=buyable,
+            locked_reason=self._locked_reason(hero, node))
+        sls = ui.small.get_linesize()
+        ui.connector(inner.x, y - ui.pad // 4, inner.right, y - ui.pad // 4,
+                     color.rule)
+        name = ("* " if node.capstone else "") + node.name
+        nx = ui.text(inner.x, y, name, color.tier_value, ui.small)
+        ui.text(inner.x + nx + ui.pad // 2, y, f"· {summary}",
+                color.hope_gain if buyable else color.tier_label, ui.small)
+        ui.text(inner.x, y + sls, ui.truncate(node.desc, inner.w, ui.small),
+                color.tier_body, ui.small)
 
     def _render_tree(self, ui, inner, top, bottom, hero) -> None:
         path = self._viewed_path()

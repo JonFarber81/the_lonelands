@@ -448,3 +448,26 @@ def parent_met(node: Node, owned) -> bool:
     """Whether ``node``'s light parent-edge is satisfied by ``owned`` (a set/
     collection of owned node ids). Roots (no parent) are always met."""
     return node.parent is None or node.parent in set(owned)
+
+
+def buy_summary(node: Node, rank: int, *, committed: bool,
+                buyable: bool, locked_reason: str = "locked") -> str:
+    """The one-line "what a point buys" framing for the Paths detail strip —
+    the marginal cost/effect of the *next* point on ``node``, given the hero's
+    current ``rank`` in it. Pure: the caller resolves ``buyable`` and
+    ``locked_reason`` (which read the hero) and passes them in.
+
+    While **pathless** (``committed`` is False) nothing is purchasable, so the
+    strip is pure reference and this is just the price (``2pp`` for a capstone).
+    Once committed it reads the live state: a one-and-done active becomes
+    ``learned`` and a rankable passive ``maxed`` when exhausted; an affordable
+    node shows ``buy · 1pp`` (first take) or ``rank 1→2 · 1pp`` (a rank-up);
+    an unaffordable/gated node shows the ``locked_reason``."""
+    if not committed:
+        return f"{node.cost}pp"
+    if rank > 0 and rank >= node.max_rank:
+        return "learned" if node.active else "maxed"
+    if buyable:
+        verb = f"rank {rank}→{rank + 1}" if rank > 0 else "buy"
+        return f"{verb} · {node.cost}pp"
+    return locked_reason
