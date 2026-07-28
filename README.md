@@ -12,7 +12,7 @@
 > J.R.R. Tolkien's Middle-earth, and leans on other people's work — see
 > [Acknowledgements](#acknowledgements--third-party) for full credits.
 
-A Dwarf-Fortress-style CP437 roguelike set in **Eriador in TA 2965**, told with
+A roguelike set in **Eriador in TA 2965**, told with
 a lightweight **d20** ruleset of our own (originally adapted from **The One
 Ring** TTRPG, since de-coupled — see `docs/adr/0005`).
 
