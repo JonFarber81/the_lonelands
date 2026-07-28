@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Tuple
 
+from lonelands import awareness
 from lonelands import color
 from lonelands import tile_types
 from lonelands.components.fighter import CRIT_BLEED
@@ -53,24 +54,27 @@ def _spring_trap(engine: "Engine", actor: "Actor") -> None:
 
 # --- Shared combat helpers ------------------------------------------------
 def resolve_ambush(hero, target_fighter) -> Tuple[bool, int, int]:
-    """The Hidden Path ambush, shared by melee and ranged (ADR 0006): an opening
-    strike against an unmarked foe (one still at full Endurance) lands with
-    advantage and bonus damage. Returns ``(is_ambush, advantage, bonus_damage)``.
+    """The Hidden Path ambush, shared by melee and ranged (ADR 0006, 0014): an
+    unseen strike against an **Unaware** foe lands with advantage and bonus
+    damage. Returns ``(is_ambush, advantage, bonus_damage)``.
 
-    A **primed** ambush (Shadowstep/Vanish) fires against *any* foe, fresh or
-    not — the blink or vanish has set up the unseen strike. Advantage is +1 only
-    when a node grants it (or an ambush is primed), so a bonus-damage-only ambush
-    still counts as an ambush (its flavour and damage) without a second die. A
-    foe (no Hero) never ambushes."""
+    Stealth is the sole gate — the old "fresh foe" opener is gone; a foe that has
+    noticed you (Alerted/Searching) cannot be ambushed until you re-hide and it
+    lapses back to Unaware. A **primed** ambush (Shadowstep/Vanish) fires against
+    *any* foe regardless of awareness — the blink or vanish has manufactured the
+    unseen strike. Advantage is +1 only when a node grants it (or an ambush is
+    primed), so a bonus-damage-only ambush still counts as an ambush (its flavour
+    and damage) without a second die. A foe (no Hero) never ambushes."""
     if hero is None:
         return False, 0, 0
     bonus = hero.node_bonus("ambush_bonus_damage")
     primed = getattr(hero, "ambush_primed", False)
-    fresh_opener = (
-        target_fighter.endurance >= target_fighter.max_endurance
+    target = getattr(target_fighter, "parent", None)
+    unseen_opener = (
+        target is not None and awareness.is_unaware(target)
         and (hero.ambush_advantage or bonus)
     )
-    is_ambush = bool(primed or fresh_opener)
+    is_ambush = bool(primed or unseen_opener)
     advantage = 1 if (is_ambush and (hero.ambush_advantage or primed)) else 0
     return is_ambush, advantage, bonus
 
@@ -187,10 +191,13 @@ class MeleeAction(ActionWithDirection):
         is_player = attacker is engine.player
         hero = getattr(attacker, "hero", None)
 
-        # Hidden Path ambush: an opening blow against an unmarked foe (still at
-        # full Endurance) strikes with advantage and bonus damage. The Shot flow
-        # calls the same helper (ADR 0006).
+        # Hidden Path ambush: an unseen blow against an Unaware foe strikes with
+        # advantage and bonus damage (ADR 0014). Read awareness *before* the
+        # strike alerts the board — the Shot flow calls the same helper (ADR 0006).
         ambush, advantage, ambush_dmg = resolve_ambush(hero, tf)
+        if is_player:
+            # A blow — hit or miss — alerts the struck foe and any witness in sight.
+            awareness.alert_on_attack(engine, target)
 
         result = roll_check(af.attack_bonus, tf.defence, advantage=advantage)
         # Tell the roll its Crit threshold (Swift Wrath widens it below 20) so the
@@ -388,6 +395,10 @@ def resolve_shot(engine: "Engine", attacker: "Actor", target: "Actor", *,
     # lends Advantage. The two fold into one signed advantage int.
     adjacent = _has_adjacent_hostile(engine, attacker)
     ambush, ambush_adv, ambush_dmg = resolve_ambush(hero, tf)
+    if is_player:
+        # Loosing an arrow alerts the mark and any foe with a line to the fight
+        # (read awareness first, above, so this Shot still lands as an ambush).
+        awareness.alert_on_attack(engine, target)
     advantage = ambush_adv + (-1 if adjacent else 0)
 
     # A Shot Crits only on a natural 20 — Swift Wrath's widened melee crit does

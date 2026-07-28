@@ -25,7 +25,7 @@ carrying:
   (``atk_bonus``, ``defence_bonus``, ``soak_bonus``, ``max_endurance_bonus``,
   ``melee_damage_bonus``, ``crit_range``, the Far Shot ranged fields
   ``ranged_bonus`` / ``ranged_damage_bonus`` read by the Shot flow — ADR 0006,
-  and ``stealth_bonus`` for the stealth layer not yet built)
+  and ``stealth_bonus`` fed into ``Hero.stealth`` by the stealth layer — ADR 0014)
 * ambush fields — a first-strike advantage / bonus damage the melee flow reads
 * rally fields — a low-Endurance trigger the Fighter reads live (the Long Watch's
   Rally grants ``rally_atk_bonus``; ``rally_soak_bonus`` awaits a future node)
@@ -88,8 +88,9 @@ class ActiveSpec:
                         ``duration`` rounds (Pinning). Needs a **target foe**.
       * ``"vanish"`` — the Trapper capstone (untargeted): slip into shadow —
                         your next strike is a guaranteed ambush and every deed is
-                        readied. Scoped to the existing ambush trigger (ADR 0011;
-                        a true unseen state waits on a stealth/visibility layer).
+                        readied. Primes a sure ambush that bypasses enemy
+                        awareness (ADR 0011; the stealth/awareness layer is
+                        ADR 0014).
 
     Far Shot (#75) — multi-target shots, a kiting shot, a mark, and a primed crit:
       * ``"arc_shot"``  — Multishot: loose at a chosen foe and every foe within
@@ -170,8 +171,8 @@ class Node:
     # --- Far Shot ranged fields (read by the Shot flow — ADR 0006) --------
     ranged_bonus: int = 0        # +to-hit added to a Shot's d20 (via Hero/Fighter)
     ranged_damage_bonus: int = 0  # flat damage added to a landed Shot
-    # --- field for a system not yet built ---------------------------------
-    stealth_bonus: int = 0       # TODO: consumed by a future stealth/detection layer
+    # --- stealth (Silent Tread; read into Hero.stealth — ADR 0014) --------
+    stealth_bonus: int = 0       # per-rank Stealth: shrinks a foe's Perception
 
     # --- ambush (read by MeleeAction on a first strike) -------------------
     ambush_advantage: bool = False   # advantage on the opening blow vs a fresh foe

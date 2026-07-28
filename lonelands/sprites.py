@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import numpy as np
 import pygame
 
-from lonelands import color, config, tile_glyphs, tile_types
+from lonelands import awareness, color, config, tile_glyphs, tile_types
 from lonelands.render_order import RenderOrder
 
 if TYPE_CHECKING:
@@ -315,6 +315,8 @@ class SpriteMap:
         # Cache of synthetic floor markers (loot gems, corpse heaps), keyed by
         # (colour, kind) — these carry no sheet art, so they're drawn, not blitted.
         self._markers: Dict[Tuple[Tuple[int, int, int], str], pygame.Surface] = {}
+        # Cache of awareness tags (the !/? over a wakeful foe), keyed by glyph.
+        self._aware_tags: Dict[str, pygame.Surface] = {}
 
     @staticmethod
     def _load(paths: Tuple[str, ...]) -> Optional[pygame.Surface]:
@@ -392,6 +394,28 @@ class SpriteMap:
         pygame.draw.polygon(surf, hi, facet)
         pygame.draw.polygon(surf, outline, body, max(1, s // 16))
         self._markers[key] = surf
+        return surf
+
+    def _aware_tag(self, mark: str) -> "pygame.Surface":
+        """A cached, cell-sized overlay carrying the awareness glyph (``!``/``?``)
+        near the top of the cell — the sprite-mode twin of the ASCII tag drawn in
+        :meth:`GameMap.render`. Rendered with a dark outline so a bright fell-red
+        mark stays legible over any sprite beneath it."""
+        cached = self._aware_tags.get(mark)
+        if cached is not None:
+            return cached
+        s = self.cell
+        surf = pygame.Surface((s, s), pygame.SRCALPHA)
+        if not pygame.font.get_init():
+            pygame.font.init()
+        font = pygame.font.Font(None, max(10, int(s * 0.6)))
+        outline = font.render(mark, True, color.near_black)
+        glyph = font.render(mark, True, color.sauron_eye)
+        gx = (s - glyph.get_width()) // 2
+        for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            surf.blit(outline, (gx + ox, oy))
+        surf.blit(glyph, (gx, 0))
+        self._aware_tags[mark] = surf
         return surf
 
     def _composite(self, layers: Tuple[Layer, ...], dim: bool
@@ -502,5 +526,11 @@ class SpriteMap:
                         tile = self._marker(tuple(e.color), "corpse")
             if tile is not None:
                 ent_blits.append((tile, (ox + vx * cell, oy + vy * cell)))
+            # Awareness tag over a wakeful foe (ADR 0014) — the sprite-mode twin
+            # of the ASCII !/? in GameMap.render, drawn last so it rides on top.
+            mark = awareness.MARKER.get(awareness.awareness_of(e))
+            if mark is not None:
+                ent_blits.append(
+                    (self._aware_tag(mark), (ox + vx * cell, oy + vy * cell)))
         if ent_blits:
             screen.blits(ent_blits, doreturn=False)

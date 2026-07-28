@@ -125,6 +125,19 @@ class Hero(BaseComponent):
         """Flat damage the Far Shot Path adds to a Shot (Fletcher's Eye/Deadeye)."""
         return self.node_bonus("ranged_damage_bonus")
 
+    @property
+    def stealth(self) -> int:
+        """The Ranger's **Stealth** score (ADR 0014): his Wits modifier + Silent
+        Tread (``stealth_bonus`` nodes, rank-scaled) + gear ``stealth_bonus`` (the
+        *gleaming* affix and the like). **No floor** — a clumsy, low-Wits Ranger
+        can carry negative Stealth and so is *easier* to spot. It shrinks a foe's
+        effective Perception while he is sneaking (see :mod:`lonelands.awareness`).
+        ``self.wits`` already folds in any +Wits accessory, so a token of Wits and
+        a gleaming cloak both count — through their own, separate channels."""
+        eq = getattr(self.parent, "equipment", None)
+        gear = eq.stealth_bonus if eq is not None else 0
+        return self.wits + self.node_bonus("stealth_bonus") + gear
+
     # --- Paths & nodes (ADR 0011) -----------------------------------------
     def owned_nodes(self) -> List["perks.Node"]:
         """The Nodes the hero owns (rank ≥ 1), in no particular order."""

@@ -277,17 +277,22 @@ def test_far_shot_nodes_add_ranged_to_hit_and_damage():
 # --- Ambush: the shared helper, applied to a Shot ---------------------------
 
 def test_the_shared_ambush_helper_reads_hidden_path_nodes():
+    from lonelands import awareness
+
     _, _, player = make_world()
     hero = player.hero
     foe = content.cave_goblin.spawn(GameMap(Engine(player), 5, 5), 1, 1)
     # No nodes: no ambush.
     assert resolve_ambush(hero, foe.fighter) == (False, 0, 0)
-    # Ambush node: advantage + bonus damage against a fresh foe.
+    # Ambush node: advantage + bonus damage against an Unaware foe.
     grant(hero, "hp_ambush")
     is_ambush, adv, bonus = resolve_ambush(hero, foe.fighter)
     assert is_ambush and adv == 1 and bonus == 2
-    # A bloodied foe cannot be ambushed.
-    foe.fighter.endurance = foe.fighter.max_endurance - 1
+    # Stealth is the gate now (ADR 0014), not freshness: a foe that has noticed
+    # you (Alerted/Searching) cannot be ambushed until it lapses back to Unaware.
+    foe.fighter.endurance = foe.fighter.max_endurance - 1  # bloodied is irrelevant
+    assert resolve_ambush(hero, foe.fighter)[0] is True
+    foe.ai.awareness = awareness.ALERTED
     assert resolve_ambush(hero, foe.fighter)[0] is False
 
 

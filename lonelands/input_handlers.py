@@ -185,6 +185,8 @@ class MainGameEventHandler(EventHandler):
 
         if key == KeySym.f:
             return self._begin_ranged()
+        if key == KeySym.s:
+            return self._toggle_sneak()
         if key == KeySym.g:
             return PickupAction(player)
         if key == KeySym.i:
@@ -209,6 +211,23 @@ class MainGameEventHandler(EventHandler):
             return DebugMenuHandler(self.engine)  # cheat menu (ADR 0012)
         if key == KeySym.ESCAPE:
             return EscapeMenuHandler(self.engine)
+        return None
+
+    def _toggle_sneak(self) -> None:
+        """Toggle the Sneak stance (ADR 0014). Free — a stance, not an action —
+        so it returns no Action and passes no turn; it just re-lights the FOV at
+        the new (narrowed or full) radius and notes the change. Foes re-evaluate
+        against the Ranger's live Stealth on their own next turn."""
+        engine = self.engine
+        engine.sneaking = not engine.sneaking
+        engine.update_fov()
+        if engine.sneaking:
+            engine.message_log.add_message(
+                "You sink into a crouch, senses narrowed, moving as a shadow.",
+                color.ranger_green)
+        else:
+            engine.message_log.add_message(
+                "You rise from your crouch and walk openly.", color.gray)
         return None
 
     def _fire_hotbar(self, slot: int) -> Optional[Action]:
@@ -1303,6 +1322,7 @@ WAIT       . (period) or z
 ENTER/> <  use a gate, stair, or barrow-entrance you stand upon
 f          loose an arrow — lock onto the nearest foe in sight, then
            Tab/move to cycle, f or Enter to shoot, Esc to cancel
+s          sneak — crouch to move unseen (narrows your own sight); free
 g          pick up what lies underfoot
 i          use or equip from your pack
 d          set down an item
@@ -1325,6 +1345,12 @@ THE BOW    A bow rides the ranged slot beside your melee weapon — no swap.
            A Shot is keyed off Wits and spends an arrow; it flies true within
            the bow's range, then falls off past it, and a foe at your elbow
            spoils the aim. Half your arrows can be gathered up again (g).
+
+STEALTH    Sneak (s) to slip past foes: your Stealth (Wits + Silent Tread +
+           gear) shrinks a foe's sight, and a foe that never spots you can be
+           Ambushed — an unseen strike that hits with advantage and bonus
+           damage. A struck or watching foe wakes (!), hunts your last spot
+           (?), then loses the trail. Re-hide and the Ambush comes round again.
 
 VITALS     Endurance is your vigour — at 0 you fall. Grow Weary as burdens
            mount past your strength; a Bleed wound worsens each round until

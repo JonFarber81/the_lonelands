@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional
 
 import numpy as np
 
-from lonelands import color, config, tile_types
+from lonelands import awareness, color, config, tile_types
 from lonelands.entity import Actor, Item
 from lonelands.tile_glyphs import graphic_char
 
@@ -107,6 +107,18 @@ class GameMap:
                     x=vx, y=vy,
                     string=graphic_char(entity.char), fg=entity.color,
                 )
+
+        # Awareness tags (ADR 0014): a small !/? floated over a foe's head once
+        # it has noticed the Ranger (Alerted / Searching), so the deterministic
+        # stealth model reads on the board rather than feeling like dice.
+        for actor in self.actors:
+            mark = awareness.MARKER.get(awareness.awareness_of(actor))
+            if mark is None:
+                continue
+            vx, vy = actor.x - sx, actor.y - sy - 1
+            if 0 <= vx < w and 0 <= vy < h and self.visible[actor.x, actor.y]:
+                console.print(x=vx, y=vy, string=graphic_char(mark),
+                              fg=color.sauron_eye)
 
 
 def nearest_walkable(gm: "GameMap", x: int, y: int) -> "tuple[int, int]":
