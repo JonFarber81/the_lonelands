@@ -241,6 +241,35 @@ hero rolls; a foe never rolls (the dice tray stays the player's).
   rides along in the save. *(Defined in `config.DIFFICULTIES`; applied at the
   single seam `Fighter.take_damage`.)*
 
+## Stealth & awareness
+
+- **Sneak** — the Ranger's crouched **stance**, toggled with **`s`** (free — a
+  stance, not an action, so it costs no turn). While sneaking the Ranger's own
+  **senses narrow** (FOV cut by ~a third) in exchange for a chance to go unseen.
+  Never called "hide" or "cloak". *(The half-speed movement cost is a planned
+  extension — ADR 0014.)*
+- **Stealth** — the score that makes the Ranger hard to spot: `Wits modifier +
+  Silent Tread + gear stealth_bonus`. It **shrinks** a foe's Perception. No floor
+  — a clumsy (negative-Wits) Ranger is *easier* to see. Not the same as **Sneak**
+  (the stance) — Stealth is the number, Sneak is the posture.
+- **Perception** — a foe's sight range in tiles (a wary **hostile** ~8, a
+  **beast** ~4). **Effective perception** = base − the Ranger's Stealth, and only
+  reaches through line of sight; townsfolk have none. Reduce it to 0 and the
+  Ranger can stand **adjacent and unseen** — the intended reward, and what makes a
+  melee **Ambush** possible. *(Distinct from a bow's **Effective range**.)*
+- **Awareness** — a foe's per-enemy knowledge of the Ranger, which rises *and*
+  falls through three states: **Unaware** (idle/wandering — hasn't noticed you),
+  **Alerted** (`!` — has you and hunts), and **Searching** (`?` — lost you and is
+  making for your **last-known** tile). A foe stays Searching for `max(2, 5 −
+  Stealth)` turns before falling back to Unaware; re-detection resets it.
+- **Ambush** — the unseen strike: **advantage + bonus damage** on a blow against
+  an **Unaware** foe (or one set up by a **primed** active — Shadowstep/Vanish,
+  which bypass awareness). Keyed harder by the Hidden Path's **Deathblow**.
+  Because the Ranger can re-hide, an Ambush is **repeatable**, not just an opener.
+  Striking always makes the target (and any foe with line of sight to the fight)
+  **Alerted**. *(Stealth is the sole gate — there is no "strike a fresh foe"
+  ambush without concealment; ADR 0014.)*
+
 ## Ranged combat
 
 Loosing arrows is the same `d20` core as melee, but keyed off **Wits** rather
