@@ -217,7 +217,7 @@ class MainGameEventHandler(EventHandler):
         # untargeted ones fire at once.
         if node.active.targeted:
             return begin_active(self.engine, node)
-        return ActivateAbilityAction(self.engine.player, node.id)
+        return fire_untargeted(self.engine, node)
 
     def _begin_ranged(self) -> Optional[BaseEventHandler]:
         """Enter lock-on firing mode (ADR 0006). Refuses with no bow readied or
@@ -484,12 +484,60 @@ class SnareTargetHandler(TileTargetHandler):
         return MainGameEventHandler(self.engine)
 
 
+class ActiveFoeTargetHandler(LockOnHandler):
+    """Lock-on for a foe-targeted Path deed — the Far Shot volley (Multishot,
+    Piercing Shot, Harrying Shot), Hunter's Mark, and (later) the Long Watch's
+    Charge. Offers only foes within the deed's reach and fires its Action on
+    confirm. (Pinning keeps its own handler for its shooting-readout niceties.)"""
+
+    def __init__(self, engine: "Engine", node_id: str):
+        self.node_id = node_id
+        self._spec = perks.ALL_NODES[node_id].active
+        super().__init__(engine)
+
+    @property
+    def prompt(self) -> str:  # type: ignore[override]
+        return f"{self._spec.name} — pick a foe"
+
+    def _gather_targets(self) -> List["Actor"]:
+        reach = self._spec.reach
+        p = self.engine.player
+        return [f for f in super()._gather_targets()
+                if actions.king_dist(p.x, p.y, f.x, f.y) <= reach]
+
+    def on_target(self, target: "Actor") -> Optional[BaseEventHandler]:
+        action_cls = _FOE_DEED_ACTIONS[self._spec.kind]
+        self.handle_action(action_cls(self.engine.player, self.node_id, target))
+        if self.engine.player.fighter is None or self.engine.player.fighter._dead:
+            return GameOverEventHandler(self.engine)
+        return MainGameEventHandler(self.engine)
+
+
+# node active kind -> the Action its lock-on fires.
+_FOE_DEED_ACTIONS = {
+    "arc_shot": actions.MultishotAction,
+    "line_shot": actions.PiercingShotAction,
+    "harry": actions.HarryingShotAction,
+    "mark": actions.HuntersMarkAction,
+    "charge": actions.ChargeAction,
+}
+
+
+def fire_untargeted(engine: "Engine", node) -> Action:
+    """The Action for a ready untargeted deed. Most resolve in the Hero
+    (ActivateAbilityAction), but a map-bound one (Sweeping Blow strikes the tiles
+    around you) needs an Action of its own."""
+    if node.active.kind == "sweep":
+        return actions.SweepAction(engine.player, node.id)
+    return ActivateAbilityAction(engine.player, node.id)
+
+
 def begin_active(engine: "Engine", node) -> Optional[BaseEventHandler]:
     """Route a ready owned active: untargeted deeds return None (the caller fires
-    the ActivateAbilityAction), while dash/place-tile/root deeds open a targeting
-    handler. If nothing can be targeted, report why and hand back a fresh main
-    handler (as ``_begin_ranged`` does) so ``engine.event_handler`` isn't left
-    on the discarded targeting handler."""
+    the ActivateAbilityAction), while targeted deeds open a targeting handler. If
+    nothing can be targeted, report why and hand back a fresh main handler (as
+    ``_begin_ranged`` does) so ``engine.event_handler`` isn't left on the
+    discarded targeting handler."""
     spec = node.active
     if spec.kind == "root":
         h = PinningTargetHandler(engine, node.id)
@@ -504,6 +552,25 @@ def begin_active(engine: "Engine", node) -> Optional[BaseEventHandler]:
         if not h.any_valid():
             engine.message_log.add_message(
                 "There is no open ground within reach.", color.impossible)
+            return MainGameEventHandler(engine)
+        return h
+    if spec.kind in _FOE_DEED_ACTIONS:
+        # The three volley shots need a bow and an arrow before we even aim
+        # (Hunter's Mark and Charge don't).
+        if spec.kind in ("arc_shot", "line_shot", "harry"):
+            f = engine.player.fighter
+            if f is None or not f.has_ranged_weapon:
+                engine.message_log.add_message(
+                    "You have no bow readied.", color.impossible)
+                return MainGameEventHandler(engine)
+            if actions._ammo_stack(engine.player) is None:
+                engine.message_log.add_message(
+                    "Your quiver is empty.", color.impossible)
+                return MainGameEventHandler(engine)
+        h = ActiveFoeTargetHandler(engine, node.id)
+        if h.target is None:
+            engine.message_log.add_message(
+                "There is no foe within reach.", color.impossible)
             return MainGameEventHandler(engine)
         return h
     return None  # an untargeted active — caller fires ActivateAbilityAction
@@ -1138,7 +1205,7 @@ class AbilitiesHandler(AskUserHandler):
             # Hand off to the targeting handler (which falls back to the main
             # handler itself when there is nothing in reach to target).
             return begin_active(self.engine, pk)
-        self.handle_action(ActivateAbilityAction(self.engine.player, pk.id))
+        self.handle_action(fire_untargeted(self.engine, pk))
         return MainGameEventHandler(self.engine)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:

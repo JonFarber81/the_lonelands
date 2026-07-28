@@ -134,7 +134,7 @@ def test_tree_cursor_walks_and_buys():
     ph = ih.PathsHandler(engine)
     assert ph.cursor_id == "lw_endure"         # the branching trunk root
     ph.ev_keydown(events.KeyDown(sym=ih.KeySym.UP, mod=0))
-    assert ph.cursor_id == "lw_wind"           # up the stem to the other trunk root
+    assert ph.cursor_id == "lw_athelas"        # up the stem to the next trunk root
     ph.cursor_id = "lw_endure"
     ph.ev_keydown(events.KeyDown(sym=ih.KeySym.RETURN, mod=0))
     assert hero.has_node("lw_endure")          # bought at the cursor

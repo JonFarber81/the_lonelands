@@ -66,6 +66,7 @@ class Hero(BaseComponent):
         self._node_cooldowns: Dict[str, int] = {}
         self._primed = set()                # ids of primed next-hit actives (Wrath)
         self._ambush_primed = False         # next strike is a sure ambush (Shadowstep/Vanish)
+        self._aimed_shot = False            # next Shot is a sure Critical (Aimed Shot)
         self._stance_soak = 0               # extra Soak from an active stance
         self._stance_rounds = 0             # rounds the stance persists
         # True on a turn spent *setting* a timer (activating a deed or landing a
@@ -256,6 +257,23 @@ class Hero(BaseComponent):
             self._node_cooldowns[node_id] = spec.cooldown
             self._timers_touched_this_turn = True
             return f"You set your feet — {spec.name}! (+{spec.soak} Soak)"
+        if spec.kind == "athelas":
+            # Kingsfoil: cleanse the hero's Bleed at once and set a heal-over-time
+            # that the Engine ticks each round for the draught's duration.
+            fighter = getattr(self.parent, "fighter", None)
+            if fighter is not None:
+                fighter.bleed = 0
+                fighter.apply_regen(spec.magnitude, spec.duration)
+            self._node_cooldowns[node_id] = spec.cooldown
+            self._timers_touched_this_turn = True
+            return "You crush kingsfoil into a draught — its healing steals through you."
+        if spec.kind == "aim":
+            # Aimed Shot: steady the shaft — the next Shot lands a sure Critical.
+            # The cooldown starts now (spent whether or not you loose).
+            self._aimed_shot = True
+            self._node_cooldowns[node_id] = spec.cooldown
+            self._timers_touched_this_turn = True
+            return "You steady the shaft — your next Shot will fly true."
         if spec.kind == "vanish":
             # The Trapper capstone: slip into shadow, ready every deed, and set up
             # a sure ambush. Clear cooldowns first, then start Vanish's own.
@@ -296,6 +314,19 @@ class Hero(BaseComponent):
     def consume_ambush_prime(self) -> None:
         """Clear a primed sure-ambush (called when the primed strike lands)."""
         self._ambush_primed = False
+
+    @property
+    def aimed_shot(self) -> bool:
+        """Whether a sure-Critical Shot is primed and waiting (Aimed Shot)."""
+        return self._aimed_shot
+
+    def consume_aimed_shot(self) -> bool:
+        """Spend a primed Aimed Shot: returns True (and clears it) if one was set,
+        so the Shot flow lands a guaranteed Critical. Called on the next Shot."""
+        if self._aimed_shot:
+            self._aimed_shot = False
+            return True
+        return False
 
     def is_primed(self, node_id: str) -> bool:
         """Whether ``node_id``'s next-hit active is primed and waiting to spend."""

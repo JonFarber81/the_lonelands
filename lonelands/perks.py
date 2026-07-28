@@ -27,8 +27,8 @@ carrying:
   ``ranged_bonus`` / ``ranged_damage_bonus`` read by the Shot flow — ADR 0006,
   and ``stealth_bonus`` for the stealth layer not yet built)
 * ambush fields — a first-strike advantage / bonus damage the melee flow reads
-* rally fields — a low-Endurance trigger the Fighter reads live (unused by the
-  ported placeholder trees; kept for a future Kindled Heart Path)
+* rally fields — a low-Endurance trigger the Fighter reads live (the Long Watch's
+  Rally grants ``rally_atk_bonus``; ``rally_soak_bonus`` awaits a future node)
 * ``active`` — an optional :class:`ActiveSpec` for a charge/cooldown ability
 
 Gating (documented here, enforced in :meth:`Hero.can_buy`)
@@ -91,23 +91,51 @@ class ActiveSpec:
                         readied. Scoped to the existing ambush trigger (ADR 0011;
                         a true unseen state waits on a stealth/visibility layer).
 
-    The ``dash``/``place_tile``/``root`` kinds are **targeted** — the hotbar
-    routes them through a targeting handler, and an Action (with map access)
-    resolves the effect and starts the cooldown, rather than :meth:`Hero.
-    activate_ability`, which handles only the untargeted kinds.
+    Far Shot (#75) — multi-target shots, a kiting shot, a mark, and a primed crit:
+      * ``"arc_shot"``  — Multishot: loose at a chosen foe and every foe within
+                        ``radius`` tiles of it, resolving a Shot against each.
+      * ``"line_shot"`` — Piercing Shot: a Shot along the line from the hero
+                        through a chosen foe, striking every foe on it out to
+                        ``reach``.
+      * ``"harry"``     — Harrying Shot: loose at a chosen foe, then hop one tile
+                        straight back from it (the kiting shot). Needs a foe.
+      * ``"mark"``      — Hunter's Mark: mark a chosen foe within ``reach``; while
+                        marked it takes the marking node's ``marked_damage`` extra
+                        on every hero hit. Only one foe is marked at a time.
+      * ``"aim"``       — Aimed Shot (untargeted): spend a turn steadying — your
+                        next Shot lands as a guaranteed Critical.
+
+    Long Watch (#76) — a charge, a sweep, and a cleansing regen:
+      * ``"charge"``    — Charge: rush to a chosen foe within ``reach`` and strike
+                        it for ``magnitude`` extra melee damage. Needs a foe.
+      * ``"sweep"``     — Sweeping Blow (untargeted): one melee attack against
+                        every foe adjacent to the hero.
+      * ``"athelas"``   — Athelas (untargeted): cleanse the hero's Bleed and grant
+                        ``magnitude`` Endurance regen per round for ``duration``
+                        rounds (kingsfoil's slow healing).
+
+    The **targeted** kinds (see :data:`TARGETED`) are picked with a targeting
+    handler and resolved in an Action with map access, which starts the cooldown;
+    the untargeted kinds resolve in :meth:`Hero.activate_ability`.
     """
 
     name: str
     kind: str
     cooldown: int = 0           # player-turns before it may be used again
-    magnitude: str = "0"        # dice spec for wrath/heal/trap effects
+    magnitude: str = "0"        # dice spec for wrath/heal/trap/charge/athelas
     soak: int = 0               # stance: extra Soak while active
-    duration: int = 0           # stance/root/trap: rounds the effect persists
-    reach: int = 0              # dash/place_tile/root: target range in tiles
+    duration: int = 0           # stance/root/trap/athelas: rounds the effect lasts
+    reach: int = 0              # dash/place_tile/root/shot/charge: range in tiles
+    radius: int = 0             # arc_shot: tiles around the mark also struck
     primes_ambush: bool = False  # dash: the blink sets up an ambush strike
 
-    # The targeted kinds resolve in an Action against a chosen tile/foe.
-    TARGETED = frozenset({"dash", "place_tile", "root"})
+    # The targeted kinds resolve in an Action against a chosen tile/foe. A blink/
+    # snare needs a tile; a root/shot/charge needs a foe (picked with lock-on).
+    TARGETED = frozenset({"dash", "place_tile", "root",
+                          "arc_shot", "line_shot", "harry", "mark", "charge"})
+    # The lock-on (foe-targeted) subset — the rest of TARGETED pick a tile.
+    FOE_TARGETED = frozenset({"root", "arc_shot", "line_shot", "harry",
+                              "mark", "charge"})
 
     @property
     def targeted(self) -> bool:
@@ -152,8 +180,20 @@ class Node:
     # --- Poisoned Blade (read by MeleeAction on any landed hit) -----------
     melee_bleed: int = 0             # Bleed stacks the hero's melee hits inflict
 
+    # --- Hunter's Mark (Far Shot): bonus damage vs the currently-marked foe --
+    marked_damage: int = 0           # extra damage on any hero hit vs a marked foe
+
+    # --- Executioner (Long Watch): a context-conditional vs a wounded foe ---
+    execute_threshold: float = 0.0   # fires vs a foe at/below this fraction of max
+    execute_damage: int = 0          # extra melee damage on that finishing blow
+
+    # --- Thornguard / Immovable (Long Watch Warden passives) --------------
+    thorns_damage: int = 0           # damage a foe takes for landing a melee hit on you
+    root_immune: bool = False        # cannot be rooted / knocked back (holds ground)
+
     # --- low-Endurance rally trigger (read live by Fighter) ---------------
-    # Unused by the ported placeholder trees; kept for a future Kindled Heart.
+    # The Long Watch's Rally grants rally_atk_bonus; rally_soak_bonus is unused
+    # until a future node (a Kindled Heart Path) grants it.
     rally_threshold: float = 0.0     # fires while endurance <= threshold * max
     rally_atk_bonus: int = 0
     rally_soak_bonus: int = 0
@@ -186,7 +226,10 @@ PATHS: List[Path] = [
         "Endure and protect — the Ranger who holds the line.",
         {"warden": "Warden", "reaver": "Reaver"},
         [
-            # --- trunk ---
+            # --- trunk (survival + sustain) -----------------------------------
+            # Steady Endurance is the shared branching root; the sustain
+            # deeds/passives are childless trunk roots that stack as a stem above
+            # it, and it forks into the two branches below (#76).
             Node("lw_endure", "long_watch", "trunk", "Steady Endurance",
                  "Long years in the wild have hardened you. +4 max Endurance per rank.",
                  cost=1, tier=1, max_rank=3, max_endurance_bonus=4),
@@ -194,7 +237,17 @@ PATHS: List[Path] = [
                  "Draw on hidden reserves: restore 2d6 Endurance.",
                  cost=1, tier=1,
                  active=ActiveSpec("Second Wind", "heal", cooldown=6, magnitude="2d6")),
-            # --- Warden branch (defence) ---
+            Node("lw_rally", "long_watch", "trunk", "Rally",
+                 "Cornered and grim, you fight all the harder: +2 to-hit while at "
+                 "or below half Endurance.",
+                 cost=1, tier=1, rally_threshold=0.5, rally_atk_bonus=2),
+            Node("lw_athelas", "long_watch", "trunk", "Athelas",
+                 "Crush kingsfoil into a healing draught: cleanse your Bleed and "
+                 "knit 1d4 Endurance a round for 3 rounds.",
+                 cost=1, tier=1,
+                 active=ActiveSpec("Athelas", "athelas", cooldown=8,
+                                   magnitude="1d4", duration=3)),
+            # --- Warden branch (defence) --------------------------------------
             Node("lw_soak", "long_watch", "warden", "Iron Skin",
                  "You shrug off blows that would fell lesser folk. +1 Soak per rank.",
                  cost=1, tier=2, max_rank=3, parent="lw_endure", soak_bonus=1),
@@ -203,10 +256,24 @@ PATHS: List[Path] = [
                  cost=1, tier=2, parent="lw_soak", defence_bonus=1),
             Node("lw_hold", "long_watch", "warden", "Hold the Line",
                  "Set your feet and weather the storm: +4 Soak for 3 rounds.",
-                 cost=2, tier=3, capstone=True, parent="lw_guard",
+                 cost=1, tier=2, parent="lw_guard",
                  active=ActiveSpec("Hold the Line", "stance",
                                    cooldown=6, soak=4, duration=3)),
-            # --- Reaver branch (melee offence) ---
+            Node("lw_thorn", "long_watch", "warden", "Thornguard",
+                 "Your bristling guard bites back: a foe takes 2 damage for every "
+                 "melee blow it lands on you.",
+                 cost=1, tier=3, parent="lw_hold", thorns_damage=2),
+            Node("lw_immovable", "long_watch", "warden", "Immovable",
+                 "Rooted like an old oak: you cannot be held fast or driven back, "
+                 "and stand +1 Defence for it.",
+                 cost=1, tier=3, parent="lw_thorn",
+                 root_immune=True, defence_bonus=1),
+            Node("lw_unbroken", "long_watch", "warden", "Unbroken",
+                 "Nothing moves you. +2 Soak, +2 Defence, and you can never be "
+                 "held fast.",
+                 cost=2, tier=3, capstone=True, parent="lw_immovable",
+                 soak_bonus=2, defence_bonus=2, root_immune=True),
+            # --- Reaver branch (melee offence) --------------------------------
             Node("lw_hone", "long_watch", "reaver", "Honed Edge",
                  "Your strokes find the gap. +1 to-hit in melee per rank.",
                  cost=1, tier=2, max_rank=3, parent="lw_endure", atk_bonus=1),
@@ -217,35 +284,86 @@ PATHS: List[Path] = [
                  "Loose your fury: your next hit deals +2d6 damage.",
                  cost=1, tier=2, parent="lw_hone",
                  active=ActiveSpec("Wrath", "wrath", cooldown=4, magnitude="2d6")),
+            Node("lw_charge", "long_watch", "reaver", "Charge",
+                 "Close the gap in a heartbeat: rush a foe and strike for +1d6 "
+                 "damage.",
+                 cost=1, tier=3, parent="lw_might",
+                 active=ActiveSpec("Charge", "charge", cooldown=5, reach=5,
+                                   magnitude="1d6")),
+            Node("lw_sweep", "long_watch", "reaver", "Sweeping Blow",
+                 "One great arc: strike every foe pressed around you at once.",
+                 cost=1, tier=3, parent="lw_charge",
+                 active=ActiveSpec("Sweeping Blow", "sweep", cooldown=4)),
+            Node("lw_execute", "long_watch", "reaver", "Executioner",
+                 "You know a killing chance when you see one: +4 melee damage to a "
+                 "foe under a third of its Endurance.",
+                 cost=1, tier=3, parent="lw_sweep",
+                 execute_threshold=1 / 3, execute_damage=4),
             Node("lw_reaver", "long_watch", "reaver", "Reaver's Instinct",
                  "You feel the killing stroke before it lands: melee crits on a "
                  "natural 19 or 20, and every kill readies your active deeds anew.",
-                 cost=2, tier=3, capstone=True, parent="lw_might", crit_range=1,
+                 cost=2, tier=3, capstone=True, parent="lw_execute", crit_range=1,
                  readies_actives_on_kill=True),
         ],
     ),
     Path(
         "far_shot", "The Far Shot",
         "Marksmanship — the Ranger who kills before the foe closes.",
-        {"marksman": "Marksman", "skirmisher": "Skirmisher"},
+        {"sharpshooter": "Sharpshooter", "volley": "Volley"},
         [
-            # The Shot flow reads these ranged_* fields live (ADR 0006).
+            # The Shot flow reads these ranged_* fields live (ADR 0006). Steady
+            # Aim is the shared root; it forks into Fletcher's Eye (heading the
+            # precision branch) and Skirmisher (heading the mobility branch),
+            # mirroring the Hidden Path's fork-at-the-root shape (#75).
             # --- trunk ---
             Node("fs_aim", "far_shot", "trunk", "Steady Aim",
                  "A patient eye down the shaft. +1 to-hit with bows per rank. (ranged)",
                  cost=1, tier=1, max_rank=3, ranged_bonus=1),
-            # --- Marksman branch (damage/reach) ---
-            Node("fs_fletcher", "far_shot", "marksman", "Fletcher's Eye",
+            Node("fs_fletcher", "far_shot", "trunk", "Fletcher's Eye",
                  "Your arrows bite deep. +1 ranged damage per rank. (ranged)",
-                 cost=1, tier=2, max_rank=3, parent="fs_aim", ranged_damage_bonus=1),
-            Node("fs_deadeye", "far_shot", "marksman", "Deadeye",
-                 "No range is too far. +2 to-hit and +2 damage with bows. (ranged)",
-                 cost=2, tier=3, capstone=True, parent="fs_fletcher",
-                 ranged_bonus=2, ranged_damage_bonus=2),
-            # --- Skirmisher branch (footwork) ---
-            Node("fs_footwork", "far_shot", "skirmisher", "Skirmisher",
+                 cost=1, tier=1, max_rank=3, parent="fs_aim", ranged_damage_bonus=1),
+            Node("fs_footwork", "far_shot", "trunk", "Skirmisher",
                  "You keep the enemy at bay and yourself hard to pin. +1 Defence.",
-                 cost=1, tier=2, parent="fs_aim", defence_bonus=1),
+                 cost=1, tier=1, parent="fs_aim", defence_bonus=1),
+            # --- Sharpshooter branch (precision) ------------------------------
+            Node("fs_mark", "far_shot", "sharpshooter", "Hunter's Mark",
+                 "Single out your quarry: while marked, a foe takes +3 from every "
+                 "shot and stroke you land. Marks one foe at a time.",
+                 cost=1, tier=2, parent="fs_fletcher", marked_damage=3,
+                 active=ActiveSpec("Hunter's Mark", "mark", cooldown=4, reach=8)),
+            Node("fs_aimed", "far_shot", "sharpshooter", "Aimed Shot",
+                 "Steady the shaft and hold your breath: your next Shot flies as a "
+                 "guaranteed Critical.",
+                 cost=1, tier=2, parent="fs_mark",
+                 active=ActiveSpec("Aimed Shot", "aim", cooldown=4)),
+            Node("fs_deadeye", "far_shot", "sharpshooter", "Deadeye",
+                 "No range is too far. +2 to-hit and +2 damage with bows. (ranged)",
+                 cost=2, tier=3, capstone=True, parent="fs_aimed",
+                 ranged_bonus=2, ranged_damage_bonus=2),
+            # --- Volley branch (mobility / multi-target) ----------------------
+            Node("fs_multishot", "far_shot", "volley", "Multishot",
+                 "Loose a spread: strike your mark and every foe within a tile of "
+                 "it in one draw.",
+                 cost=1, tier=2, parent="fs_footwork",
+                 active=ActiveSpec("Multishot", "arc_shot", cooldown=5, reach=8,
+                                   radius=1)),
+            Node("fs_harry", "far_shot", "volley", "Harrying Shot",
+                 "Fire and fade: loose at a foe, then slip one tile back out of "
+                 "its reach — the kiting shot.",
+                 cost=1, tier=2, parent="fs_multishot",
+                 active=ActiveSpec("Harrying Shot", "harry", cooldown=4, reach=8)),
+            Node("fs_pierce", "far_shot", "volley", "Piercing Shot",
+                 "A shaft loosed with such force it passes clean through: strike "
+                 "every foe in a line.",
+                 cost=1, tier=3, parent="fs_harry",
+                 active=ActiveSpec("Piercing Shot", "line_shot", cooldown=5,
+                                   reach=8)),
+            Node("fs_storm", "far_shot", "volley", "Arrow Storm",
+                 "Empty your quiver skyward: a hail of arrows falls on your mark "
+                 "and every foe around it.",
+                 cost=2, tier=3, capstone=True, parent="fs_pierce",
+                 active=ActiveSpec("Arrow Storm", "arc_shot", cooldown=8, reach=8,
+                                   radius=2)),
         ],
     ),
     Path(

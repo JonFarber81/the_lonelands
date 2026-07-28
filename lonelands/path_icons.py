@@ -163,6 +163,93 @@ def _arrow(screen, cx, cy, s, col, w):
     _lines(screen, col, w, cx, cy, s, [(-0.7, 0.7), (-0.34, 0.7)])
 
 
+def _volley(screen, cx, cy, s, col, w):
+    """Arc shot (Multishot / Arrow Storm) — a fan of arrows spreading outward."""
+    for fx in (-0.5, 0.0, 0.5):
+        _lines(screen, col, w, cx, cy, s, [(fx * 0.5, 0.8), (fx, -0.8)])
+        head = fx
+        _poly(screen, col, cx, cy, s,
+              [(head, -0.8), (head - 0.16, -0.5), (head + 0.16, -0.5)])
+
+
+def _pierce(screen, cx, cy, s, col, w):
+    """Line shot (Piercing Shot) — one long arrow driven through two marks."""
+    _lines(screen, col, w, cx, cy, s, [(-0.85, 0.85), (0.85, -0.85)])
+    _poly(screen, col, cx, cy, s, [(0.85, -0.85), (0.42, -0.74), (0.74, -0.42)])
+    for (fx, fy) in ((-0.2, 0.2), (0.34, -0.34)):        # the marks it passes
+        _dot(screen, col, cx, cy, s, fx, fy, 0.12 * s)
+
+
+def _harry(screen, cx, cy, s, col, w):
+    """Harrying Shot — an arrow loosed forward over a backward hop chevron."""
+    _lines(screen, col, w, cx, cy, s, [(-0.5, -0.15), (0.8, -0.15)])
+    _poly(screen, col, cx, cy, s, [(0.8, -0.15), (0.5, -0.34), (0.5, 0.04)])
+    for off in (0.0, 0.32):                              # a double chevron stepping back
+        _lines(screen, col, max(1, w - 1), cx, cy, s,
+               [(-0.3 + off, 0.35), (-0.62 + off, 0.6), (-0.3 + off, 0.85)])
+
+
+def _crosshair(screen, cx, cy, s, col, w):
+    """Hunter's Mark — a ringed reticle over the quarry."""
+    _ring(screen, col, cx, cy, s, 0.6, w)
+    for a in (0, 90, 180, 270):
+        rad = math.radians(a)
+        _lines(screen, col, w, cx, cy, s,
+               [(0.6 * math.cos(rad), 0.6 * math.sin(rad)),
+                (0.95 * math.cos(rad), 0.95 * math.sin(rad))])
+    _dot(screen, col, cx, cy, s, 0, 0, 0.11 * s)
+
+
+def _focus(screen, cx, cy, s, col, w):
+    """Aimed Shot — an arrowhead sighted through a steadying ring."""
+    _ring(screen, col, cx, cy, s, 0.85, max(1, w - 1))
+    _poly(screen, col, cx, cy, s, [(0, -0.6), (0.34, 0.1), (0, -0.1), (-0.34, 0.1)], w)
+    _lines(screen, col, w, cx, cy, s, [(0, -0.1), (0, 0.62)])
+
+
+def _sweep_arc(screen, cx, cy, s, col, w):
+    """Sweeping Blow — a blade swung in a wide crescent arc."""
+    _arc(screen, col, w, cx, cy, s, 0.85, 0.85, math.radians(200), math.radians(340))
+    _lines(screen, col, w, cx, cy, s, [(0.55, 0.5), (0.9, 0.85)])   # the hilt trailing
+    _dot(screen, col, cx, cy, s, -0.7, -0.35, 0.09 * s)             # the arc's spark
+
+
+def _leaf(screen, cx, cy, s, col, w):
+    """Athelas — a kingsfoil leaf with its central vein."""
+    _poly(screen, col, cx, cy, s, [(0, -0.85), (0.45, 0.0), (0, 0.85), (-0.45, 0.0)], w)
+    _lines(screen, col, w, cx, cy, s, [(0, -0.7), (0, 0.7)])        # the midrib
+    for fy in (-0.32, 0.02, 0.36):                                  # side veins
+        _lines(screen, col, max(1, w - 1), cx, cy, s, [(0, fy), (0.3, fy - 0.18)])
+        _lines(screen, col, max(1, w - 1), cx, cy, s, [(0, fy), (-0.3, fy - 0.18)])
+
+
+def _thorns(screen, cx, cy, s, col, w):
+    """Thornguard — a spiked guard bristling outward."""
+    _arc(screen, col, w, cx, cy, s, 0.7, 0.7, math.radians(200), math.radians(340))
+    for a in (215, 250, 290, 325):
+        rad = math.radians(a)
+        _lines(screen, col, w, cx, cy, s,
+               [(0.7 * math.cos(rad), 0.7 * math.sin(rad)),
+                (1.0 * math.cos(rad), 1.0 * math.sin(rad))])
+    _lines(screen, col, w, cx, cy, s, [(-0.5, 0.55), (0.5, 0.55)])  # the vambrace
+
+
+def _execute(screen, cx, cy, s, col, w):
+    """Executioner — a heavy blade falling on a marked line (the finishing blow)."""
+    _poly(screen, col, cx, cy, s, [(0, -0.15), (0.28, -0.75), (-0.28, -0.75)], w)  # head
+    _lines(screen, col, w, cx, cy, s, [(0, -0.15), (0, 0.45)])      # the haft
+    _lines(screen, col, w, cx, cy, s, [(-0.6, 0.75), (0.6, 0.75)])  # the block
+    for fx in (-0.35, 0.0, 0.35):
+        _lines(screen, col, max(1, w - 1), cx, cy, s, [(fx, 0.55), (fx, 0.75)])
+
+
+def _banner(screen, cx, cy, s, col, w):
+    """Rally — a raised banner, defiance in the last of the light."""
+    _lines(screen, col, w, cx, cy, s, [(-0.45, 0.85), (-0.45, -0.8)])   # the staff
+    _poly(screen, col, cx, cy, s,
+          [(-0.45, -0.8), (0.7, -0.6), (0.4, -0.3), (0.7, 0.0), (-0.45, -0.2)], w)
+
+
 def _pool(screen, cx, cy, s, col, w):
     """Endurance — a reserve filling a vessel."""
     _arc(screen, col, w, cx, cy, s, 0.7, 0.7, math.radians(180), math.radians(360))
@@ -212,7 +299,21 @@ def _archetype(node) -> Callable:
             "heal": _cross,
             "stance": _shield,
             "wrath": _burst,
+            "arc_shot": _volley,
+            "line_shot": _pierce,
+            "harry": _harry,
+            "mark": _crosshair,
+            "aim": _focus,
+            "charge": lambda sc, cx, cy, s, c, w: _chevrons(sc, cx, cy, s, c, w),
+            "sweep": _sweep_arc,
+            "athelas": _leaf,
         }.get(kind, _diamond)
+    if node.thorns_damage:
+        return _thorns
+    if node.execute_damage:
+        return _execute
+    if node.rally_atk_bonus or node.rally_soak_bonus:
+        return _banner
     if node.soak_bonus:
         return _plates
     if node.defence_bonus:

@@ -186,18 +186,19 @@ def test_an_active_is_one_and_done():
 # Points-in-Path tier gate (Diablo-2 style) + parent-edges
 # ---------------------------------------------------------------------------
 def test_a_deeper_tier_is_gated_by_points_spent_in_the_path():
-    hero = _hero_actor(path_points=9, path="far_shot").hero
-    fletcher = N["fs_fletcher"]                         # tier 2, parent fs_aim
-    assert perks.points_for_tier(2) == 2
-    # One point in Path (fs_aim rank 1): parent owned, but the tier gate isn't met.
-    assert hero.buy_node(N["fs_aim"])
-    assert hero.points_in_path == 1
-    assert not hero.can_buy(fletcher)                   # needs 2 points in Path
-    # A second point reaches the gate; now the tier-2 node is buyable.
-    assert hero.buy_node(N["fs_aim"])
-    assert hero.points_in_path == 2
-    assert hero.can_buy(fletcher)
-    assert hero.buy_node(fletcher)
+    hero = _hero_actor(path_points=12, path="far_shot").hero
+    pierce = N["fs_pierce"]                             # tier 3 (gate 4), parent fs_harry
+    assert perks.points_for_tier(3) == 4
+    # Walk the Volley branch toward Piercing Shot; at three points in Path the
+    # tier-3 gate is not yet open even once the chain reaches it.
+    _buy_all(hero, "fs_aim", "fs_footwork", "fs_multishot")
+    assert hero.points_in_path == 3
+    assert not hero.can_buy(pierce)                     # short of the tier-3 gate (4)
+    # A fourth point (Harrying Shot, Piercing's parent) reaches the gate.
+    assert hero.buy_node(N["fs_harry"])
+    assert hero.points_in_path == 4
+    assert hero.can_buy(pierce)
+    assert hero.buy_node(pierce)
 
 
 def test_a_node_needs_its_parent_owned_even_past_the_tier_gate():
@@ -218,12 +219,12 @@ def test_a_node_needs_its_parent_owned_even_past_the_tier_gate():
 # ---------------------------------------------------------------------------
 def test_capstone_gated_by_points_in_path_and_its_parent():
     hero = _hero_actor(path_points=12, path="far_shot").hero
-    deadeye = N["fs_deadeye"]                           # tier 3, cost 2, parent fs_fletcher
+    deadeye = N["fs_deadeye"]                           # tier 3, cost 2, parent fs_aimed
     assert deadeye.capstone and deadeye.cost == 2
     assert perks.points_for_tier(3) == 4
-    _buy_all(hero, "fs_aim", "fs_aim", "fs_fletcher")   # 3 points in Path
+    _buy_all(hero, "fs_aim", "fs_fletcher", "fs_mark")  # 3 points in Path
     assert not hero.can_buy(deadeye)                    # short of the tier-3 gate (4)
-    assert hero.buy_node(N["fs_fletcher"])             # 4 points in Path now
+    assert hero.buy_node(N["fs_aimed"])                # 4 points; capstone's parent
     assert hero.can_buy(deadeye)
     assert hero.buy_node(deadeye)
     assert hero.has_node("fs_deadeye")
@@ -445,13 +446,15 @@ def test_stance_lasts_its_full_duration_after_the_activation_turn():
 # On-kill hook: Reaver's Instinct readies the hero's deeds on a slaying
 # ---------------------------------------------------------------------------
 def _full_reaver(hero):
-    """Walk the Reaver branch to its capstone (Reaver's Instinct)."""
-    _buy_all(hero, "lw_endure", "lw_endure", "lw_hone", "lw_might",
-             "lw_wrath", "lw_reaver")
+    """Walk the Reaver branch to its capstone (Reaver's Instinct), owning Wrath
+    along the way. Charge/Sweeping Blow/Executioner sit between Killing Might and
+    the capstone (#76), so the walk is longer than the placeholder tree's."""
+    _buy_all(hero, "lw_endure", "lw_endure", "lw_hone", "lw_wrath", "lw_might",
+             "lw_charge", "lw_sweep", "lw_execute", "lw_reaver")
 
 
 def test_on_kill_readies_deeds_only_with_reavers_instinct():
-    with_reaver = _hero_actor(path_points=9, path="long_watch").hero
+    with_reaver = _hero_actor(path_points=10, path="long_watch").hero
     _full_reaver(with_reaver)
     with_reaver._node_cooldowns["lw_wrath"] = 3         # Wrath spent, cooling down
     with_reaver.on_kill()
@@ -468,7 +471,7 @@ def test_on_kill_readies_deeds_only_with_reavers_instinct():
 
 def test_slaying_a_foe_triggers_the_on_kill_hook():
     engine, gm, player = make_world()
-    player.hero.path_points = 9
+    player.hero.path_points = 10
     player.hero.commit_path("long_watch")
     _full_reaver(player.hero)
     player.hero._node_cooldowns["lw_wrath"] = 3         # on cooldown before the kill
@@ -488,7 +491,7 @@ def test_slaying_a_foe_triggers_the_on_kill_hook():
 # ---------------------------------------------------------------------------
 def test_reavers_instinct_natural_19_reads_as_a_crit_in_the_tray():
     engine, gm, player = make_world()
-    player.hero.path_points = 9
+    player.hero.path_points = 10
     player.hero.commit_path("long_watch")
     _full_reaver(player.hero)                           # Reaver's Instinct: crit on 19+
     assert player.fighter.crit_face == 19
