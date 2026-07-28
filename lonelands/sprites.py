@@ -9,7 +9,9 @@ deliberately hard-coded and disposable:
   the humanoid roster (findings: terrain and characters live on *separate* sheets,
   so Phase 1's ``sprite key -> (sheet, col, row)`` table must carry a sheet id);
 * a tiny :data:`SPRITE_KEYS` table for the nine spike keys (grass, road, stone,
-  wall, door, tree, townsman, orc, ranger);
+  wall, door, tree, townsman, orc, ranger), plus a paper-doll crowd
+  (:func:`crowd_layers`) that mixes body + clothing + hair so the race-lettered
+  wanderers don't all look alike;
 * codepoint/kind reverse-mapping to pick a key per cell (Phase 1 replaces this
   with an explicit ``sprite_key`` on every tile type and entity);
 * a two-layer blit — terrain, then entities — over the map viewport, in square
@@ -21,7 +23,8 @@ sheets absent the overlay simply draws nothing (the ASCII map shows through).
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+import random
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import pygame
 
@@ -98,7 +101,11 @@ def resolve_terrain(kind: int, light_cp: int) -> Optional[str]:
 
 def resolve_entity(char: str) -> Optional[str]:
     """Sprite key for an entity from its ASCII ``char`` — or ``None`` to skip it
-    (dropped items and creatures this spike doesn't cover)."""
+    (dropped items and creatures this spike doesn't cover).
+
+    The single-tile fallback: the render path prefers :func:`crowd_layers` for the
+    race-lettered folk (so they vary), and only falls back to the flat
+    ``townsman`` tile here if that returns nothing."""
     if char == "@":                       # player + hand-authored principals
         return "ranger"
     if char in ("o", "O"):                # orcs
@@ -106,6 +113,69 @@ def resolve_entity(char: str) -> Optional[str]:
     if char in ("m", "h", "d"):           # the race-lettered crowd (ADR-0009)
         return "townsman"
     return None
+
+
+# --- The layered crowd (mixing body + clothing + hair) --------------------
+# The Kenney Characters sheet is a paper-doll: a plain body, then a clothing
+# (torso) tile, then a hair/hat tile, each 16×16 and stacked with transparency.
+# Rather than clone one finished figure, the race-lettered wanderers each pick a
+# stack, so a Bree street reads as a varied crowd. Layers are ``(sheet, col,
+# row)`` on the characters sheet; Phase 1 promotes these hand-picked sets into
+# the race→sprite table (the way ADR-0009 maps race→letter).
+Layer = Tuple[str, int, int]
+
+_BODIES: Tuple[Layer, ...] = (
+    ("chars", 0, 0),   # pale
+    ("chars", 0, 1),   # tan
+    ("chars", 0, 2),   # brown
+)
+# Torsos: tunics, coats, robes, and leathers across the colour range.
+_CLOTHES: Tuple[Layer, ...] = (
+    ("chars", 6, 0), ("chars", 10, 0), ("chars", 14, 0),   # orange, teal, purple
+    ("chars", 5, 5), ("chars", 10, 4), ("chars", 14, 4),   # green, grey, brown
+    ("chars", 5, 9), ("chars", 10, 6), ("chars", 14, 9),   # red, leather, amber
+    ("chars", 6, 4),                                        # belted orange
+)
+# Hair/hats without a beard (hobbits, most men).
+_HAIR_PLAIN: Tuple[Layer, ...] = (
+    ("chars", 22, 1), ("chars", 25, 0), ("chars", 20, 4), ("chars", 24, 5),
+    ("chars", 22, 2), ("chars", 25, 1), ("chars", 20, 1), ("chars", 24, 1),
+)
+# Beards and a weathered hood — the bearded folk (dwarves; some older men).
+_HAIR_BEARD: Tuple[Layer, ...] = (
+    ("chars", 24, 4), ("chars", 20, 10),
+)
+
+# Per-race wardrobe: (body pool, clothing pool, hair pool). Men draw from
+# everything; hobbits skip beards; dwarves are always bearded and earthy-clad.
+_EARTHY = (("chars", 5, 5), ("chars", 10, 4), ("chars", 14, 4),
+           ("chars", 10, 6), ("chars", 5, 9))
+_WARDROBE: Dict[str, Tuple[Tuple[Layer, ...], Tuple[Layer, ...], Tuple[Layer, ...]]] = {
+    "m": (_BODIES, _CLOTHES, _HAIR_PLAIN + _HAIR_BEARD),
+    "h": ((("chars", 0, 0), ("chars", 0, 1)), _CLOTHES, _HAIR_PLAIN),
+    "d": ((("chars", 0, 1), ("chars", 0, 2)), _EARTHY, _HAIR_BEARD),
+}
+
+
+def crowd_layers(char: str, seed: int) -> Optional[Tuple[Layer, ...]]:
+    """A deterministic body+clothing+hair stack for a race-lettered wanderer, or
+    ``None`` for anything that isn't one (the player, orcs, items).
+
+    ``seed`` fixes the choice, so a given wanderer keeps its look frame to frame;
+    passing the entity's identity gives a varied but stable crowd. (Across
+    save/load the look re-rolls — fine for the spike; Phase 1 seeds it from a
+    persisted identity.)"""
+    wardrobe = _WARDROBE.get(char)
+    if wardrobe is None:
+        return None
+    bodies, clothes, hair = wardrobe
+    rng = random.Random(seed)
+    stack: List[Layer] = [rng.choice(bodies), rng.choice(clothes)]
+    # A few folk go bare-headed — but a dwarf is never beardless.
+    bare = char != "d" and rng.random() < 0.12
+    if hair and not bare:
+        stack.append(rng.choice(hair))
+    return tuple(stack)
 
 
 class SpriteMap:
@@ -118,8 +188,8 @@ class SpriteMap:
         self._sheets: Dict[str, Optional[pygame.Surface]] = {
             name: self._load(paths) for name, paths in SHEET_CANDIDATES.items()
         }
-        # Cache of cell-sized tiles, keyed by (sprite key, dimmed?).
-        self._cache: Dict[Tuple[str, bool], Optional[pygame.Surface]] = {}
+        # Cache of composited cell-sized surfaces, keyed by (layer stack, dimmed?).
+        self._cache: Dict[Tuple[Tuple[Layer, ...], bool], Optional[pygame.Surface]] = {}
 
     @staticmethod
     def _load(paths: Tuple[str, ...]) -> Optional[pygame.Surface]:
@@ -142,30 +212,44 @@ class SpriteMap:
         return self._sheets.get("base") is not None
 
     def _tile(self, key: str, dim: bool) -> Optional[pygame.Surface]:
-        cache_key = (key, dim)
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-        surf = self._build_tile(key, dim)
-        self._cache[cache_key] = surf
-        return surf
-
-    def _build_tile(self, key: str, dim: bool) -> Optional[pygame.Surface]:
+        """The surface for a single sprite key (terrain or a flat character)."""
         spec = SPRITE_KEYS.get(key)
         if spec is None:
             return None
-        sheet_name, col, row = spec
-        sheet = self._sheets.get(sheet_name)
-        if sheet is None:
-            return None
-        src = sheet.subsurface((col * STEP, row * STEP, TILE, TILE))
-        # transform.scale duplicates pixels (no smoothing) -> crisp at integer
-        # multiples of 16, merely blocky otherwise. Copy so we own the pixels.
-        tile = pygame.transform.scale(src.copy(), (self.cell, self.cell))
-        if dim:
+        return self._composite((spec,), dim)
+
+    def _composite(self, layers: Tuple[Layer, ...], dim: bool
+                   ) -> Optional[pygame.Surface]:
+        """One cell-sized surface built by stacking ``layers`` (bottom-first),
+        cached by the stack. A single-element stack is a plain tile; a
+        body+clothing+hair stack is a paper-doll character."""
+        cache_key = (layers, dim)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+        surf = self._build(layers, dim)
+        self._cache[cache_key] = surf
+        return surf
+
+    def _build(self, layers: Tuple[Layer, ...], dim: bool
+               ) -> Optional[pygame.Surface]:
+        out: Optional[pygame.Surface] = None
+        for sheet_name, col, row in layers:
+            sheet = self._sheets.get(sheet_name)
+            if sheet is None:
+                continue
+            src = sheet.subsurface((col * STEP, row * STEP, TILE, TILE))
+            # transform.scale duplicates pixels (no smoothing) -> crisp at integer
+            # multiples of 16, merely blocky otherwise. Copy so we own the pixels.
+            tile = pygame.transform.scale(src.copy(), (self.cell, self.cell))
+            if out is None:
+                out = tile
+            else:
+                out.blit(tile, (0, 0))  # alpha-composite the layer over the stack
+        if out is not None and dim:
             # Remembered tiles: the same sprite, darkened (ADR-0013's FOV-by-
             # dimming, not palette-swap). Multiply keeps the alpha shape.
-            tile.fill((110, 110, 110, 255), special_flags=pygame.BLEND_RGBA_MULT)
-        return tile
+            out.fill((110, 110, 110, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        return out
 
     def render(self, screen: pygame.Surface, offset: Tuple[int, int],
                game_map: "GameMap") -> None:
@@ -210,10 +294,14 @@ class SpriteMap:
                 continue
             if not bool(visible[e.x, e.y]):
                 continue
-            key = resolve_entity(e.char)
-            if key is None:
-                continue
-            tile = self._tile(key, dim=False)
+            # Prefer a mixed body+clothing+hair stack for the race-lettered crowd
+            # (varied but stable per entity); fall back to a flat sprite key.
+            layers = crowd_layers(e.char, id(e))
+            if layers is not None:
+                tile = self._composite(layers, dim=False)
+            else:
+                key = resolve_entity(e.char)
+                tile = self._tile(key, dim=False) if key is not None else None
             if tile is not None:
                 ent_blits.append((tile, (ox + e.x * cell, oy + e.y * cell)))
         if ent_blits:

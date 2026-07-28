@@ -79,6 +79,50 @@ def test_unmapped_char_falls_through():
     assert sprites.resolve_entity("*") is None
 
 
+# --- the layered crowd: body + clothing + hair, mixed per wanderer ---------
+def test_crowd_layers_only_for_the_race_lettered():
+    assert sprites.crowd_layers("@", 1) is None   # the player
+    assert sprites.crowd_layers("o", 1) is None   # orcs
+    assert sprites.crowd_layers("!", 1) is None   # an item
+    for glyph in RACE_GLYPHS.values():
+        assert sprites.crowd_layers(glyph, 1) is not None
+
+
+def test_crowd_layers_is_deterministic_per_seed():
+    assert sprites.crowd_layers("m", 42) == sprites.crowd_layers("m", 42)
+
+
+def test_crowd_layers_varies_across_the_crowd():
+    stacks = {sprites.crowd_layers("m", s) for s in range(50)}
+    assert len(stacks) > 5  # a street of men is not a row of clones
+
+
+def test_crowd_stack_is_body_then_clothing_then_optional_hair():
+    for s in range(30):
+        stack = sprites.crowd_layers("m", s)
+        assert stack[0] in sprites._BODIES          # body first
+        assert stack[1] in sprites._CLOTHES         # clothing over it
+        assert 2 <= len(stack) <= 3                 # hair is optional
+
+
+def test_dwarves_are_bearded_and_hobbits_are_not():
+    beards = set(sprites._HAIR_BEARD)
+    for s in range(40):
+        dwarf = sprites.crowd_layers("d", s)
+        assert any(layer in beards for layer in dwarf[2:])
+        hobbit = sprites.crowd_layers("h", s)
+        assert all(layer not in beards for layer in hobbit[2:])
+
+
+def test_every_crowd_layer_points_at_the_characters_sheet():
+    pools = (sprites._BODIES, sprites._CLOTHES,
+             sprites._HAIR_PLAIN, sprites._HAIR_BEARD)
+    for pool in pools:
+        for sheet, col, row in pool:
+            assert sheet == "chars"
+            assert col >= 0 and row >= 0
+
+
 # --- the flag defaults off: the ASCII path is unchanged --------------------
 def test_sprite_mode_defaults_off():
     assert config.SPRITES is False
@@ -104,3 +148,5 @@ def test_all_keys_bake_a_tile_when_sheets_present():
     for key in sprites.SPRITE_KEYS:
         assert sm._tile(key, dim=False) is not None, key
         assert sm._tile(key, dim=True) is not None, key
+    # a mixed body+clothing+hair stack composites to a single surface
+    assert sm._composite(sprites.crowd_layers("m", 3), dim=False) is not None
