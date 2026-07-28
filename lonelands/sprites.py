@@ -49,9 +49,9 @@ STEP = TILE + MARGIN
 # fraction mixed toward luma grey (0 = untouched, 1 = greyscale), ``tint`` is a
 # per-channel multiplier for a warm/cool cast. Identity = (1.0, 0.0, (1,1,1)).
 GRADE: Dict[str, object] = {
-    "darken": 0.70,
-    "desat": 0.33,
-    "tint": (1.00, 0.99, 0.93),  # near-neutral — a hair of warmth, no brown cast
+    "darken": 0.88,
+    "desat": 0.27,
+    "tint": (1.01, 0.99, 0.93),  # near-neutral — a hair of warmth, no brown cast
 }
 # A snapshot of the shipped default, so the debug tuner (below) can reset to it.
 _DEFAULT_GRADE = {**GRADE, "tint": tuple(GRADE["tint"])}  # type: ignore[arg-type]
