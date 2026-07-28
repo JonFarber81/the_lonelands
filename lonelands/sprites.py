@@ -160,16 +160,23 @@ def enabled() -> bool:
 
 # --- native tile-size detection ---------------------------------------------
 def _detect_native_size(width: int, height: int, hint: int) -> int:
-    """The tile size nearest ``hint`` that best divides ``width``×``height``.
-    Oryx sheets are cropped tight, not padded to an exact grid multiple, so
-    this searches a small window around the documented hint rather than
-    requiring perfect divisibility."""
-    best_size, best_rem = hint, width % hint + height % hint
-    for size in range(max(4, hint - 6), hint + 7):
-        rem = width % size + height % size
-        if rem < best_rem:
-            best_size, best_rem = size, rem
-    return best_size
+    """The tile size nearest ``hint`` that divides both ``width`` and
+    ``height`` exactly, or ``hint`` itself if none in the window does.
+
+    Oryx sheets are cropped tight, not padded to an exact grid multiple, so a
+    sheet's true tile size usually does *not* divide its pixel dimensions —
+    the crop just trims a partial trailing row/column. Minimising the total
+    remainder (an earlier version of this function) picks up on that noise:
+    a *wrong* size can have a smaller combined remainder than the true one
+    (Terrain.png: 22 remainders to 14px, the true 24 to 16px — 22 "wins" and
+    slices every tile off-grid, producing a visible moiré of seams). An exact
+    divisor of both dimensions is real signal; a merely-smaller remainder
+    isn't, so only an exact match overrides the documented hint."""
+    window = range(max(4, hint - 6), hint + 7)
+    for size in sorted(window, key=lambda s: abs(s - hint)):
+        if width % size == 0 and height % size == 0:
+            return size
+    return hint
 
 
 # --- The atlas ---------------------------------------------------------------
