@@ -1292,6 +1292,149 @@ def generate_ettenmoors(engine) -> GameMap:
 
 
 # ---------------------------------------------------------------------------
+# Cluster 6 — The South (Cardolan → Tharbad) (issue #21). The southern reach down
+# the Greenway: the emptied realm of Cardolan (barrows and broken keeps) giving
+# way to the Greyflood marsh-flats at ruined Tharbad, the southern gateway. Wild
+# country; the Greenway bends south-east down the corridor, and the soft south
+# edge is cut off (diegetic wood). Each anchor is sealed by `_finish_surface`;
+# Tharbad's silted deeps are a plan marker dug in a later pass (out of scope).
+# ---------------------------------------------------------------------------
+def generate_cardolan(engine) -> GameMap:
+    """Cardolan (1,2): the emptied old realm south of the Road — a hushed country
+    of low green downs heaped with grass-grown barrows and the broken keeps of a
+    kingdom long fallen. Nothing lives here but the wind and what walks the mounds;
+    the Greenway threads through on its way south (roads sealed by `_finish_surface`)."""
+    cell = overworld.cell((1, 2))
+    gm = _open_surface(engine, cell)
+    gm.name = "Cardolan, the emptied realm"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.26)                  # close-cropped down-turf
+    patches(gm, T.hill, 10, 4, 0.55)                # the low rolling downs and barrow-mounds
+
+    # the broken keeps of the fallen realm, roofless masonry strewn with rubble
+    for rx0, ry0, rx1, ry1 in [(9, 10, 18, 18), (40, 12, 50, 20),
+                               (14, 28, 23, 35), (44, 30, 53, 37)]:
+        ruin_walls(gm, rx0, ry0, rx1, ry1)
+    scatter(gm, T.rubble, 0.03)                     # tumbled stone across the downs
+    scatter(gm, T.tree, 0.03)                       # a lone wind-bent thorn on a mound
+    return _finish_surface(gm, cell)
+
+
+def generate_tharbad(engine) -> GameMap:
+    """Tharbad (1,4): the ruined river-city on the Greyflood, the southern gateway
+    of Eriador. The Greyflood spreads into silted marsh-flats across the south;
+    the drowned and broken stonework of the old crossing-town stands among the
+    reeds, and a raised stone causeway carries the Greenway down to the river.
+    (Its silted deeps under the ruins are dug in a later pass.)"""
+    cell = overworld.cell((1, 4))
+    gm = _open_surface(engine, cell)
+    gm.name = "Tharbad, the ruined river-city on the Greyflood"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.14)
+
+    # the Greyflood silts into marsh-flats across the southern half of the map
+    for x in range(gm.width):
+        flat = 26 + rng.randint(-2, 2)
+        for y in range(flat, gm.height):
+            if rng.random() < 0.7:
+                gm.tiles[x, y] = T.water
+    patches(gm, T.water, 6, 3, 0.6)                 # standing meres among the reeds
+
+    # the raised stone causeway carrying the Greenway down to the river-crossing
+    for y in range(gm.height):
+        gm.tiles[ROAD_COL, y] = T.cobble
+        gm.tiles[ROAD_COL - 1, y] = T.cobble
+
+    # the drowned and broken stonework of the old crossing-town
+    for rx0, ry0, rx1, ry1 in [(10, 12, 20, 20), (36, 11, 46, 19),
+                               (12, 24, 21, 31), (40, 23, 49, 30)]:
+        ruin_walls(gm, rx0, ry0, rx1, ry1)
+    scatter(gm, T.rubble, 0.03)
+    return _finish_surface(gm, cell)
+
+
+# ---------------------------------------------------------------------------
+# Cluster 7 — Eregion & the Mountain-gates (issue #22). The SE gates under the
+# Misty Mountains: the holly-country of Hollin, ruined Ost-in-Edhil of the
+# Elven-smiths, the Hollin gate of Khazad-dûm with the Watcher's pool, and the
+# Redhorn Pass over Caradhras. No roads are drawn (approach-tracks only); the east
+# and south wall is the Misty Mountains (diegetic mountain/gate). Wild → Perilous
+# → Dark bands. Each anchor is sealed by `_finish_surface`; the Ost-in-Edhil and
+# Moria deeps are plan markers dug in a later pass (out of scope).
+# ---------------------------------------------------------------------------
+def generate_ost_in_edhil(engine) -> GameMap:
+    """Ost-in-Edhil (4,3): the ruined city of the Elven-smiths of Eregion, standing
+    in the holly-country of Hollin under the mountain wall. Roofless halls and
+    forge-cellars line grass-grown ways; holly crowds the broken stone, and a
+    cobbled plaza still shows where the smiths of the Gwaith-i-Mírdain once worked.
+    (Its forge-cellar deeps are dug in a later pass.)"""
+    cell = overworld.cell((4, 3))
+    gm = _open_surface(engine, cell)
+    gm.name = "Ost-in-Edhil, the ruined city of the Elven-smiths"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.18)
+    scatter(gm, T.tree, 0.12)                       # the holly of Hollin, crowding the stone
+
+    # the ruined city: roofless halls and forge-cellars about a cobbled plaza
+    for rx0, ry0, rx1, ry1 in [(9, 9, 19, 17), (23, 8, 33, 16), (37, 10, 47, 18),
+                               (12, 24, 22, 32), (26, 25, 36, 33), (40, 24, 50, 32)]:
+        ruin_walls(gm, rx0, ry0, rx1, ry1)
+    for x in range(24, 39):                         # the cobbled smith-plaza at the centre
+        for y in range(19, 23):
+            gm.tiles[x, y] = T.cobble
+    scatter(gm, T.rubble, 0.03)
+    return _finish_surface(gm, cell)
+
+
+def generate_moria_west_gate(engine) -> GameMap:
+    """Moria West-gate (5,3): the Hollin gate of Khazad-dûm — the Doors of Durin
+    set in the sheer mountain wall, before them the dark still Watcher's pool where
+    the Sirannon was dammed. The cliff of the Misty Mountains rears along the east;
+    holly clings to the rock, and the fell water lies black and waiting under the
+    doors. (The long dark of Moria beyond the gate is dug in a later pass.)"""
+    cell = overworld.cell((5, 3))
+    gm = _open_surface(engine, cell)
+    gm.name = "The West-gate of Moria (the Hollin gate of Khazad-dûm)"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.12)
+    scatter(gm, T.tree, 0.08)                       # holly clinging to the rock
+
+    # the sheer cliff of the Misty Mountains rears along the eastern edge. This is
+    # a deliberate *interior* set-piece, not a plan border: (5,3)'s east neighbour
+    # (6,3) is present, so `diegetic_borders` paints nothing here — the gate fronts
+    # the wall from within its own cell. Hence a hand-painted belt (deeper/denser
+    # than `_BORDER_BELT[MOUNTAIN]`) rather than the shared closed-edge barrier.
+    edge_belt(gm, T.hill, "e", 8, 0.9)
+
+    # the Doors of Durin, set in the cliff-face: a wall of stone pierced by a gate
+    gate_x = gm.width - 9
+    door_y = gm.height // 2
+    for y in range(door_y - 6, door_y + 7):
+        if gm.in_bounds(gate_x, y):
+            gm.tiles[gate_x, y] = T.building_wall
+    gm.tiles[gate_x, door_y] = T.door               # the West-door itself
+
+    # the Watcher's pool: dark still water spread before the doors
+    patch(gm, T.water, gate_x - 8, door_y, 7, 0.85)
+    return _finish_surface(gm, cell)
+
+
+def generate_redhorn_pass(engine) -> GameMap:
+    """Redhorn Pass (6,2): the high pass under Caradhras the Cruel, over the Misty
+    Mountains. Bare wind-scoured rock heaps the fells to either side, a thin track
+    climbs toward the gap in the eastern wall, and little grows on the cold stone.
+    The gate east is the pass itself, cut through the diegetic mountain wall (#15)."""
+    cell = overworld.cell((6, 2))
+    gm = _open_surface(engine, cell)
+    gm.name = "The Redhorn Pass, under Caradhras"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.05)                  # a little starved alpine turf
+    patches(gm, T.hill, 18, 5, 0.72)                # bare wind-scoured mountain rock
+    scatter(gm, T.rubble, 0.04)                     # scree and fallen stone
+    return _finish_surface(gm, cell)
+
+
+# ---------------------------------------------------------------------------
 # Tyrn Gorthad — the Barrow-downs (the main quest's barrow, re-homed here from
 # the Weather Hills to match the geography of ADR 0003).
 # ---------------------------------------------------------------------------

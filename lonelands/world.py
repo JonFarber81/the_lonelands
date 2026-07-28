@@ -56,6 +56,13 @@ _AUTHORED_SURFACES: Dict[Coord, Callable[["Engine"], GameMap]] = {
     # Cluster 5 — The North-East marches (Dark) (issue #20).
     (4, -4): procgen.generate_mt_gram,          # orc-hold of the northern hills
     (5, -4): procgen.generate_ettenmoors,       # the troll-fells; NE gateway toward Angmar
+    # Cluster 6 — The South (Cardolan → Tharbad) (issue #21).
+    (1, 2): procgen.generate_cardolan,          # emptied realm; barrows and broken keeps
+    (1, 4): procgen.generate_tharbad,           # ruined river-city on the Greyflood (gateway)
+    # Cluster 7 — Eregion & the Mountain-gates (issue #22).
+    (4, 3): procgen.generate_ost_in_edhil,      # ruined Eregion city of the Elven-smiths
+    (5, 3): procgen.generate_moria_west_gate,   # Hollin gate of Khazad-dûm; the Watcher's pool
+    (6, 2): procgen.generate_redhorn_pass,      # Caradhras pass over the Misty Mountains (gateway)
 }
 
 # Cells whose deeps are authored this pass (ADR 0003 re-home): the barrow-wight
