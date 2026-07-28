@@ -103,6 +103,11 @@ class PopupMessage(BaseEventHandler):
 
 
 class EventHandler(BaseEventHandler):
+    # SPIKE (#92): this handler and its subclasses draw the region map into the
+    # top-left viewport, so the sprite overlay applies. OverworldMapHandler,
+    # which paints the full-screen overworld instead, clears this.
+    renders_region_map = True
+
     def __init__(self, engine: "Engine"):
         self.engine = engine
 
@@ -1341,6 +1346,8 @@ class OverworldMapHandler(AskUserHandler):
     where it marks the Region overhead. Data and layout come from
     :mod:`lonelands.overworld_map`; this handler only blits and drives the cursor.
     """
+
+    renders_region_map = False  # SPIKE (#92): a full-screen atlas, not the viewport
 
     def __init__(self, engine: "Engine"):
         super().__init__(engine)

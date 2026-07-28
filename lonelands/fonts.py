@@ -391,10 +391,10 @@ class GlyphAtlas:
 def _graphic_source_char(cp: int) -> "Optional[str]":
     """The source character for a Private-Use *graphic* codepoint (map/entity
     tiles), or ``None`` if ``cp`` is not in the graphic block."""
-    base = tile_glyphs.GRAPHIC_BASE
-    if base + 0x20 <= cp <= base + 0x7E:
-        return chr(cp - base)
-    for ch, ecp in tile_glyphs._EXTRA_CP.items():
+    ch = tile_glyphs.graphic_source_char(cp)  # printable-ASCII graphic block
+    if ch is not None:
+        return ch
+    for ch, ecp in tile_glyphs._EXTRA_CP.items():  # the extra map glyphs
         if ecp == cp:
             return ch
     return None

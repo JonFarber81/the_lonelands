@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pygame
 
-from lonelands import config, events, fonts, ui
+from lonelands import config, events, fonts, sprites, ui
 
 # An RGB colour as the renderers pass it (a bare 3-tuple, matching tcod).
 Color = Tuple[int, int, int]
@@ -173,6 +173,8 @@ class Display:
         # display only caches the tinted copies keyed by foreground colour.
         self._atlas = fonts.GlyphAtlas(self.cell_w, self.cell_h)
         self._tinted: Dict[Tuple[int, Color], Optional[pygame.Surface]] = {}
+        # SPIKE (#92): the sprite overlay's cell-sized tiles (square cells).
+        self._sprites = sprites.SpriteMap(self.cell_w) if config.SPRITES else None
 
     def _base_surface(self, cp: int) -> Optional[pygame.Surface]:
         return self._atlas.base_surface(cp)
@@ -231,6 +233,15 @@ class Display:
         if sequence:
             screen.blits(sequence, doreturn=False)
 
+    def blit_sprite_map(self, game_map) -> None:
+        """SPIKE (#92): composite the sprite map over the ASCII map viewport.
+
+        Called after :meth:`blit_console` and before native overlays, so sprites
+        cover the ASCII map but sit under the native HUD (which occupies the
+        sidebar and Chronicle, outside the viewport)."""
+        if self._sprites is not None:
+            self._sprites.render(self.screen, self.offset, game_map)
+
     # --- window / resize ---------------------------------------------------
     def resize(self, win_w: int, win_h: int) -> None:
         """Fit the largest whole-pixel cell into the new window and recentre.
@@ -241,6 +252,8 @@ class Display:
         self.screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
         cw = max(1, win_w // config.SCREEN_WIDTH)
         ch = max(1, win_h // config.SCREEN_HEIGHT)
+        if config.SPRITES:
+            ch = cw = min(cw, ch)  # SPIKE (#92): keep cells square in sprite mode
         grid_w = cw * config.SCREEN_WIDTH
         grid_h = ch * config.SCREEN_HEIGHT
         self.offset = ((win_w - grid_w) // 2, (win_h - grid_h) // 2)
