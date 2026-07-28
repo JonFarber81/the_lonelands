@@ -214,12 +214,12 @@ class Path:
     nodes: List[Node] = field(default_factory=list)
 
 
-# Placeholder trees (ADR 0011): the three Paths, each a trunk forking into two
-# branches. These port the old five Paths' *effects* into the new shape so the
-# game still runs — the real, deep tree content lands in the per-Path issues
-# (#75 Far Shot, #76 Long Watch, #77 Hidden Path). The old Swift Wrath melee
-# offence becomes the Long Watch's Reaver branch; Kindled Heart's Second Wind
-# folds into the Long Watch trunk; the rest of Kindled Heart is deferred.
+# The three Paths (ADR 0011), each a trunk forking into two branches, tipped by
+# capstones — the Long Watch (#76), the Far Shot (#75), and the Hidden Path
+# (#77) are all fully built out. The old Swift Wrath melee offence lives on as
+# the Long Watch's Reaver branch (Wrath included); Kindled Heart's Second Wind,
+# Rally, and Athelas fold into the Long Watch trunk; the rest of Kindled Heart
+# (Daunt, Light of the West) is deferred to a future Path.
 PATHS: List[Path] = [
     Path(
         "long_watch", "The Long Watch",
