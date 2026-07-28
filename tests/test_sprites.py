@@ -123,6 +123,21 @@ def test_every_crowd_layer_points_at_the_characters_sheet():
             assert col >= 0 and row >= 0
 
 
+# --- the hero's own sprite, apart from the crowd ---------------------------
+def test_player_sprite_is_a_valid_char_stack():
+    assert len(sprites.PLAYER_SPRITE) >= 2  # more than a bare body
+    for sheet, col, row in sprites.PLAYER_SPRITE:
+        assert sheet == "chars"
+        assert col >= 0 and row >= 0
+
+
+def test_player_sprite_differs_from_the_flat_ranger_and_crowd():
+    # The hero must not resolve to the same art as a generic @ or a wanderer.
+    assert sprites.PLAYER_SPRITE != (sprites.SPRITE_KEYS["ranger"],)
+    assert all(sprites.PLAYER_SPRITE != sprites.crowd_layers("m", s)
+               for s in range(50))
+
+
 # --- the tone grade: darker, desaturated, earthier -------------------------
 def _fresh_surface(rgb):
     import pygame
