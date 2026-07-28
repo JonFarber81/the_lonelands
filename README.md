@@ -50,16 +50,19 @@ map falls back to the font's own glyphs, so the game always runs.
   someone out and speak with them), and **travel-to** goals (reach a named
   Region) — each begun and turned in through the same dialog flow.
 - **A d20 resolution core** (see `docs/adr/0005`): every action is a **Check** —
-  `d20 + attribute (+ perk/gear)` vs a **Target Number**. A natural 20 is a
+  `d20 + attribute (+ node/gear)` vs a **Target Number**. A natural 20 is a
   **Critical** (auto-hit + bonus damage), a natural 1 a **Fumble** (auto-miss);
   **Advantage/Disadvantage** roll two dice and keep the higher/lower. The dice
   tray at the top of the log shows the player's latest roll; the tray owns all
   the numbers, the message log stays pure prose.
-- **A perk-and-Path hero**: three attributes — **Brawn**, **Wits**, **Will** — a
-  single **Endurance** HP pool, and XP-driven **Level**s that grant HP, to-hit,
-  and **perk points**. Specialisation lives in **perks** bought across five
-  **Paths** — the Long Watch, the Swift Wrath, the Far Shot, the Hidden Path, and
-  the Kindled Heart — each with a hard-won **capstone**.
+- **A committed-skill-tree hero** (see `docs/adr/0011`): three attributes —
+  **Brawn**, **Wits**, **Will** — a single **Endurance** HP pool, and XP-driven
+  **Level**s that grant HP, to-hit, and **Path points**. At level 2 the Ranger
+  **commits to one of three Paths** — the **Long Watch** (tank), the **Far Shot**
+  (ranged), or the **Hidden Path** (stealth) — then pours every point down that
+  Path's deep, branching tree of **Nodes** (ranked passives, one-and-done
+  actives), tipped by two hard-won **capstones**. A future **Kindled Heart**
+  Path is deferred.
 - **Melee & ranged combat** (see `docs/adr/0006`): melee is a **bump**
   (`d20 + attack bonus vs Defence`, then `weapon damage − soak`); ranged is a
   deliberate aimed **Shot** keyed off Wits, with **bows**, spendable and
