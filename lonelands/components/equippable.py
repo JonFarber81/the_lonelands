@@ -41,7 +41,7 @@ class Equippable(BaseComponent):
         soak_bonus: int = 0,      # heavy armour: adds to Soak (subtracts from damage)
         # --- Accessory pluses (non-combat) -------------------------------
         attributes: Optional[Dict[str, int]] = None,  # +Brawn/+Wits/+Will
-        stealth_bonus: int = 0,   # sharpens the (future) stealth/detection layer
+        stealth_bonus: int = 0,   # feeds Hero.stealth — shrinks a foe's Perception (ADR 0014)
         path_synergy: str = "",   # a Path this token favours (flavour + future hooks)
         ability_charges: int = 0, # spare charges lent to Path actives (future hook)
         # A hand-authored named Unique sits *outside* the Plain/Fine/Rare affix
