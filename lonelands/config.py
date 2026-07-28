@@ -10,6 +10,23 @@ import os
 # where the switch matters (input_handlers, hud); nothing writes it but main().
 DEBUG = False
 
+# --- Sprites (ADR 0016) -----------------------------------------------------
+# A runtime-only switch, set once from ``main.py``'s ``--ascii`` flag, that
+# forces the ASCII play field even when Oryx art is on disk. Never serialized,
+# same shape as DEBUG above. The default behaviour (this False) auto-detects:
+# sprites draw when the art is present (see lonelands.sprites.enabled()).
+ASCII_ONLY = False
+
+
+def tiles_path() -> str | None:
+    """The local Oryx sheet directory from ``LONELANDS_TILES``, or ``None`` if
+    unset or missing. The art is licensed and never committed — this is the
+    only way the game finds it (ADR 0016)."""
+    path = os.environ.get("LONELANDS_TILES")
+    if not path or not os.path.isdir(path):
+        return None
+    return path
+
 # --- Window / console geometry (in tiles) ---------------------------------
 SCREEN_WIDTH = 61
 SCREEN_HEIGHT = 36
@@ -71,16 +88,13 @@ FONT_CANDIDATES = [
 ]
 
 # Cell size in pixels. The console grid has one cell size for the whole screen,
-# so map and prose share it. The cell is a little taller than wide, giving the
-# TTF prose the vertical room it needs to stay legible, with only a thin grid
-# gap between rows. 24x30 balances a readable Chronicle against a solid map.
-#
-# These are 1.5× what the pre-camera build used: the console grid shrank by the
-# same factor (the viewport now shows a scrolling window onto the region, not
-# the whole thing), so scaling the cell up keeps the launch window the same
-# pixel size while glyphs render 1.5× larger.
-TILE_WIDTH = 24
-TILE_HEIGHT = 30
+# so map, sprites, and prose all share it. Square (ADR 0016): an Oryx tile
+# wants a square cell to avoid stretching, and prose still reads fine —
+# Atkinson Hyperlegible Mono doesn't need the extra vertical room 24×30 gave
+# it. HUD/sidebar/log all derive their pixel rects from this same cell (see
+# lonelands.hud), so squaring it reflows the whole frame in one place.
+TILE_WIDTH = 28
+TILE_HEIGHT = 28
 
 WINDOW_TITLE = "The Lonelands — Eriador, TA 2965"
 

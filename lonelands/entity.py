@@ -35,6 +35,7 @@ class Entity:
         name: str = "<unnamed>",
         blocks_movement: bool = False,
         render_order: RenderOrder = RenderOrder.CORPSE,
+        sprite: str = "",
     ) -> None:
         self.x = x
         self.y = y
@@ -43,6 +44,10 @@ class Entity:
         self.name = name
         self.blocks_movement = blocks_movement
         self.render_order = render_order
+        # A sprite key (ADR 0016) into lonelands.sprites.SPRITE_KEYS — the
+        # tinted-tile look-alike of `char`. Empty means "ASCII only, forever"
+        # (the bespoke-four props); every other drawable should carry one.
+        self.sprite = sprite
         if parent is not None:
             self.parent = parent
             parent.entities.add(self)
@@ -93,6 +98,7 @@ class Actor(Entity):
         equipment: Optional["Equipment"] = None,
         level: Optional["Level"] = None,
         npc: Optional["NPC"] = None,
+        sprite: str = "",
     ) -> None:
         super().__init__(
             x=x,
@@ -102,6 +108,7 @@ class Actor(Entity):
             name=name,
             blocks_movement=True,
             render_order=RenderOrder.ACTOR,
+            sprite=sprite,
         )
         self.ai: Optional["BaseAI"] = ai_cls(self) if ai_cls else None
 
@@ -145,6 +152,7 @@ class Item(Entity):
         value: int = 0,
         stackable: bool = False,
         quantity: int = 1,
+        sprite: str = "",
     ) -> None:
         super().__init__(
             x=x,
@@ -154,6 +162,7 @@ class Item(Entity):
             name=name,
             blocks_movement=False,
             render_order=RenderOrder.ITEM,
+            sprite=sprite,
         )
         self.description = description
         # Base worth in coins; 0 means the item cannot be sold. A merchant sells

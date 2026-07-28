@@ -17,6 +17,13 @@ env/
 # Reference material (art, maps, PDFs — not distributed)
 references/
 
+# Oryx tile-sheet art (ADR-0016) — licensed, loaded locally via
+# LONELANDS_TILES, never committed. Covers a vendored copy if one ever lands
+# inside the repo tree by accident.
+/tiles/
+/assets/tiles/
+oryx_roguelike_2*/
+
 # OS / editor
 .DS_Store
 .idea/

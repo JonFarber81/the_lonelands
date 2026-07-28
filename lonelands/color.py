@@ -63,7 +63,11 @@ tree_light = (0x3E, 0x5E, 0x36)
 tree_dark = (0x20, 0x2E, 0x1E)
 
 # --- Entities --------------------------------------------------------------
-player_c = (0xEC, 0xE4, 0xC8)
+# Dúnedain steel-grey (ADR 0016): the hero's one signature tint, shared by the
+# ASCII '@' and the hooded-Ranger-with-bow sprite alike (they're one (char/
+# sprite-key, fg) cell) — cool and grey so he reads apart from the green
+# orc-kin and the lettered crowd.
+player_c = (0x8C, 0x96, 0xA2)
 ranger_green = (0x6E, 0x8C, 0x52)
 npc_c = (0x9A, 0xC0, 0xD8)
 orc_c = (0x7C, 0x9A, 0x54)
