@@ -2,9 +2,12 @@
 
 ## Status
 
-Accepted. **Supersedes ADR-0013** (full-colour sprite tileset), which is now
-retired. Amends ADR-0001: the glyph-baking seam survives for the dice only, not
-for map/entity art.
+**Superseded by ADR-0016** (Oryx monochrome-mask tileset). Reversed one day
+after being decided: a licensed tileset landed that fits the "tinted like
+text" technical basis this ADR's own Amendment left open. Supersedes ADR-0013
+(full-colour sprite tileset), which is now retired. Amends ADR-0001: the
+glyph-baking seam survives for the dice only, not for map/entity art — until
+ADR-0016 re-extends it to the map.
 
 ## Context
 

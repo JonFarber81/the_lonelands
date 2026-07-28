@@ -1,5 +1,13 @@
 # Sprite tileset — implementation plan
 
+**Superseded.** This was ADR-0013's phase plan (Kenney art, vendored into
+`lonelands/assets/tiles/`); ADR-0013 was itself superseded by ADR-0015, then
+ADR-0015 by ADR-0016, which took a different technical basis (licensed Oryx
+monochrome masks, loaded locally via `LONELANDS_TILES`, never vendored). See
+`docs/adr/0016-oryx-monochrome-tinted-tileset.md` and
+`notes/oryx-tileset-mapping.md` for the current plan and sprite-key mapping.
+Kept for the record of what was tried.
+
 Turns ADR-0013 into a sequence of GitHub issues. Each is independently
 shippable and leaves the game runnable; ASCII mode is the safety net throughout,
 so a half-finished sprite swap is never a broken game. Phases are ordered by
