@@ -105,7 +105,7 @@ map falls back to the font's own glyphs, so the game always runs.
   three **luminance tiers** (dim label · normal body · bright glowing value), a
   **filled bar** for the single "this is the thing" emphasis, **header-and-rule**
   section breaks, **stateful colour** used only where hue drives a decision
-  (Endurance green→amber→red, spendable perk points in gold), and a **scrim**
+  (Endurance green→amber→red, spendable Path points in gold), and a **scrim**
   that dims the world behind any open popup.
 - **A title-screen difficulty selector**: pick **Merciful**, **Wayfarer**
   (intended balance), or **Grim** — it scales *only the damage the player takes*,
@@ -125,8 +125,8 @@ map falls back to the font's own glyphs, so the game always runs.
 | `i` | use / equip from pack |
 | `d` | drop |
 | `c` | character sheet |
-| `p` | Paths & perks (spend perk points) |
-| `a` | abilities (active perks) |
+| `p` | Paths & Nodes (spend Path points) |
+| `a` | abilities (active Nodes) |
 | `q` | errands (quests) |
 | `?` | help |
 | `Esc` | pause menu — save & continue, save & quit, or quit |
@@ -143,7 +143,7 @@ lonelands/
   dice.py            the d20 Check engine (Critical / Fumble / Advantage)
   dice_glyphs.py     die-face glyphs for the dice tray
   character.py       attributes, Level curve, the hero's derived stats
-  perks.py           the five Paths and their perks
+  perks.py           the three Paths and their Nodes
   content.py         creatures, weapons, armour, consumables (templates)
   equipment_types.py base-item / slot / property definitions
   affixes.py         the prefix/suffix generator → Plain / Fine / Rare loot
