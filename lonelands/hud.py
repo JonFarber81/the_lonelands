@@ -41,6 +41,13 @@ def render(display: "Display", engine: "Engine", banner: bool = True) -> None:
     sidebar, chronicle = _rects(display)
     _sidebar(display.ui, sidebar, engine)
     _chronicle(display.ui, chronicle, engine)
+    # The sidebar and Chronicle are one L-shaped pane: bordered on the outside,
+    # seamless where they meet. The only interior line is the divider walling off
+    # the map — the sidebar's left edge, but *only* down the map's height. Below
+    # that the two panes merge with no seam. (See the per-pane ``sides`` above.)
+    ox, oy = display.offset
+    sx = sidebar[0]
+    display.ui.hud_seam(sx, oy, sidebar[2], MAP_HEIGHT * display.cell_h, "W")
     if banner:
         # Suppressed during lock-on targeting, whose own prompt owns the map's
         # top row (see LockOnHandler).
@@ -64,7 +71,10 @@ def _banner(display: "Display", engine: "Engine") -> None:
 # --- sidebar ---------------------------------------------------------------
 def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
     x, y, w, h = rect
-    inner = ui.hud_panel(x, y, w, h)
+    # Skip the west border: the interior divider (drawn in render) supplies the
+    # map seam for the top portion, and below the map the sidebar merges into the
+    # Chronicle with no line between them.
+    inner = ui.hud_panel(x, y, w, h, sides="NES")
     ix, iw = inner.x, inner.w
     cy = inner.y
     p = engine.player
@@ -179,7 +189,10 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
 # --- Chronicle (dice tray + message log) -----------------------------------
 def _chronicle(ui: "UI", rect, engine: "Engine") -> None:
     x, y, w, h = rect
-    inner = ui.hud_panel(x, y, w, h)
+    # Leave the east border open: the full-height sidebar sits flush to the right
+    # and already draws that seam, so framing it here would double the line and
+    # collide the corner ornaments at the bottom junction.
+    inner = ui.hud_panel(x, y, w, h, sides="NWS")
     ix, iw = inner.x, inner.w
     # A compact header row: the "Chronicle" caption on the left, the dice tray
     # filling the rest — keeping as much height as possible for the prose log.

@@ -16,7 +16,7 @@ from typing import List, Tuple
 import numpy as np
 
 from lonelands import affixes, content, overworld, story, tile_types
-from lonelands.config import MAP_HEIGHT, MAP_WIDTH
+from lonelands.config import REGION_HEIGHT as MAP_HEIGHT, REGION_WIDTH as MAP_WIDTH
 from lonelands.dice import rng
 from lonelands.entity import Item
 from lonelands.game_map import GameMap, nearest_walkable

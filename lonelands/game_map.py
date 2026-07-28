@@ -4,11 +4,12 @@ from typing import TYPE_CHECKING, Iterable, Iterator, Optional
 
 import numpy as np
 
-from lonelands import color, tile_types
+from lonelands import color, config, tile_types
 from lonelands.entity import Actor, Item
 from lonelands.tile_glyphs import graphic_char
 
 if TYPE_CHECKING:
+    from lonelands.camera import Camera
     from lonelands.display import Console
     from lonelands.engine import Engine
     from lonelands.entity import Entity
@@ -71,28 +72,39 @@ class GameMap:
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.width and 0 <= y < self.height
 
-    def render(self, console: Console) -> None:
-        console.rgb[0 : self.width, 0 : self.height] = np.select(
-            condlist=[self.visible, self.explored],
-            choicelist=[self.tiles["light"], self.tiles["dark"]],
+    def render(self, console: Console, camera: "Camera") -> None:
+        # Only the camera's window onto the region is drawn, into the top-left
+        # MAP_WIDTH×MAP_HEIGHT viewport of the console. World tile (wx, wy) maps
+        # to view cell (wx - sx, wy - sy); the slice is clamped to the map so a
+        # region smaller than the viewport just letterboxes.
+        sx, sy = camera.x, camera.y
+        ex = min(sx + config.MAP_WIDTH, self.width)
+        ey = min(sy + config.MAP_HEIGHT, self.height)
+        w, h = ex - sx, ey - sy
+        console.rgb[0:w, 0:h] = np.select(
+            condlist=[self.visible[sx:ex, sy:ey], self.explored[sx:ex, sy:ey]],
+            choicelist=[self.tiles["light"][sx:ex, sy:ey],
+                        self.tiles["dark"][sx:ex, sy:ey]],
             default=tile_types.SHROUD,
         )
 
         # Laid Snares sit under the entities: a small glyph on a visible tile.
         for (tx, ty), trap in self.traps.items():
-            if self.visible[tx, ty]:
-                console.print(x=tx, y=ty, string=graphic_char(trap.char),
+            vx, vy = tx - sx, ty - sy
+            if 0 <= vx < w and 0 <= vy < h and self.visible[tx, ty]:
+                console.print(x=vx, y=vy, string=graphic_char(trap.char),
                               fg=color.snare_c)
 
         entities_sorted = sorted(
             self.entities, key=lambda x: x.render_order.value
         )
         for entity in entities_sorted:
-            if self.visible[entity.x, entity.y]:
+            vx, vy = entity.x - sx, entity.y - sy
+            if 0 <= vx < w and 0 <= vy < h and self.visible[entity.x, entity.y]:
                 # Draw the entity's glyph from the map tileset (shaded art),
                 # not the plain ASCII char — see lonelands.tile_glyphs.
                 console.print(
-                    x=entity.x, y=entity.y,
+                    x=vx, y=vy,
                     string=graphic_char(entity.char), fg=entity.color,
                 )
 

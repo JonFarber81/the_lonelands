@@ -26,14 +26,17 @@ Rgb = Tuple[int, int, int]
 
 # --- geometry ---------------------------------------------------------------
 # The playable window is x in -7..+7 (15 cols) and y in -4..+4 (9 rows). Each
-# Region is a 5×3 block: 15×5 = 75 cols, 9×3 = 27 rows, leaving the 92×54 screen
-# room for a legend and the cursor footer.
+# Region is a 4×3 block: 15×4 = 60 cols, 9×3 = 27 rows — the terrain grid fits
+# inside the 61×36 console with the rows beneath free for the legend and the
+# cursor footer. (Region *names* are no longer stamped into these cells; the
+# handler draws them natively in a proportional font, so the block only has to
+# hold the band tint, roads, and the role/deeps/@ markers — see ``render_map``.)
 X_MIN, X_MAX = -7, 7
 Y_MIN, Y_MAX = -4, 4
 COLS = X_MAX - X_MIN + 1          # 15
 ROWS = Y_MAX - Y_MIN + 1         # 9
-CELL_W, CELL_H = 5, 3
-GRID_W = COLS * CELL_W           # 75
+CELL_W, CELL_H = 4, 3
+GRID_W = COLS * CELL_W           # 60
 GRID_H = ROWS * CELL_H           # 27
 
 # --- glyphs -----------------------------------------------------------------
@@ -128,6 +131,11 @@ class Placed(NamedTuple):
     text: str
     role: str
 
+    @property
+    def fg(self) -> Rgb:
+        """The colour this name draws in — Towns in gold, everything else pale."""
+        return TOWN_NAME_FG if self.role == overworld.TOWN else LANDMARK_NAME_FG
+
 
 def _label_candidates(col: int, row: int, text: str):
     """Yield candidate (start_col, start_row) placements for a name anchored at
@@ -196,6 +204,9 @@ class Buffer:
         self.graphic: List[List[bool]] = [[False] * width for _ in range(height)]
         # Cells holding a glyph a printed name must not clobber.
         self.protected: Set[Coord] = set()
+        # Region-name placements, laid out clear of every glyph but drawn by the
+        # handler in a proportional font (not baked into these cells).
+        self.placements: List["Placed"] = []
 
     def put(self, col: int, row: int, ch: str, fg: Optional[Rgb] = None,
             bg: Optional[Rgb] = None, graphic: bool = False,
@@ -292,13 +303,13 @@ def render_map(player_coord: Coord, cursor_coord: Coord) -> Buffer:
         pcx, pcy = cell_center(player_coord)
         buf.put(pcx, pcy, PLAYER_GLYPH, PLAYER_FG, protect=True)
 
-    # 5) printed names, then the cursor highlight on the very top.
-    placements, _ = place_labels(labels, buf.protected, buf.width, buf.height)
-    for p in placements:
-        fg = TOWN_NAME_FG if p.role == overworld.TOWN else LANDMARK_NAME_FG
-        for i, ch in enumerate(p.text):
-            buf.put(p.col + i, p.row, ch, fg)
+    # 5) region names: laid out clear of every glyph, but *not* baked into the
+    #    cells — the handler draws them natively in a proportional font (so a name
+    #    reads as a word, not one wide grid glyph per letter). place_labels still
+    #    reserves each name a clear run; the handler maps the anchor cell to pixels.
+    buf.placements, _ = place_labels(labels, buf.protected, buf.width, buf.height)
 
+    # 6) the cursor highlight on the very top.
     if in_window(cursor_coord):
         ox, oy = cell_origin(cursor_coord)
         for r in range(oy, oy + CELL_H):

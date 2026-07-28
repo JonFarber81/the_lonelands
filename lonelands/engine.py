@@ -6,6 +6,7 @@ import tcod  # retained headless: FOV only (tcod.map.compute_fov below)
 from tcod import libtcodpy
 
 from lonelands import color, config, render_functions
+from lonelands.camera import Camera
 from lonelands.exceptions import Impossible
 from lonelands.message_log import MessageLog
 from lonelands.quests import QuestLog
@@ -29,6 +30,9 @@ class Engine:
         # The dice tray shows the player's most recent Test; None until they roll.
         self.last_roll: "RollResult | None" = None
         self.mouse_location = (0, 0)
+        # The scrolling viewport offset, recomputed each frame in ``render`` and
+        # shared by the map/sprite renderers and the targeting reticles.
+        self.camera = Camera()
         self.flags: Dict[str, Any] = {}
         self.turn_count = 0
         # Difficulty scales only the damage the player takes (see config and
@@ -122,7 +126,11 @@ class Engine:
         """The cell-grid layer: the map, plus the mouse-hover names that label a
         map tile. The sidebar, Chronicle, and location banner are drawn natively
         — see :meth:`render_hud`."""
-        self.game_map.render(console)
+        p = self.player
+        self.camera = Camera.centered(
+            p.x, p.y, self.game_map.width, self.game_map.height
+        )
+        self.game_map.render(console, self.camera)
         render_functions.render_names_at_mouse(console, self)
 
     def render_hud(self, display, banner: bool = True) -> None:

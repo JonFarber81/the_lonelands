@@ -6,12 +6,15 @@ build on a de-risked seam rather than a paper design. Everything here is
 deliberately hard-coded and disposable:
 
 * one Kenney **Roguelike Base** sheet for terrain, one **Characters** sheet for
-  the humanoid roster (findings: terrain and characters live on *separate* sheets,
-  so Phase 1's ``sprite key -> (sheet, col, row)`` table must carry a sheet id);
-* a tiny :data:`SPRITE_KEYS` table for the nine spike keys (grass, road, stone,
-  wall, door, tree, townsman, orc, ranger), plus a paper-doll crowd
-  (:func:`crowd_layers`) that mixes body + clothing + hair so the race-lettered
-  wanderers don't all look alike;
+  the humanoid roster, one **Tiny Dungeon** sheet for the beasts/undead the Kenney
+  art lacks, and a hand-painted **custom** sheet for the wolf/warg/boar no bundled
+  pack draws (findings: terrain, characters, and beasts all live on *separate*
+  sheets, so Phase 1's ``sprite key -> (sheet, col, row)`` table must carry a
+  sheet id);
+* a tiny :data:`SPRITE_KEYS` table for the spike keys (terrain: grass, road,
+  stone, wall, door, tree; folk: townsman, orc, ranger; beasts: spider, wight,
+  wolf, warg, boar), plus a paper-doll crowd (:func:`crowd_layers`) that mixes
+  body + clothing + hair so the race-lettered wanderers don't all look alike;
 * codepoint/kind reverse-mapping to pick a key per cell (Phase 1 replaces this
   with an explicit ``sprite_key`` on every tile type and entity);
 * a two-layer blit — terrain, then entities — over the map viewport, in square
@@ -29,7 +32,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 import numpy as np
 import pygame
 
-from lonelands import config, tile_glyphs, tile_types
+from lonelands import color, config, tile_glyphs, tile_types
+from lonelands.render_order import RenderOrder
 
 if TYPE_CHECKING:
     from lonelands.game_map import GameMap
@@ -125,6 +129,22 @@ SHEET_CANDIDATES: Dict[str, Tuple[str, ...]] = {
         os.path.join(_KENNEY, "Roguelike Characters Pack", "Spritesheet",
                      "roguelikeChar_transparent.png"),
     ),
+    # The Kenney Roguelike sheets carry no beasts (only humanoids), so the
+    # non-humanoid foes come from Tiny Dungeon — the one bundled 16×16 top-down
+    # pack with monster art. Our shipped copy has the two tiles we use
+    # (spider, skeleton) flood-filled clear of Tiny Dungeon's dark "floor pad"
+    # so they sit transparent like the Kenney sprites; the raw pack is the
+    # fallback (padded, but better than nothing).
+    "beasts": (
+        os.path.join(_TILES, "tiny_dungeon.png"),
+        os.path.join(_KENNEY, "Tiny Dungeon", "Tilemap", "tilemap.png"),
+    ),
+    # Hand-authored fills for the beasts no bundled pack draws — wolf, warg,
+    # boar. Painted to match the tone/scale (see assets/tiles/gen_custom_beasts.py);
+    # ours alone, so no fallback (absent → those foes show ASCII).
+    "custom": (
+        os.path.join(_TILES, "custom_beasts.png"),
+    ),
 }
 
 # The nine spike keys -> (sheet, col, row). Hand-picked from the sheets; see the
@@ -139,8 +159,14 @@ SPRITE_KEYS: Dict[str, Tuple[str, int, int]] = {
     "tree": ("base", 13, 9),    # round broad-leaf tree
     # Characters (Roguelike Characters sheet)
     "townsman": ("chars", 0, 8),
-    "orc": ("chars", 0, 3),     # green humanoid
+    "orc": ("chars", 0, 3),     # green humanoid (orcs + goblins, all greenskins)
     "ranger": ("chars", 0, 7),  # the player + hand-authored @-folk
+    # Beasts and undead (Tiny Dungeon, depadded) + hand-authored quadrupeds.
+    "spider": ("beasts", 2, 10),  # brown many-legged spider
+    "wight": ("beasts", 2, 7),    # bare-skulled undead (the barrow-wight)
+    "wolf": ("custom", 0, 0),     # grey quadruped
+    "warg": ("custom", 1, 0),     # darker, red-eyed, fanged
+    "boar": ("custom", 2, 0),     # tusked, hump-shouldered
 }
 
 
@@ -164,13 +190,34 @@ def resolve_terrain(kind: int, light_cp: int) -> Optional[str]:
     }.get(ch or "")
 
 
-def resolve_entity(char: str) -> Optional[str]:
-    """Sprite key for an entity from its ASCII ``char`` — or ``None`` to skip it
-    (dropped items and creatures this spike doesn't cover).
+# Sprite key per creature, matched on lowercased name. Name (not glyph) is the
+# key because glyphs collide — the warg and the barrow-wight are both ``W`` — so a
+# char-only mapping can't tell a wolf-pack apart from an undead. Names come from
+# content.py; anything unlisted falls through to the glyph mapping below.
+_SPRITE_BY_NAME: Dict[str, str] = {
+    "great spider": "spider",
+    "barrow-wight": "wight",
+    "warg": "warg",
+    "grey wolf": "wolf",
+    "wild boar": "boar",
+    "cave-goblin": "orc",        # goblins are greenskins — share the orc sprite
+    "orc soldier": "orc",
+    "orc bowman": "orc",
+    "footpad": "townsman",       # brigands are just rough men
+    "highwayman": "townsman",
+}
 
-    The single-tile fallback: the render path prefers :func:`crowd_layers` for the
-    race-lettered folk (so they vary), and only falls back to the flat
-    ``townsman`` tile here if that returns nothing."""
+
+def resolve_entity(entity) -> Optional[str]:
+    """Sprite key for an entity — by creature name first, then ASCII ``char`` —
+    or ``None`` to skip it (dropped items and creatures this spike doesn't cover).
+
+    The render path prefers :func:`crowd_layers` for the race-lettered folk (so
+    they vary), and only falls back to a flat tile here if that returns nothing."""
+    key = _SPRITE_BY_NAME.get((getattr(entity, "name", "") or "").lower())
+    if key is not None:
+        return key
+    char = getattr(entity, "char", "")
     if char == "@":                       # player + hand-authored principals
         return "ranger"
     if char in ("o", "O"):                # orcs
@@ -265,6 +312,9 @@ class SpriteMap:
         }
         # Cache of composited cell-sized surfaces, keyed by (layer stack, dimmed?).
         self._cache: Dict[Tuple[Tuple[Layer, ...], bool], Optional[pygame.Surface]] = {}
+        # Cache of synthetic floor markers (loot gems, corpse heaps), keyed by
+        # (colour, kind) — these carry no sheet art, so they're drawn, not blitted.
+        self._markers: Dict[Tuple[Tuple[int, int, int], str], pygame.Surface] = {}
 
     @staticmethod
     def _load(paths: Tuple[str, ...]) -> Optional[pygame.Surface]:
@@ -298,6 +348,51 @@ class SpriteMap:
         if spec is None:
             return None
         return self._composite((spec,), dim)
+
+    def _marker(self, col: Tuple[int, int, int], kind: str) -> "pygame.Surface":
+        """A synthetic floor marker for entities with no sheet art — dropped
+        items and corpses. Drawn (not blitted from a sheet) so a drop is always
+        visible and pickable on the sprite map, whatever the loaded sheets.
+
+        ``kind='item'`` is a bright gem tinted to the item's own colour (loot
+        reads apart from the somber terrain — deliberately *not* tone-graded);
+        ``kind='corpse'`` is a low, dark heap, clearly not shiny loot."""
+        key = (col, kind)
+        cached = self._markers.get(key)
+        if cached is not None:
+            return cached
+        s = self.cell
+        surf = pygame.Surface((s, s), pygame.SRCALPHA)
+        r, g, b = col
+        cx, cy = s / 2.0, s / 2.0
+        if kind == "corpse":
+            # A dark mound low in the cell with two pale bone ticks over it.
+            dark = (int(r * 0.55), int(g * 0.5), int(b * 0.5))
+            pygame.draw.ellipse(
+                surf, dark, (s * 0.18, s * 0.5, s * 0.64, s * 0.34))
+            bone = (0xC9, 0xC2, 0xAE)
+            w = max(1, s // 16)
+            pygame.draw.line(surf, bone, (s * 0.34, s * 0.56),
+                             (s * 0.66, s * 0.74), w)
+            pygame.draw.line(surf, bone, (s * 0.66, s * 0.56),
+                             (s * 0.34, s * 0.74), w)
+            self._markers[key] = surf
+            return surf
+        # A gem/diamond: dark drop-shadow, coloured body, dark outline, and a
+        # bright top-left facet so it catches the eye as loot.
+        rad = s * 0.30
+        outline = color.near_black
+        shadow = [(cx, cy - rad + s * 0.08), (cx + rad, cy + s * 0.08),
+                  (cx, cy + rad + s * 0.08), (cx - rad, cy + s * 0.08)]
+        body = [(cx, cy - rad), (cx + rad, cy), (cx, cy + rad), (cx - rad, cy)]
+        facet = [(cx, cy - rad), (cx, cy), (cx - rad, cy)]
+        hi = (min(255, r + 70), min(255, g + 70), min(255, b + 70))
+        pygame.draw.polygon(surf, (0, 0, 0, 90), shadow)
+        pygame.draw.polygon(surf, (r, g, b), body)
+        pygame.draw.polygon(surf, hi, facet)
+        pygame.draw.polygon(surf, outline, body, max(1, s // 16))
+        self._markers[key] = surf
+        return surf
 
     def _composite(self, layers: Tuple[Layer, ...], dim: bool
                    ) -> Optional[pygame.Surface]:
@@ -346,20 +441,26 @@ class SpriteMap:
             return
         ox, oy = offset
         cell = self.cell
-        cols = min(game_map.width, config.MAP_WIDTH)
-        rows = min(game_map.height, config.MAP_HEIGHT)
+        # Share the engine's scroll offset so sprites line up with the ASCII map
+        # and reticles; fall back to (0, 0) if the map has no engine/camera.
+        cam = getattr(getattr(game_map, "engine", None), "camera", None)
+        sx, sy = (cam.x, cam.y) if cam is not None else (0, 0)
+        cols = min(game_map.width - sx, config.MAP_WIDTH)
+        rows = min(game_map.height - sy, config.MAP_HEIGHT)
         tiles = game_map.tiles
         visible = game_map.visible
         explored = game_map.explored
 
-        # --- terrain layer ---
+        # --- terrain layer --- (view cell (x, y) shows world tile (sx+x, sy+y))
         blits = []
         for x in range(cols):
+            wx = sx + x
             for y in range(rows):
-                seen = bool(visible[x, y])
-                if not seen and not bool(explored[x, y]):
+                wy = sy + y
+                seen = bool(visible[wx, wy])
+                if not seen and not bool(explored[wx, wy]):
                     continue  # unseen -> leave black
-                cell_t = tiles[x, y]
+                cell_t = tiles[wx, wy]
                 key = resolve_terrain(int(cell_t["kind"]), int(cell_t["light"]["ch"]))
                 if key is None:
                     continue
@@ -374,7 +475,8 @@ class SpriteMap:
         entities = sorted(game_map.entities, key=lambda e: e.render_order.value)
         ent_blits = []
         for e in entities:
-            if not (0 <= e.x < cols and 0 <= e.y < rows):
+            vx, vy = e.x - sx, e.y - sy
+            if not (0 <= vx < cols and 0 <= vy < rows):
                 continue
             if not bool(visible[e.x, e.y]):
                 continue
@@ -388,9 +490,17 @@ class SpriteMap:
                 if layers is not None:
                     tile = self._composite(layers, dim=False)
                 else:
-                    key = resolve_entity(e.char)
+                    key = resolve_entity(e)
                     tile = self._tile(key, dim=False) if key is not None else None
+                if tile is None:
+                    # Floor loot and corpses carry no character/creature sprite;
+                    # draw a synthetic marker so drops stay visible and pickable.
+                    order = getattr(e, "render_order", None)
+                    if order is RenderOrder.ITEM:
+                        tile = self._marker(tuple(e.color), "item")
+                    elif order is RenderOrder.CORPSE:
+                        tile = self._marker(tuple(e.color), "corpse")
             if tile is not None:
-                ent_blits.append((tile, (ox + e.x * cell, oy + e.y * cell)))
+                ent_blits.append((tile, (ox + vx * cell, oy + vy * cell)))
         if ent_blits:
             screen.blits(ent_blits, doreturn=False)

@@ -18,7 +18,7 @@ from typing import List, Optional, Tuple
 
 import pygame
 
-from lonelands import color
+from lonelands import color, skins
 
 Color = Tuple[int, int, int]
 
@@ -53,6 +53,12 @@ class UI:
         self.prose = _font(base, face=_PROSE)          # read text: NPC speech, quests
         self.prose_line = self.prose.get_linesize()
         self.pad = base                      # panel inner padding
+        # The ornamental HUD frame (Kenney Fantasy UI Borders). Whole-pixel corner
+        # scale tracks the window size; a dim gilt tint at partial alpha keeps the
+        # frame reading as worked stone-edge, settled back rather than popping.
+        self.frame_scale = max(2, base // 8)
+        self.frame_tint = color.frame          # dim gilt, near the stone value
+        self.frame_alpha = 200
         self.line = self.body.get_linesize()  # default row advance
         self._mono: dict = {}                # size -> monospace font (help page)
         self._prop: dict = {}                # size -> proportional font (dense lists)
@@ -91,6 +97,19 @@ class UI:
         font = font or self.body
         self.text(right - font.size(s)[0], y, s, col, font)
 
+    def plate(self, x: int, y: int, s: str, fg: Color, font=None,
+              bg: Color = (0x10, 0x0E, 0x0C), alpha: int = 200, pad: int = 5) -> int:
+        """Draw ``s`` on a dim, rounded plate — a label legible over busy
+        artwork (the overworld atlas Region names, laid over band-tinted
+        terrain). Returns the text width."""
+        font = font or self.small
+        w, h = font.size(s)
+        surf = pygame.Surface((w + 2 * pad, h + 2), pygame.SRCALPHA)
+        pygame.draw.rect(surf, (*bg, alpha), surf.get_rect(), border_radius=4)
+        self.screen.blit(surf, (x - pad, y - 1))
+        self.text(x, y, s, fg, font)
+        return w
+
     def truncate(self, s: str, max_w: int, font=None) -> str:
         """``s`` clipped with an ellipsis to fit ``max_w`` pixels."""
         font = font or self.body
@@ -111,13 +130,18 @@ class UI:
 
     # --- chrome ------------------------------------------------------------
     def panel(self, x: int, y: int, w: int, h: int, title: Optional[str] = None) -> "pygame.Rect":
-        """A translucent dark-stone rounded panel with a thin bright border.
-        Returns the inner content rect (padded); a ``title`` is drawn at its top
-        and the rect advanced below it."""
+        """A translucent dark-stone panel wrapped in the Kenney "Fantasy UI
+        Borders" gilt frame — the same ornament as the always-on HUD panes, so
+        menus, the character sheet and dialogs read as one interface. Returns the
+        inner content rect (padded); a ``title`` is drawn at its top and the rect
+        advanced below it."""
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
-        pygame.draw.rect(surf, (*color.panel_bg, 240), (0, 0, w, h), border_radius=12)
-        pygame.draw.rect(surf, (*color.frame_bright, 255), (0, 0, w, h), width=2, border_radius=12)
+        surf.fill((*color.panel_bg, 240))
         self.screen.blit(surf, (x, y))
+        skins.FANTASY_BORDER.draw(
+            self.screen, (x, y, w, h), tint=self.frame_tint,
+            scale=self.frame_scale, alpha=self.frame_alpha,
+        )
         inner = pygame.Rect(x + self.pad, y + self.pad, w - 2 * self.pad, h - 2 * self.pad)
         if title:
             self.text(inner.x, inner.y, title, color.menu_title, self.head)
@@ -130,13 +154,29 @@ class UI:
         """A ``w``×``h`` rect centred in the window."""
         return pygame.Rect((self.w - w) // 2, (self.h - h) // 2, w, h)
 
-    def hud_panel(self, x: int, y: int, w: int, h: int) -> "pygame.Rect":
-        """A solid dark-stone panel docked to a screen edge (the HUD panes), with
-        a thin border. Returns the padded inner content rect."""
+    def hud_panel(self, x: int, y: int, w: int, h: int,
+                  sides: str = "NESW") -> "pygame.Rect":
+        """A solid dark-stone panel docked to a screen edge (the HUD panes),
+        wrapped in the vendored Kenney "Fantasy UI Borders" frame (issue #92
+        follow-up). ``sides`` omits the border on any edge that butts a
+        neighbouring pane, so abutting panes share one clean seam. Returns the
+        padded inner content rect."""
         pygame.draw.rect(self.screen, color.panel_bg, (x, y, w, h))
-        pygame.draw.rect(self.screen, color.frame, (x, y, w, h), width=1)
+        skins.FANTASY_BORDER.draw(
+            self.screen, (x, y, w, h), tint=self.frame_tint,
+            scale=self.frame_scale, alpha=self.frame_alpha, sides=sides,
+        )
         p = self.pad
         return pygame.Rect(x + p, y + p // 2, w - 2 * p, h - p)
+
+    def hud_seam(self, x: int, y: int, w: int, h: int, sides: str) -> None:
+        """Draw only the ornamental frame edge(s) for ``sides`` over an existing
+        pane (no fill), matching :meth:`hud_panel`. Used for the lone interior
+        divider so the sidebar and Chronicle read as one L-shaped pane."""
+        skins.FANTASY_BORDER.draw(
+            self.screen, (x, y, w, h), tint=self.frame_tint,
+            scale=self.frame_scale, alpha=self.frame_alpha, sides=sides,
+        )
 
     def scrim(self, alpha: int = 165) -> None:
         """Dim the whole window (so an open panel reads as the top layer,
@@ -178,6 +218,14 @@ class UI:
     def hint(self, cx: int, y: int, s: str) -> None:
         """A dim, centred footer of key hints."""
         self.text_center(cx, y, s, color.tier_label, self.small)
+
+    def tri_down(self, x: int, y: int, size: int, col: Color) -> int:
+        """A small filled downward triangle — the atlas legend's ``deeps`` mark,
+        which the proportional font has no glyph for (the map draws it from the
+        tileset). Returns its width."""
+        pygame.draw.polygon(self.screen, col,
+                            [(x, y), (x + size, y), (x + size // 2, y + size)])
+        return size
 
     def hrule(self, x: int, y: int, w: int) -> None:
         """A thin dim horizontal rule."""
