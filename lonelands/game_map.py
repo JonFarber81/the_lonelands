@@ -92,7 +92,7 @@ class GameMap:
             vx, vy = tx - sx, ty - sy
             if 0 <= vx < w and 0 <= vy < h and self.visible[tx, ty]:
                 console.print(x=vx, y=vy, string=trap.char,
-                              fg=color.snare_c)
+                              fg=color.snare_c, sprite="snare")
 
         entities_sorted = sorted(
             self.entities, key=lambda x: x.render_order.value
@@ -102,7 +102,7 @@ class GameMap:
             if 0 <= vx < w and 0 <= vy < h and self.visible[entity.x, entity.y]:
                 console.print(
                     x=vx, y=vy,
-                    string=entity.char, fg=entity.color,
+                    string=entity.char, fg=entity.color, sprite=entity.sprite,
                 )
 
         # Awareness tags (ADR 0014): a small !/? floated over a foe's head once

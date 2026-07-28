@@ -9,13 +9,14 @@ from typing import Tuple
 
 import numpy as np
 
-from lonelands import color
+from lonelands import color, sprites
 
 graphic_dt = np.dtype(
     [
         ("ch", np.int32),
         ("fg", "3B"),
         ("bg", "3B"),
+        ("sprite", np.int32),  # ADR 0016: sprites.sprite_id(key), 0 = ASCII only
     ]
 )
 
@@ -48,12 +49,17 @@ def new_tile(
     dark: Tuple[int, Tuple[int, int, int], Tuple[int, int, int]],
     light: Tuple[int, Tuple[int, int, int], Tuple[int, int, int]],
     kind: int = KIND_GENERIC,
+    sprite: str = "",
 ) -> np.ndarray:
-    return np.array((walkable, transparent, dark, light, kind), dtype=tile_dt)
+    """``sprite`` is a key into ``sprites.SPRITE_KEYS`` (ADR 0016) — the same
+    tile art for both the ``dark``/``light`` memory-shading variants, only the
+    tint differs. Empty means "no sprite; ASCII always" (a bespoke tile)."""
+    sid = sprites.sprite_id(sprite)
+    return np.array((walkable, transparent, (*dark, sid), (*light, sid), kind), dtype=tile_dt)
 
 
 # Unexplored / out-of-knowledge tiles.
-SHROUD = np.array((ord(" "), color.black, color.black), dtype=graphic_dt)
+SHROUD = np.array((ord(" "), color.black, color.black, 0), dtype=graphic_dt)
 
 # --- Ruin / dungeon --------------------------------------------------------
 floor = new_tile(
@@ -61,18 +67,21 @@ floor = new_tile(
     transparent=True,
     dark=(ord("."), color.floor_dark, color.black),
     light=(ord("."), color.floor_light, (0x1A, 0x18, 0x14)),
+    sprite="floor",
 )
 wall = new_tile(
     walkable=False,
     transparent=False,
     dark=(ord("#"), color.wall_dark, color.black),
     light=(ord("#"), color.wall_light, (0x22, 0x1E, 0x18)),
+    sprite="wall",
 )
 rubble = new_tile(
     walkable=True,
     transparent=True,
     dark=(ord("%"), (0x3A, 0x36, 0x30), color.black),
     light=(ord("%"), (0x74, 0x6A, 0x58), (0x1A, 0x18, 0x14)),
+    sprite="rubble",
 )
 down_stairs = new_tile(
     walkable=True,
@@ -80,6 +89,7 @@ down_stairs = new_tile(
     dark=(ord(">"), (0x5A, 0x54, 0x48), color.black),
     light=(ord(">"), (0xE0, 0xD0, 0x90), (0x22, 0x1E, 0x18)),
     kind=KIND_DOWN,
+    sprite="down_stairs",
 )
 up_stairs = new_tile(
     walkable=True,
@@ -87,6 +97,7 @@ up_stairs = new_tile(
     dark=(ord("<"), (0x5A, 0x54, 0x48), color.black),
     light=(ord("<"), (0xE0, 0xD0, 0x90), (0x22, 0x1E, 0x18)),
     kind=KIND_UP,
+    sprite="up_stairs",
 )
 door = new_tile(
     walkable=True,
@@ -94,6 +105,7 @@ door = new_tile(
     dark=(ord("+"), (0x6A, 0x50, 0x34), color.black),
     light=(ord("+"), (0xB0, 0x86, 0x4A), (0x22, 0x1E, 0x18)),
     kind=KIND_DOOR,
+    sprite="door",
 )
 
 # --- Wilderness (overworld) -----------------------------------------------
@@ -102,18 +114,21 @@ grass = new_tile(
     transparent=True,
     dark=(ord('"'), color.grass_dark, color.black),
     light=(ord('"'), color.grass_light, (0x18, 0x1E, 0x12)),
+    sprite="grass",
 )
 grass_low = new_tile(
     walkable=True,
     transparent=True,
     dark=(ord(","), color.grass_dark, color.black),
     light=(ord(","), (0x4E, 0x64, 0x3A), (0x16, 0x1C, 0x10)),
+    sprite="grass_low",
 )
 tree = new_tile(
     walkable=False,
     transparent=False,
     dark=(ord("T"), color.tree_dark, color.black),
     light=(ord("T"), color.tree_light, (0x14, 0x1C, 0x10)),
+    sprite="tree",
 )
 water = new_tile(
     walkable=False,
@@ -121,6 +136,7 @@ water = new_tile(
     dark=(ord("~"), color.water_dark, (0x10, 0x18, 0x22)),
     light=(ord("~"), color.water_light, (0x18, 0x28, 0x3A)),
     kind=KIND_WATER,
+    sprite="water",
 )
 road = new_tile(
     walkable=True,
@@ -128,6 +144,7 @@ road = new_tile(
     dark=(ord("."), color.road_dark, color.black),
     light=(ord("."), color.road_light, (0x22, 0x1E, 0x16)),
     kind=KIND_ROAD,
+    sprite="road",
 )
 bridge = new_tile(
     walkable=True,
@@ -135,12 +152,14 @@ bridge = new_tile(
     dark=(ord("="), (0x5A, 0x46, 0x30), color.black),
     light=(ord("="), (0x9A, 0x78, 0x4E), (0x22, 0x1E, 0x16)),
     kind=KIND_ROAD,   # a road that carries over water — snappable like any road
+    sprite="bridge",
 )
 hill = new_tile(
     walkable=True,
     transparent=True,
     dark=(ord("n"), (0x40, 0x3A, 0x2E), color.black),
     light=(ord("n"), (0x7A, 0x6E, 0x54), (0x1C, 0x1A, 0x14)),
+    sprite="hill",
 )
 
 # --- Town ------------------------------------------------------------------
@@ -149,12 +168,14 @@ cobble = new_tile(
     transparent=True,
     dark=(ord("."), (0x38, 0x34, 0x2E), color.black),
     light=(ord("."), (0x7C, 0x74, 0x64), (0x20, 0x1E, 0x1A)),
+    sprite="cobble",
 )
 building_wall = new_tile(
     walkable=False,
     transparent=False,
     dark=(ord("#"), (0x4A, 0x3E, 0x30), color.black),
     light=(ord("#"), (0x8C, 0x74, 0x52), (0x24, 0x1E, 0x16)),
+    sprite="building_wall",
 )
 ruin_entrance = new_tile(
     walkable=True,
@@ -162,4 +183,5 @@ ruin_entrance = new_tile(
     dark=(ord(">"), (0x5A, 0x54, 0x48), color.black),
     light=(ord(">"), (0xE0, 0xC0, 0x70), (0x22, 0x1E, 0x18)),
     kind=KIND_RUIN_ENTRANCE,
+    sprite="ruin_entrance",
 )

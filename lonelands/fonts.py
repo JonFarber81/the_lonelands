@@ -37,9 +37,14 @@ _RasterizeFn = Callable[[str, int], "np.ndarray"]
 
 
 # --- surface helpers -------------------------------------------------------
-def _mask_to_surface(mask: "np.ndarray") -> "Optional[pygame.Surface]":
+def mask_to_surface(mask: "np.ndarray") -> "Optional[pygame.Surface]":
     """A white surface whose alpha is the coverage ``mask`` (rows, cols); the
-    display tints it by the cell's foreground colour. ``None`` if fully blank."""
+    display tints it by the cell's foreground colour. ``None`` if fully blank.
+
+    The shared seam: dice art bakes through this, and so does
+    :mod:`lonelands.sprites` when it slices an Oryx tile into a coverage mask
+    (ADR 0016) — both end up as the same kind of white/alpha surface the
+    display already knows how to tint."""
     if mask.size == 0 or int(mask.max()) == 0:
         return None
     h, w = mask.shape
@@ -315,4 +320,4 @@ class GlyphAtlas:
             br: art[h : h * 2, w : w * 2],
         }
         for cp, quad in quads.items():
-            out[cp] = _mask_to_surface(np.ascontiguousarray(quad))
+            out[cp] = mask_to_surface(np.ascontiguousarray(quad))

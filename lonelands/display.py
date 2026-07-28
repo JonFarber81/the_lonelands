@@ -20,15 +20,16 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pygame
 
-from lonelands import config, events, fonts, ui
+from lonelands import config, events, fonts, sprites, ui
 
 # An RGB colour as the renderers pass it (a bare 3-tuple, matching tcod).
 Color = Tuple[int, int, int]
 
-# The console cell dtype — identical to tcod's ``console.rgb`` and to
-# ``tile_types.graphic_dt`` (ch + fg + bg), so ``game_map`` can assign a slice of
-# terrain graphics straight into ``console.rgb`` exactly as before.
-console_dt = np.dtype([("ch", np.int32), ("fg", "3B"), ("bg", "3B")])
+# The console cell dtype — identical (field-for-field) to ``tile_types.
+# graphic_dt`` (ch + fg + bg + sprite), so ``game_map`` can assign a slice of
+# terrain graphics straight into ``console.rgb`` exactly as before. ``sprite``
+# is a sprites.sprite_id() (ADR 0016); 0 means "ASCII only, no sprite key".
+console_dt = np.dtype([("ch", np.int32), ("fg", "3B"), ("bg", "3B"), ("sprite", np.int32)])
 
 # The default frame decoration, matching tcod's ``draw_frame``: top-left, top,
 # top-right, left, middle, right, bottom-left, bottom, bottom-right. The bundled
@@ -59,21 +60,25 @@ class Console:
         self._buf["ch"] = ord(" ")
         self._buf["fg"] = (255, 255, 255)
         self._buf["bg"] = (0, 0, 0)
+        self._buf["sprite"] = 0
 
     def print(
         self, x: int, y: int, string: str,
         fg: Optional[Color] = None, bg: Optional[Color] = None,
-        alignment: int = events.LEFT,
+        alignment: int = events.LEFT, sprite: str = "",
     ) -> None:
         """Write ``string`` at cell ``(x, y)``. ``fg``/``bg`` left ``None`` keep
-        whatever colour the cell already holds (matching tcod's ``print``)."""
+        whatever colour the cell already holds (matching tcod's ``print``).
+        ``sprite`` is a sprite key (ADR 0016) drawn instead of ``string`` when
+        sprites are enabled; every printed cell gets the same one, so a
+        multi-char ``string`` should only pass ``sprite`` for single glyphs."""
         for line in string.split("\n"):
-            self._print_line(x, y, line, fg, bg, alignment)
+            self._print_line(x, y, line, fg, bg, alignment, sprite)
             y += 1
 
     def _print_line(
         self, x: int, y: int, line: str,
-        fg: Optional[Color], bg: Optional[Color], alignment: int,
+        fg: Optional[Color], bg: Optional[Color], alignment: int, sprite: str = "",
     ) -> None:
         if alignment == events.CENTER:
             x -= len(line) // 2
@@ -81,11 +86,13 @@ class Console:
             x -= len(line) - 1
         if not (0 <= y < self.height):
             return
+        sid = sprites.sprite_id(sprite)
         for offset, ch in enumerate(line):
             cx = x + offset
             if 0 <= cx < self.width:
                 cell = self._buf[cx, y]
                 cell["ch"] = ord(ch)
+                cell["sprite"] = sid
                 if fg is not None:
                     cell["fg"] = fg
                 if bg is not None:
@@ -104,6 +111,7 @@ class Console:
         region = self._buf[x0:x1, y0:y1]
         if ch:
             region["ch"] = ch
+            region["sprite"] = 0
         if fg is not None:
             region["fg"] = fg
         if bg is not None:
@@ -142,6 +150,7 @@ class Console:
         if 0 <= x < self.width and 0 <= y < self.height:
             cell = self._buf[x, y]
             cell["ch"] = ord(ch)
+            cell["sprite"] = 0
             if fg is not None:
                 cell["fg"] = fg
             if bg is not None:
@@ -172,22 +181,47 @@ class Display:
         # The atlas owns the white per-codepoint surfaces (and caches them); the
         # display only caches the tinted copies keyed by foreground colour.
         self._atlas = fonts.GlyphAtlas(self.cell_w, self.cell_h)
+        self._sprite_atlas = sprites.SpriteAtlas(self.cell_w, self.cell_h)
         self._tinted: Dict[Tuple[int, Color], Optional[pygame.Surface]] = {}
+        self._sprite_tinted: Dict[Tuple[int, Color], Optional[pygame.Surface]] = {}
 
     def _base_surface(self, cp: int) -> Optional[pygame.Surface]:
         return self._atlas.base_surface(cp)
 
-    def _glyph(self, cp: int, fg: Color) -> Optional[pygame.Surface]:
+    def _glyph(self, cp: int, fg: Color, sid: int = 0) -> Optional[pygame.Surface]:
+        """The tinted surface for a cell: its sprite (ADR 0016) when sprites
+        are on and one resolves, else its ASCII glyph — the same per-cell
+        fallback that keeps the bespoke-four (and anything else without a
+        sprite key) drawn, never blank."""
+        if sid and sprites.enabled():
+            tinted = self._tinted_sprite(sid, fg)
+            if tinted is not None:
+                return tinted
+        return self._tinted_glyph(cp, fg)
+
+    def _tinted_glyph(self, cp: int, fg: Color) -> Optional[pygame.Surface]:
         key = (cp, fg)
         if key in self._tinted:
             return self._tinted[key]
-        base = self._base_surface(cp)
-        tinted: Optional[pygame.Surface] = None
-        if base is not None:
-            tinted = base.copy()
-            # White ink × fg == fg, preserving the coverage alpha.
-            tinted.fill((*fg, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        tinted = self._tint(self._base_surface(cp), fg)
         self._tinted[key] = tinted
+        return tinted
+
+    def _tinted_sprite(self, sid: int, fg: Color) -> Optional[pygame.Surface]:
+        key = (sid, fg)
+        if key in self._sprite_tinted:
+            return self._sprite_tinted[key]
+        tinted = self._tint(self._sprite_atlas.base_surface(sid), fg)
+        self._sprite_tinted[key] = tinted
+        return tinted
+
+    @staticmethod
+    def _tint(base: Optional[pygame.Surface], fg: Color) -> Optional[pygame.Surface]:
+        if base is None:
+            return None
+        tinted = base.copy()
+        # White ink × fg == fg, preserving the coverage alpha.
+        tinted.fill((*fg, 255), special_flags=pygame.BLEND_RGBA_MULT)
         return tinted
 
     # --- painting ----------------------------------------------------------
@@ -222,10 +256,11 @@ class Display:
         # Glyphs: gather (surface, dest) for every non-blank cell, blit in one go.
         ch_a = buf["ch"]
         fg_a = buf["fg"]
+        sprite_a = buf["sprite"]
         xs, ys = np.nonzero((ch_a != 0) & (ch_a != ord(" ")))
         sequence: List[Tuple[pygame.Surface, Tuple[int, int]]] = []
         for gx, gy in zip(xs.tolist(), ys.tolist()):
-            glyph = self._glyph(int(ch_a[gx, gy]), tuple(fg_a[gx, gy]))
+            glyph = self._glyph(int(ch_a[gx, gy]), tuple(fg_a[gx, gy]), int(sprite_a[gx, gy]))
             if glyph is not None:
                 sequence.append((glyph, (ox + gx * cw, oy + gy * ch)))
         if sequence:

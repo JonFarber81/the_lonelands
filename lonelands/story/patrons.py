@@ -17,7 +17,7 @@ from lonelands.components.inventory import Inventory
 from lonelands.components.npc import NPC
 from lonelands.dice import rng
 from lonelands.entity import Actor
-from lonelands.story._helpers import RACE_GLYPHS, opt
+from lonelands.story._helpers import RACE_GLYPHS, RACE_SPRITES, opt
 
 
 # One rumour in four, roughly: mostly the patrons are pure colour, and only
@@ -121,6 +121,7 @@ def _make_patron(kind: Kind) -> Actor:
     tree = {"root": {"text": line, "options": [opt("(turn back to the room)")]}}
     return Actor(
         char=RACE_GLYPHS[kind["race"]], color=kind["color"], name=name,
+        sprite=RACE_SPRITES[kind["race"]],
         ai_cls=IdleWanderer,
         inventory=Inventory(0), equipment=Equipment(),
         npc=NPC(title=kind["title"], tree=tree, keep_tree=True),

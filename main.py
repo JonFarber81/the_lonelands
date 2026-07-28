@@ -28,12 +28,18 @@ def _parse_args() -> argparse.Namespace:
         help="enable debug mode: the F12 cheat menu (god, level, teleport…). "
              "Runtime only — never written to a save (ADR 0012).",
     )
+    parser.add_argument(
+        "--ascii", action="store_true",
+        help="force the ASCII play field even if Oryx art is on disk "
+             "(LONELANDS_TILES). Sprites otherwise auto-detect (ADR 0016).",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     config.DEBUG = args.debug
+    config.ASCII_ONLY = args.ascii
     disp = display.Display()
     console = display.Console(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
     handler: events.BaseEventHandler = input_handlers.MainMenuHandler()

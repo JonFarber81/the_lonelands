@@ -388,24 +388,33 @@ unreadable).
   breakdown, lineage, nodes). The deep view is self-contained — it never makes
   the player rely on the glance.
 
-### The play field: ASCII
+### The play field: ASCII, tinted by Oryx sprites where art is present
 
-The map (the play field, distinct from the **chrome**) is a classic ASCII
-roguelike view (ADR-0015). The words below name *what the player sees*, never
-how it is built.
+The map (the play field, distinct from the **chrome**) has two coequal faces,
+selected automatically at launch and always able to draw every drawable
+(ADR 0016). The words below name *what the player sees*, never how it is
+built.
 
 - **ASCII glyph** — every drawable is shown as a coloured letter or symbol, one
   glyph per cell, drawn from the bundled monospace face and tinted by its
-  colour. A wall is `#`, a floor `.`, the player `@`. (An earlier plan for a
-  full-colour sprite/tile-sheet play field, ADR-0013, was dropped — see
-  ADR-0015.)
+  colour. A wall is `#`, a floor `.`, the player `@`. This is the always-
+  available fallback and the whole game when no tile art is present.
+- **Sprite key** — the same drawable's Oryx-silhouette twin: a monochrome tile
+  sliced from a local, licensed sheet (never committed) and tinted the same
+  way as its ASCII glyph — same cell, same colour, a different bitmap. Present
+  art auto-selects sprites; a `--ascii` flag forces the letter view either way.
+  A missing sprite key is a bug, except the **bespoke-four** curated props
+  (hobbit-hole, the Prancing Pony, signposts, barrow-mounds), which keep the
+  ASCII glyph forever by design — each is its own follow-up issue.
 - **Race letter vs. `@`** — many things share a glyph (every orc is `o`); the
-  **race** crowd (ADR 0009) is drawn by its race-letter, while `@` is reserved
-  for the player and hand-authored NPCs.
+  **race** crowd (ADR 0009) is drawn by its race-letter (or the matching
+  `RACE_SPRITES` key in sprite mode), while `@` is reserved for the player and
+  hand-authored NPCs.
 - **Light / remembered / unseen** — a tile inside FOV is drawn in its **light**
   colour; one the player has seen but cannot currently see is **remembered**
   (drawn in its dimmer **dark** colour); never-seen cells are **unseen** (black).
-  Each tile carries the two colours so the map keeps that memory-shaded look.
+  Each tile carries the two colours (and the one sprite key shared by both) so
+  the map keeps that memory-shaded look in either view.
 
 ## Development & tooling
 

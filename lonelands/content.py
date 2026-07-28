@@ -45,6 +45,7 @@ def make_player() -> Actor:
         char="@",
         color=color.player_c,
         name="Greycloak",
+        sprite="player",
         ai_cls=None,
         # The hero's Defence and to-hit fold in his attributes (Wits → Defence,
         # Brawn → attack); the base numbers here are the residue on top of those.
@@ -66,9 +67,11 @@ def make_player() -> Actor:
 # not sold in Bree keep Value 0 (not sellable) for now — selling gear you can't
 # rebuy is deferred (issue #31, out of scope).
 def _weapon(name, char, dmg, load, *, attack_bonus=0, pierce=0,
-            bonus_vs="", bonus_vs_damage=0, desc="", value=0, unique=False) -> Item:
+            bonus_vs="", bonus_vs_damage=0, desc="", value=0, unique=False,
+            sprite="") -> Item:
     return Item(
         char=char, color=color.weapon_c, name=name, description=desc, value=value,
+        sprite=sprite,
         equippable=Equippable(
             EquipmentType.WEAPON, load=load, damage=dmg, attack_bonus=attack_bonus,
             pierce=pierce, bonus_vs=bonus_vs, bonus_vs_damage=bonus_vs_damage,
@@ -80,27 +83,32 @@ def _weapon(name, char, dmg, load, *, attack_bonus=0, pierce=0,
 dunedain_sword = _weapon(
     "Dúnedain sword", "/", 5, 2, attack_bonus=1,
     desc="A long, leaf-bladed sword of the North-kingdom, its make older than any town near.",
+    sprite="dunedain_sword",
 )
 short_sword = _weapon("short sword", "/", 4, 1, value=12,
-                      desc="A plain, serviceable blade.")
+                      desc="A plain, serviceable blade.", sprite="short_sword")
 hunting_dagger = _weapon("hunting dagger", "-", 3, 0, attack_bonus=1, value=7,
-                         desc="Keen and quick; it bites deep on a true stroke.")
+                         desc="Keen and quick; it bites deep on a true stroke.",
+                         sprite="hunting_dagger")
 # A spear's reach lets it slip past armour: a small pierce is its property.
 war_spear = _weapon("war spear", "|", 4, 2, pierce=1, value=10,
-                    desc="An ash-hafted spear; its point slips past mail.")
+                    desc="An ash-hafted spear; its point slips past mail.",
+                    sprite="war_spear")
 # Dwarf-make: a short, heavy hand-axe of the Blue-Mountain smiths, sold on the
 # East Road by travelling Dwarves. Blunt reliability over a Ranger's finesse.
 dwarf_axe = _weapon("dwarf-make hand-axe", "/", 5, 2, attack_bonus=1, value=16,
                     desc="A stout single-hand axe forged in the Blue Mountains; "
-                         "its bearded head bites through a shield.")
+                         "its bearded head bites through a shield.",
+                    sprite="dwarf_axe")
 
 # Bows go in the `ranged` slot and are loosed with `f` (ADR 0006). Each carries
 # damage dice and an **effective range** — the reach within which a Shot takes no
 # falloff. A bow is keyed off Wits, not Brawn, and spends an arrow per Shot.
 def _bow(name, dmg, effective_range, load, *, attack_bonus=0, desc="", value=0,
-         unique=False) -> Item:
+         unique=False, sprite="") -> Item:
     return Item(
         char="}", color=color.weapon_c, name=name, description=desc, value=value,
+        sprite=sprite,
         equippable=Equippable(
             EquipmentType.RANGED, load=load, damage=dmg, ranged=True,
             effective_range=effective_range, attack_bonus=attack_bonus,
@@ -113,10 +121,12 @@ shortbow = _bow(
     "shortbow", "1d6", 4, 1, value=15,
     desc="A short bow of horn and yew, quick to draw; its arrows carry true out "
          "to middling range.",
+    sprite="shortbow",
 )
 longbow = _bow(
     "longbow", "1d8", 6, 2, value=30,
     desc="A tall war-bow of the Dúnedain, its long stave sending shafts far and hard.",
+    sprite="longbow",
 )
 
 # Arrows: the ammunition a bow spends — a fungible Stack in the pack, one spent
@@ -128,7 +138,7 @@ AMMO_NAME = "arrows"
 def _quiver(n: int) -> Item:
     return Item(
         char="\\", color=(0xB8, 0xA0, 0x78), name=AMMO_NAME, value=1,
-        stackable=True, quantity=n,
+        stackable=True, quantity=n, sprite="arrows",
         description="A sheaf of grey-fletched arrows for a bow.",
     )
 
@@ -143,21 +153,25 @@ leather_gear = Item(
     char="[", color=color.beast_c, name="Ranger's leathers", value=10,
     description="Weathered leather and a travel-worn cloak of Rangers' grey-green; "
                 "light enough to slip a blow.",
+    sprite="leather_gear",
     equippable=Equippable(EquipmentType.ARMOUR, load=1, defence_bonus=1),
 )
 mail_corslet = Item(
     char="[", color=(0x9A, 0x9E, 0xA6), name="corslet of mail", value=30,
     description="A shirt of riveted rings, heavy but stalwart.",
+    sprite="mail_corslet",
     equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=2),
 )
 buckler = Item(
     char=")", color=(0x8A, 0x6E, 0x44), name="buckler", value=8,
     description="A small round shield, easy to bear.",
+    sprite="buckler",
     equippable=Equippable(EquipmentType.SHIELD, load=1, defence_bonus=1),
 )
 travellers_hood = Item(
     char="^", color=color.beast_c, name="reinforced hood", value=6,
     description="A hood sewn with hidden bands of leather.",
+    sprite="travellers_hood",
     equippable=Equippable(EquipmentType.HELM, load=0, defence_bonus=1),
 )
 
@@ -170,12 +184,14 @@ ranger_star = Item(
     char="*", color=(0xC0, 0xC4, 0xCE), name="star of the Dúnedain", value=14,
     description="A six-rayed silver star, the badge worn at a Ranger's shoulder. "
                 "It quickens the wary eye.",
+    sprite="ranger_star",
     equippable=Equippable(EquipmentType.ACCESSORY, attributes={"Wits": 1}),
 )
 elven_brooch = Item(
     char="*", color=(0x8E, 0xC8, 0x9A), name="leaf-brooch of green", value=12,
     description="A brooch shaped as a beech-leaf, elven-made; the eye slides "
                 "past the one who wears it.",
+    sprite="elven_brooch",
     equippable=Equippable(EquipmentType.ACCESSORY, stealth_bonus=2,
                           path_synergy="the Hidden Path"),
 )
@@ -190,17 +206,20 @@ angolar = _weapon(
     bonus_vs="orc", bonus_vs_damage=2, value=120, unique=True,
     desc="A grey Númenórean blade drawn from the Brandywine ford, its edge cold "
          "against the Enemy's brood. Runes name it Angolar.",
+    sprite="angolar",
 )
 mail_of_the_last_watch = Item(
     char="[", color=(0xB6, 0xBE, 0xC8), name="Mail of the Last Watch", value=110,
     description="A hauberk of star-silver rings borne by the last warden of Amon "
                 "Sûl; blows turn from it as rain from stone.",
+    sprite="mail_of_the_last_watch",
     equippable=Equippable(EquipmentType.ARMOUR, load=3, soak_bonus=3, unique=True),
 )
 cloak_of_lorien = Item(
     char="(", color=(0x7C, 0xA6, 0x86), name="Grey Mantle of Lórien", value=90,
     description="A leaf-woven cloak out of the Golden Wood; the wearer walks "
                 "unseen and thinks the clearer for it.",
+    sprite="cloak_of_lorien",
     equippable=Equippable(EquipmentType.ACCESSORY, attributes={"Wits": 1},
                           stealth_bonus=3, path_synergy="the Hidden Path", unique=True),
 )
@@ -213,21 +232,25 @@ UNIQUES: List[Item] = [angolar, mail_of_the_last_watch, cloak_of_lorien]
 athelas = Item(
     char="*", color=color.herb_c, name="athelas leaves", value=6, stackable=True,
     description="Kingsfoil. Of little worth to the unlearned, but of virtue in the hands of a healer.",
+    sprite="athelas",
     consumable=consumable.RemedyConsumable(amount=8),
 )
 healing_herbs = Item(
     char="*", color=color.herb_c, name="healing herbs", value=4, stackable=True,
     description="Bundled field herbs to bind a hurt.",
+    sprite="healing_herbs",
     consumable=consumable.HealingConsumable(amount=6),
 )
 lembas = Item(
     char="%", color=(0xD8, 0xD0, 0xA0), name="waybread", value=3, stackable=True,
     description="Wrapped in leaves; a small bite restores vigour on a long road.",
+    sprite="lembas",
     consumable=consumable.HealingConsumable(amount=4),
 )
 miruvor = Item(
     char="!", color=color.hope_gain, name="draught of the Dúnedain", value=8, stackable=True,
     description="A cordial that kindles new strength in the weary body.",
+    sprite="miruvor",
     consumable=consumable.HealingConsumable(amount=8),
 )
 # Southlinch — the pipe-weed grown on the sunny south slopes of Bree-hill, prized
@@ -236,6 +259,7 @@ pipe_weed = Item(
     char="%", color=(0x9C, 0x7A, 0x54), name="Southlinch pipe-weed", value=3, stackable=True,
     description="A twist of fragrant leaf grown on Bree-hill's south slope; a "
                 "quiet pipe of it settles the nerves and eases small hurts.",
+    sprite="pipe_weed",
     consumable=consumable.HealingConsumable(amount=3),
 )
 
@@ -244,6 +268,7 @@ star_brooch = Item(
     char="*", color=(0xE6, 0xE0, 0xC0), name="star-brooch of Arnor",
     description="A silver brooch wrought as a many-rayed star: the token of the last "
                 "warden of Amon Gûl. Old Dírhael will wish to see this.",
+    sprite="star_brooch",
 )
 
 # Quest item — the Archet woodcutters' lost felling-axe, an heirloom left in the
@@ -252,26 +277,32 @@ felling_axe = Item(
     char="/", color=(0x8C, 0x6E, 0x46), name="woodwright's felling-axe",
     description="A broad, worn felling-axe, its haft dark with the grip of many "
                 "hands; the Archet woodcutters will know it, and grieve or rejoice.",
+    sprite="felling_axe",
 )
 
 # ---------------------------------------------------------------------------
 # Trade-goods — sold for coin in Bree; their only purpose is their Value.
 # ---------------------------------------------------------------------------
-def _trade_good(name, char, col, value, desc) -> Item:
+def _trade_good(name, char, col, value, desc, sprite="") -> Item:
     return Item(char=char, color=col, name=name, description=desc,
-                value=value, stackable=True)
+                value=value, stackable=True, sprite=sprite)
 
 
 wolf_pelt = _trade_good("wolf-pelt", "~", color.wolf_c, 6,
-                        "The grey hide of a wolf, worth coin to a Bree furrier.")
+                        "The grey hide of a wolf, worth coin to a Bree furrier.",
+                        sprite="wolf_pelt")
 warg_pelt = _trade_good("warg-pelt", "~", color.wolf_c, 10,
-                        "The great pelt of a warg — worth more than a common wolf's.")
+                        "The great pelt of a warg — worth more than a common wolf's.",
+                        sprite="warg_pelt")
 spider_silk = _trade_good("spider-silk", "~", color.beast_c, 8,
-                          "A skein of tough, glistening silk drawn from a great spider.")
+                          "A skein of tough, glistening silk drawn from a great spider.",
+                          sprite="spider_silk")
 orc_trophy = _trade_good("orc-trophy", "\"", color.orc_c, 5,
-                         "A crude token stripped from a slain orc; proof of the deed.")
+                         "A crude token stripped from a slain orc; proof of the deed.",
+                         sprite="orc_trophy")
 wolf_fang = _trade_good("wolf-fang", "'", color.wolf_c, 4,
-                        "A long curved fang — a curio the folk of Bree will pay a little for.")
+                        "A long curved fang — a curio the folk of Bree will pay a little for.",
+                        sprite="wolf_fang")
 
 
 # ---------------------------------------------------------------------------
@@ -279,9 +310,9 @@ wolf_fang = _trade_good("wolf-fang", "'", color.wolf_c, 4,
 # ---------------------------------------------------------------------------
 def _beast(char, name, col, endurance, defence, attack_bonus, damage, xp,
            soak=0, bleed_on_hit=0, kind="", ai=HostileEnemy, desc="mauls",
-           loot=None) -> Actor:
+           loot=None, sprite="") -> Actor:
     return Actor(
-        char=char, color=col, name=name, ai_cls=ai,
+        char=char, color=col, name=name, ai_cls=ai, sprite=sprite,
         fighter=Fighter(
             endurance=endurance, defence=defence, attack_bonus=attack_bonus,
             damage=damage, soak=soak, bleed_on_hit=bleed_on_hit, kind=kind,
@@ -306,35 +337,35 @@ def _beast(char, name, col, endurance, defence, attack_bonus, damage, xp,
 # an early level. Reward tracks danger: weak skirmishers pay little, pack-hunters
 # and the barrow-wight pay best. (Anchor: level 1→2 = 20 XP; see character.xp_to_next.)
 cave_goblin = _beast("g", "cave-goblin", color.orc_c, 8, 11, 3, "1d4", 4,
-                     kind="orc", desc="claws",
+                     kind="orc", desc="claws", sprite="cave_goblin",
                      loot=[[(None, 60), (Coins(1, 2), 40)]])
 orc_soldier = _beast("o", "orc soldier", color.orc_c, 14, 12, 4, "1d6", 7,
-                     soak=1, kind="orc", desc="hacks at",
+                     soak=1, kind="orc", desc="hacks at", sprite="orc_soldier",
                      loot=[
                          [(None, 35), (Coins(2, 4), 60), (Coins(4, 6), 5)],
                          [(None, 88), (orc_trophy, 12)],
                      ])
 orc_archer = _beast("o", "orc bowman", (0x94, 0xA8, 0x60), 11, 12, 4, "1d4", 5,
-                    kind="orc", desc="looses at",
+                    kind="orc", desc="looses at", sprite="orc_archer",
                     loot=[
                         [(None, 50), (Coins(1, 3), 50)],
                         [(None, 45), (arrow_bundle, 55)],  # a bowman leaves shafts
                     ])
 great_spider = _beast("s", "great spider", color.beast_c, 12, 13, 4, "1d6", 6,
-                      bleed_on_hit=1, kind="beast", desc="bites",
+                      bleed_on_hit=1, kind="beast", desc="bites", sprite="great_spider",
                       loot=[[(None, 45), (spider_silk, 55)]])
 # The barrow-wight is the deadliest routine foe: a tough, named undead that only
 # stirs in the deep barrow. It pays the richest XP of any foe and additionally
 # drops a grave-hoard of coins.
 wight = _beast("W", "barrow-wight", color.undead_c, 22, 13, 6, "1d8+1", 14,
-               soak=2, bleed_on_hit=1, kind="undead", desc="chills",
+               soak=2, bleed_on_hit=1, kind="undead", desc="chills", sprite="wight",
                loot=[[(None, 40), (Coins(5, 10), 60)]])
 
 wolf = _beast("w", "grey wolf", color.wolf_c, 10, 13, 4, "1d4", 5, ai=SkittishBeast,
-              kind="beast", desc="snaps at",
+              kind="beast", desc="snaps at", sprite="wolf",
               loot=[[(None, 35), (wolf_pelt, 60), (wolf_fang, 5)]])
 warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 8, bleed_on_hit=1,
-              kind="beast", desc="savages",
+              kind="beast", desc="savages", sprite="warg",
               loot=[[(None, 25), (warg_pelt, 72), (wolf_fang, 3)]])
 
 # --- Brigands (ADR 0007) -----------------------------------------------------
@@ -343,13 +374,13 @@ warg = _beast("W", "warg", color.wolf_c, 16, 13, 5, "1d6", 8, bleed_on_hit=1,
 # AI (they close and fight, they do not skulk like a beast). Loot is coin plus,
 # now and then, the weapon off their belt.
 footpad = _beast("b", "footpad", color.orc_c, 8, 11, 3, "1d4", 4,
-                 kind="man", desc="knifes",
+                 kind="man", desc="knifes", sprite="footpad",
                  loot=[
                      [(None, 45), (Coins(1, 3), 55)],
                      [(None, 90), (hunting_dagger, 10)],
                  ])
 highwayman = _beast("b", "highwayman", (0xB0, 0x7A, 0x4A), 14, 12, 4, "1d6", 7,
-                    soak=1, kind="man", desc="cuts at",
+                    soak=1, kind="man", desc="cuts at", sprite="highwayman",
                     loot=[
                         [(None, 30), (Coins(2, 5), 65), (Coins(5, 9), 5)],
                         [(None, 85), (short_sword, 15)],
@@ -359,7 +390,7 @@ highwayman = _beast("b", "highwayman", (0xB0, 0x7A, 0x4A), 14, 12, 4, "1d6", 7,
 # An aggressive wild animal that hunts alone — no pack AI, just a bad temper and
 # a goring tusk that opens a wound.
 boar = _beast("q", "wild boar", (0x6B, 0x5A, 0x3E), 12, 11, 4, "1d6", 6,
-              bleed_on_hit=1, kind="beast", desc="gores")
+              bleed_on_hit=1, kind="beast", desc="gores", sprite="boar")
 
 
 # Depth-weighted spawn tables: (template, weight)
