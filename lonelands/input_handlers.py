@@ -1886,7 +1886,7 @@ class MainMenuHandler(BaseEventHandler):
             ui.text_center(cx, y, o, color.selected, ui.subtitle)
             y += ui.subtitle.get_linesize() + ui.pad // 2
         ui.hint(cx, display.win_h - ui.line * 2,
-                "Powered by The One Ring · feat die + success dice")
+                "A Middle-earth roguelike · the Third Age, 2965 · d20 core")
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         from lonelands import savegame, setup_game
