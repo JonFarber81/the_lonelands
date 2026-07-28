@@ -27,13 +27,6 @@ Chronicle log, and the location banner.
 
 ![Bree, the hub town](screenshots/bree_town.png)
 
-**A committed skill-tree** — at level 2 the Ranger commits to one of three Paths,
-then pours Path points down its branching tree of Nodes. Here, a part-filled
-**Long Watch** (Tank): owned nodes glow green, buyable ones gold, deeper ones
-locked, each with its own icon.
-
-![The Long Watch skill tree](screenshots/path_tree_long_watch.png)
-
 **The character sheet** — attributes, in-the-field combat numbers, and the
 committed Path.
 
