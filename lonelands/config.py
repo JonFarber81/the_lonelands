@@ -10,6 +10,14 @@ import os
 # where the switch matters (input_handlers, hud); nothing writes it but main().
 DEBUG = False
 
+# --- Sprite mode (SPIKE, issue #92) ---------------------------------------
+# A runtime-only switch set once from ``main.py``'s hidden ``--sprites`` flag
+# (ADR-0013 Phase 0 vertical slice). When on, the map viewport is composited
+# from Kenney Roguelike sprites (see ``lonelands/sprites.py``) over the ASCII
+# grid, and cells are made square (``TILE_HEIGHT`` set to ``TILE_WIDTH``). Never
+# serialized; nothing writes it but ``main()``. Off = the untouched ASCII path.
+SPRITES = False
+
 # --- Window / console geometry (in tiles) ---------------------------------
 SCREEN_WIDTH = 92
 SCREEN_HEIGHT = 54

@@ -28,11 +28,20 @@ def _parse_args() -> argparse.Namespace:
         help="enable debug mode: the F12 cheat menu (god, level, teleport…). "
              "Runtime only — never written to a save (ADR 0012).",
     )
+    parser.add_argument(
+        # SPIKE (issue #92): hidden vertical slice of the sprite path. Undocumented
+        # on purpose — no data model, toggle UI, or coverage yet (ADR-0013 Phase 0).
+        "--sprites", action="store_true", help=argparse.SUPPRESS,
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    config.DEBUG = _parse_args().debug
+    args = _parse_args()
+    config.DEBUG = args.debug
+    if args.sprites:
+        config.SPRITES = True
+        config.TILE_HEIGHT = config.TILE_WIDTH  # square cells for the sprite map
     disp = display.Display()
     console = display.Console(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
     handler: events.BaseEventHandler = input_handlers.MainMenuHandler()
@@ -42,6 +51,13 @@ def main() -> None:
             console.clear()
             handler.on_render(console)          # the cell-grid layer (map + HUD)
             disp.blit_console(console)
+            # SPIKE (#92): composite sprites over the ASCII map viewport, but
+            # under the native HUD/menus. Only for handlers that draw the region
+            # map (not the overworld view or the main menu).
+            if config.SPRITES and getattr(handler, "renders_region_map", False):
+                engine = getattr(handler, "engine", None)
+                if engine is not None:
+                    disp.blit_sprite_map(engine.game_map)
             handler.on_render_native(disp)       # native pixel overlay (menus)
             disp.flip()
 

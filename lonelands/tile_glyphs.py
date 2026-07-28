@@ -59,3 +59,17 @@ def graphic_cp(ch: str) -> int:
 def graphic_char(ch: str) -> str:
     """The one-character string that prints ``ch`` as a tileset glyph."""
     return chr(graphic_cp(ch))
+
+
+def graphic_source_char(cp: int) -> "str | None":
+    """Inverse of :func:`graphic_cp` for the printable-ASCII graphic block: the
+    source character baked at graphic codepoint ``cp``, or ``None`` if ``cp`` is
+    outside that block (an extra map glyph or a plain text codepoint).
+
+    The single decoder for "what char does this graphic codepoint stand for" —
+    :mod:`lonelands.fonts` (rasterising) and :mod:`lonelands.sprites` (sprite-key
+    lookup) both route through it so the encoding lives in one place.
+    """
+    if GRAPHIC_BASE + 0x20 <= cp <= GRAPHIC_BASE + 0x7E:
+        return chr(cp - GRAPHIC_BASE)
+    return None
