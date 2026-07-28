@@ -53,6 +53,39 @@ GRADE: Dict[str, object] = {
     "desat": 0.33,
     "tint": (1.00, 0.99, 0.93),  # near-neutral — a hair of warmth, no brown cast
 }
+# A snapshot of the shipped default, so the debug tuner (below) can reset to it.
+_DEFAULT_GRADE = {**GRADE, "tint": tuple(GRADE["tint"])}  # type: ignore[arg-type]
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def describe_grade() -> str:
+    """A one-line, paste-ready summary of the current :data:`GRADE` — read it off
+    the Chronicle while tuning, then hard-code it in ``GRADE`` above."""
+    r, g, b = GRADE["tint"]  # type: ignore[misc]
+    return (f"GRADE  darken={float(GRADE['darken']):.2f}  "  # type: ignore[arg-type]
+            f"desat={float(GRADE['desat']):.2f}  "           # type: ignore[arg-type]
+            f"tint=({r:.2f}, {g:.2f}, {b:.2f})")
+
+
+def nudge_grade(d_darken: float = 0.0, d_desat: float = 0.0,
+                d_warmth: float = 0.0) -> str:
+    """Nudge the live tone grade (debug tuner). ``d_warmth`` shifts the tint warm
+    (>0: red up, blue down) or cool (<0). Returns :func:`describe_grade`."""
+    r, g, b = GRADE["tint"]  # type: ignore[misc]
+    GRADE["darken"] = round(_clamp(float(GRADE["darken"]) + d_darken, 0.2, 1.3), 3)  # type: ignore[arg-type]
+    GRADE["desat"] = round(_clamp(float(GRADE["desat"]) + d_desat, 0.0, 1.0), 3)     # type: ignore[arg-type]
+    GRADE["tint"] = (round(_clamp(r + d_warmth, 0.6, 1.4), 3), round(g, 3),
+                     round(_clamp(b - d_warmth, 0.6, 1.4), 3))
+    return describe_grade()
+
+
+def reset_grade() -> str:
+    """Restore :data:`GRADE` to the shipped default (debug tuner)."""
+    GRADE.update({**_DEFAULT_GRADE, "tint": tuple(_DEFAULT_GRADE["tint"])})  # type: ignore[arg-type]
+    return describe_grade()
 
 
 def _grade(surf: "pygame.Surface") -> "pygame.Surface":
@@ -252,6 +285,12 @@ class SpriteMap:
         """True if at least the terrain sheet loaded (so the overlay is worth
         drawing at all)."""
         return self._sheets.get("base") is not None
+
+    def invalidate(self) -> None:
+        """Drop the baked-tile cache so the next render re-applies the current
+        :data:`GRADE` (used by the debug tone tuner). The tone isn't in the cache
+        key, so a grade change needs this to take effect."""
+        self._cache.clear()
 
     def _tile(self, key: str, dim: bool) -> Optional[pygame.Surface]:
         """The surface for a single sprite key (terrain or a flat character)."""
