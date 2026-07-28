@@ -6,7 +6,6 @@ import numpy as np
 
 from lonelands import awareness, color, config, tile_types
 from lonelands.entity import Actor, Item
-from lonelands.tile_glyphs import graphic_char
 
 if TYPE_CHECKING:
     from lonelands.camera import Camera
@@ -92,7 +91,7 @@ class GameMap:
         for (tx, ty), trap in self.traps.items():
             vx, vy = tx - sx, ty - sy
             if 0 <= vx < w and 0 <= vy < h and self.visible[tx, ty]:
-                console.print(x=vx, y=vy, string=graphic_char(trap.char),
+                console.print(x=vx, y=vy, string=trap.char,
                               fg=color.snare_c)
 
         entities_sorted = sorted(
@@ -101,11 +100,9 @@ class GameMap:
         for entity in entities_sorted:
             vx, vy = entity.x - sx, entity.y - sy
             if 0 <= vx < w and 0 <= vy < h and self.visible[entity.x, entity.y]:
-                # Draw the entity's glyph from the map tileset (shaded art),
-                # not the plain ASCII char — see lonelands.tile_glyphs.
                 console.print(
                     x=vx, y=vy,
-                    string=graphic_char(entity.char), fg=entity.color,
+                    string=entity.char, fg=entity.color,
                 )
 
         # Awareness tags (ADR 0014): a small !/? floated over a foe's head once
@@ -117,7 +114,7 @@ class GameMap:
                 continue
             vx, vy = actor.x - sx, actor.y - sy - 1
             if 0 <= vx < w and 0 <= vy < h and self.visible[actor.x, actor.y]:
-                console.print(x=vx, y=vy, string=graphic_char(mark),
+                console.print(x=vx, y=vy, string=mark,
                               fg=color.sauron_eye)
 
 

@@ -70,30 +70,15 @@ FONT_CANDIDATES = [
     "/System/Library/Fonts/SFNSMono.ttf",
 ]
 
-# --- Map tileset ----------------------------------------------------------
-# Map terrain and entity glyphs are drawn from a Dwarf-Fortress-style 16x16
-# CP437 tilesheet (see lonelands/fonts.py, lonelands/tile_glyphs.py); prose stays
-# on the TrueType font above. The bundled sheet is the "Wanderlust" tileset,
-# kept local and gitignored — see lonelands/assets/tiles/README.md. If no sheet
-# is present the map falls back to TTF-rendered glyphs (the pre-tileset look).
-_TILES = os.path.join(os.path.dirname(__file__), "assets", "tiles")
-
-TILESET_CANDIDATES = [
-    os.path.join(_TILES, "wanderlust_16x16.png"),
-]
-
 # Cell size in pixels. The console grid has one cell size for the whole screen,
-# so map and prose share it. The tileset art is square 16x16; lonelands.fonts
-# letterboxes it (centres the square tile, never stretches) so the cell can be a
-# little taller than wide — giving the TTF prose the vertical room it needs to
-# stay legible while the map tiles stay crisp, with only a thin grid gap between
-# rows. 24x30 balances a readable Chronicle against a solid map. The window
-# re-renders the tileset crisply on resize, so this is a starting size.
+# so map and prose share it. The cell is a little taller than wide, giving the
+# TTF prose the vertical room it needs to stay legible, with only a thin grid
+# gap between rows. 24x30 balances a readable Chronicle against a solid map.
 #
 # These are 1.5× what the pre-camera build used: the console grid shrank by the
 # same factor (the viewport now shows a scrolling window onto the region, not
 # the whole thing), so scaling the cell up keeps the launch window the same
-# pixel size while tiles render 1.5× larger.
+# pixel size while glyphs render 1.5× larger.
 TILE_WIDTH = 24
 TILE_HEIGHT = 30
 

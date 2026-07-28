@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 from lonelands import (actions, character, color, config, events, overworld_map,
                        path_icons, path_tree, perks)
 from lonelands.events import CENTER, KeySym, Modifier
-from lonelands.tile_glyphs import graphic_char
 from lonelands.render_functions import endurance_color
 from lonelands.actions import (
     Action,
@@ -1461,12 +1460,10 @@ class OverworldMapHandler(AskUserHandler):
 
     def _blit(self, console, buf) -> None:
         for r in range(buf.height):
-            row_ch, row_fg, row_bg, row_g = buf.ch[r], buf.fg[r], buf.bg[r], buf.graphic[r]
+            row_ch, row_fg, row_bg = buf.ch[r], buf.fg[r], buf.bg[r]
             sy = self._GY + r
             for c in range(buf.width):
-                ch = row_ch[c]
-                string = graphic_char(ch) if row_g[c] else ch
-                console.print(self._GX + c, sy, string,
+                console.print(self._GX + c, sy, row_ch[c],
                               fg=row_fg[c] or color.gray,
                               bg=row_bg[c] or color.near_black)
 
@@ -1477,11 +1474,7 @@ class OverworldMapHandler(AskUserHandler):
         )):
             x, y = px(0, grid_h + 1 + i)
             for entry in row:
-                if entry.graphic:  # the tileset ▼ has no proportional glyph
-                    x += ui.tri_down(x, y + 2, ui.small.get_height() - 3, entry.fg)
-                    x += ui.pad // 3
-                else:
-                    x += ui.text(x, y, entry.glyph, entry.fg, ui.small) + ui.pad // 3
+                x += ui.text(x, y, entry.glyph, entry.fg, ui.small) + ui.pad // 3
                 x += ui.text(x, y, entry.label, label_fg, ui.small) + ui.pad
 
     def _render_footer(self, ui, px, cw, in_deeps) -> None:

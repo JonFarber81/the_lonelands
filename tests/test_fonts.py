@@ -1,5 +1,5 @@
-"""The pygame glyph atlas (lonelands/fonts.py): prose, map tiles, and dice faces
-baked to surfaces, keyed by the same codepoints the renderers print."""
+"""The pygame glyph atlas (lonelands/fonts.py): prose (map, entity, and text)
+and dice faces baked to surfaces, keyed by the codepoints the renderers print."""
 from __future__ import annotations
 
 import os
@@ -10,7 +10,7 @@ import pytest
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
-from lonelands import config, dice_glyphs, fonts, tile_glyphs  # noqa: E402
+from lonelands import config, dice_glyphs, fonts  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -40,10 +40,10 @@ def test_box_drawing_is_blank(atlas):
 
 
 def test_map_glyph_is_inked(atlas):
-    # With the tilesheet installed this is a CP437 tile; without it, the prose
-    # glyph for the same char. Either way, a wall/floor/player must show ink.
+    # Map terrain and entities print their plain ASCII glyph (the game is
+    # ASCII-rendered). A wall/floor/player must show ink at cell size.
     for ch in "@#.":
-        surf = atlas.base_surface(tile_glyphs.graphic_cp(ch))
+        surf = atlas.base_surface(ord(ch))
         assert surf is not None, ch
         assert surf.get_size() == (config.TILE_WIDTH, config.TILE_HEIGHT)
 
