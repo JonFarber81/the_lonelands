@@ -129,6 +129,8 @@ class BaseEventHandler:
 
     def dispatch(self, event) -> "Optional[BaseEventHandler]":
         if isinstance(event, KeyDown):
+            if event.sym is None:
+                return None  # an unbound key (media key, etc.) — nothing binds it
             return self.ev_keydown(event)
         if isinstance(event, MouseMotion):
             return self.ev_mousemotion(event)

@@ -68,3 +68,17 @@ def test_handle_events_returns_new_state_or_self():
     assert switch.handle_events(events.KeyDown(sym=KeySym.a, mod=0)) is target
     # A handler that returns None keeps the current state.
     assert target.handle_events(events.KeyDown(sym=KeySym.a, mod=0)) is target
+
+
+def test_unbound_key_is_dropped_before_ev_keydown():
+    """A key the game doesn't bind arrives as sym=None (display.py). Dispatch
+    must swallow it so handlers that do arithmetic on event.sym (e.g. the
+    dialog number keys, `KeySym.N1 <= event.sym <= KeySym.N9`) never see None."""
+
+    class Boom(events.BaseEventHandler):
+        def ev_keydown(self, event):
+            raise AssertionError("unbound key reached ev_keydown")
+
+    handler = Boom()
+    assert handler.dispatch(events.KeyDown(sym=None, mod=0)) is None
+    assert handler.handle_events(events.KeyDown(sym=None, mod=0)) is handler
