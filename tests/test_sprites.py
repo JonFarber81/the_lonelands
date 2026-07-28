@@ -123,6 +123,37 @@ def test_every_crowd_layer_points_at_the_characters_sheet():
             assert col >= 0 and row >= 0
 
 
+# --- the tone grade: darker, desaturated, earthier -------------------------
+def _fresh_surface(rgb):
+    import pygame
+
+    pygame.display.init()
+    pygame.display.set_mode((16, 16))
+    surf = pygame.Surface((4, 4), pygame.SRCALPHA)
+    surf.fill((*rgb, 255))
+    return surf
+
+
+def test_grade_identity_leaves_pixels_untouched():
+    surf = _fresh_surface((100, 150, 200))
+    old = dict(sprites.GRADE)
+    sprites.GRADE = {"darken": 1.0, "desat": 0.0, "tint": (1, 1, 1)}
+    try:
+        sprites._grade(surf)
+        assert tuple(surf.get_at((0, 0)))[:3] == (100, 150, 200)
+    finally:
+        sprites.GRADE = old
+
+
+def test_grade_darkens_and_desaturates_bright_grass():
+    surf = _fresh_surface((80, 200, 60))  # a bright, saturated green
+    sprites._grade(surf)                   # the default earthy grade
+    r, g, b = tuple(surf.get_at((0, 0)))[:3]
+    assert g < 200                         # darker
+    assert (g - r) < (200 - 80)            # desaturated: green less dominant
+    assert (surf.get_at((0, 0)))[3] == 255  # alpha untouched
+
+
 # --- the flag defaults off: the ASCII path is unchanged --------------------
 def test_sprite_mode_defaults_off():
     assert config.SPRITES is False

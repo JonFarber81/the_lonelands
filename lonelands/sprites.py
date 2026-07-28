@@ -26,6 +26,7 @@ import os
 import random
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
+import numpy as np
 import pygame
 
 from lonelands import config, tile_glyphs, tile_types
@@ -39,6 +40,37 @@ if TYPE_CHECKING:
 TILE = 16
 MARGIN = 1
 STEP = TILE + MARGIN
+
+# Tone grade (SPIKE #92): the Kenney art is bright and cheery; the North is not.
+# Every baked sprite is pushed through one transform — darkened, desaturated
+# toward its own grey, and warmed slightly — so the map reads weathered and
+# Tolkien-somber while keeping each tile's internal shading (this is NOT the flat
+# fg-tint ADR-0013 rules out). ``darken`` scales brightness, ``desat`` is the
+# fraction mixed toward luma grey (0 = untouched, 1 = greyscale), ``tint`` is a
+# per-channel multiplier for a warm/cool cast. Identity = (1.0, 0.0, (1,1,1)).
+GRADE: Dict[str, object] = {
+    "darken": 0.78,
+    "desat": 0.32,
+    "tint": (1.02, 0.98, 0.86),  # a touch of amber/olive, cooler blue
+}
+
+
+def _grade(surf: "pygame.Surface") -> "pygame.Surface":
+    """Apply the :data:`GRADE` tone transform to ``surf`` in place (RGB only;
+    the alpha shape is untouched, so transparent margins stay transparent)."""
+    darken = float(GRADE["darken"])          # type: ignore[arg-type]
+    desat = float(GRADE["desat"])            # type: ignore[arg-type]
+    tint = GRADE["tint"]
+    if darken == 1.0 and desat == 0.0 and tuple(tint) == (1, 1, 1):  # type: ignore[arg-type]
+        return surf
+    arr = pygame.surfarray.pixels3d(surf)    # (w, h, 3) view; locks the surface
+    rgb = arr.astype(np.float32)
+    luma = rgb @ np.array([0.299, 0.587, 0.114], np.float32)
+    graded = rgb * (1.0 - desat) + luma[..., None] * desat
+    graded *= np.array(tint, np.float32) * darken
+    arr[:] = np.clip(graded, 0, 255).astype(np.uint8)
+    del arr                                   # unlock the surface
+    return surf
 
 _TILES = os.path.join(os.path.dirname(__file__), "assets", "tiles")
 # Kenney source dir (the repo's bundled asset library) as a fallback, so the
@@ -245,6 +277,8 @@ class SpriteMap:
                 out = tile
             else:
                 out.blit(tile, (0, 0))  # alpha-composite the layer over the stack
+        if out is not None:
+            _grade(out)                 # tone the assembled sprite (before FOV dim)
         if out is not None and dim:
             # Remembered tiles: the same sprite, darkened (ADR-0013's FOV-by-
             # dimming, not palette-swap). Multiply keeps the alpha shape.
