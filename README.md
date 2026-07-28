@@ -40,11 +40,12 @@ python3 main.py
 ```
 
 The window, rendering, and input run on **pygame**; **tcod** is retained only as
-a headless library for field-of-view and pathfinding (see `docs/adr/0010`). The
-game is a classic **ASCII** roguelike (ADR-0015): the map and its creatures are
-drawn as coloured glyphs from the bundled **Atkinson Hyperlegible Mono** font,
-the same face the map/HUD use; menus and dialogs render natively in a
-proportional font.
+a headless library for field-of-view and pathfinding (see `docs/adr/0010`). By
+default the map and its creatures are drawn as coloured glyphs from the bundled
+**Atkinson Hyperlegible Mono** font — a classic ASCII roguelike look — but a
+licensed Oryx tile set, tinted the same way, is drawn instead wherever it's
+found locally (`LONELANDS_TILES`; `--ascii` forces the letter view either way —
+see ADR-0016). Menus and dialogs render natively in a proportional font.
 
 ## What's in this slice
 
