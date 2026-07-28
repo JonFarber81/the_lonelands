@@ -1,5 +1,17 @@
 # The Lonelands
 
+> [!NOTE]
+> **This is a learning experiment, not a game meant to ship.** The Lonelands is
+> really an excuse to drive a real, non-trivial project end-to-end with
+> [**Claude Code**](https://claude.com/claude-code) — to see how it plans,
+> builds, tests, reviews, and documents an entire codebase over many sessions —
+> and to put [**Matt Pocock's Claude agent skills**](https://github.com/mattpocock/skills)
+> (issue tracking, triage, domain modelling, code review) to work on an actual
+> repo. The roguelike is the vehicle; the *process* is the point. Treat it as a
+> sandbox, not a finished product. It is a non-commercial fan project set in
+> J.R.R. Tolkien's Middle-earth, and leans on other people's work — see
+> [Acknowledgements](#acknowledgements--third-party) for full credits.
+
 A Dwarf-Fortress-style CP437 roguelike set in **Eriador in TA 2965**, told with
 a lightweight **d20** ruleset of our own (originally adapted from **The One
 Ring** TTRPG, since de-coupled — see `docs/adr/0005`).
@@ -151,3 +163,44 @@ lonelands/
 This is a deliberately small, fully-wired vertical slice. Natural next steps:
 the Journey/Travel minigame, Fellowship-phase downtime, more of Eriador (the
 wider Barrow-downs, Rivendell), and Shadow & Corruption.
+
+## Acknowledgements & third-party
+
+Almost none of the foundations here are original — this project stands on other
+people's work, and this section notes what belongs to whom.
+
+**Tooling & process**
+- [**Claude Code**](https://claude.com/claude-code) (Anthropic) — the agent this
+  whole experiment is built to exercise; nearly all the code was written with it.
+- [**Matt Pocock's Claude agent skills**](https://github.com/mattpocock/skills) —
+  the issue-tracker, triage-label, domain-modelling, and code-review workflows
+  this repo uses (see `docs/agents/`, `CLAUDE.md`). Adapted, not authored, here.
+
+**Libraries** (installed via `requirements.txt`, not vendored)
+- [**pygame**](https://www.pygame.org/) — windowing, rendering, input, glyph
+  rasterisation (LGPL).
+- [**python-tcod**](https://github.com/libtcod/python-tcod) — field-of-view and
+  pathfinding, kept headless (BSD).
+- [**NumPy**](https://numpy.org/) — the tile arrays (BSD).
+
+**Assets**
+- **Atkinson Hyperlegible Mono** — the bundled map/HUD font
+  (`lonelands/assets/fonts/`), © 2020–2024 The Atkinson Hyperlegible Mono Project
+  Authors (Braille Institute of America), used under the **SIL Open Font License
+  1.1** (see the bundled `OFL.txt`). The native menus otherwise fall back to your
+  system's fonts via pygame.
+- **Wanderlust** CP437 tileset by **Kynsmer** — the map tilesheet. It ships with
+  no explicit license, so it is **not committed**; each developer downloads their
+  own copy (see `lonelands/assets/tiles/README.md`). The game runs without it,
+  falling back to font glyphs.
+
+**Setting & rules**
+- **Middle-earth, Eriador, and the Third Age** are the creation of **J.R.R.
+  Tolkien** (and the Tolkien Estate). This is an unofficial, non-commercial fan
+  work; no affiliation or endorsement is implied.
+- The d20 ruleset was **originally adapted from _The One Ring_** TTRPG
+  (Free League Publishing) and has since been de-coupled into its own system —
+  see `docs/adr/0005`.
+
+Everything else — the world data, content, quests, and the game code itself — was
+written for this project (with Claude Code).
