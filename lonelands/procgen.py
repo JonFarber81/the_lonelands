@@ -424,6 +424,27 @@ def river(gm: GameMap, col: int, *, half: int = 2, banks=None,
     return col
 
 
+def ruin_walls(gm: GameMap, x0: int, y0: int, x1: int, y1: int,
+               *, gap: float = 0.35) -> None:
+    """A roofless shell of old masonry: a rectangular line of `building_wall`
+    broken by gaps of fallen `rubble` (probability `gap`), with more rubble strewn
+    across the floor within — as opposed to `building`'s whole, doored house.
+    Shared by the Arnor ruins (Annúminas, Fornost) and Mt Gram's orc-stockade."""
+    T = tile_types
+    for x in range(x0, x1 + 1):                     # the north & south wall-lines
+        for y in (y0, y1):
+            if gm.in_bounds(x, y):
+                gm.tiles[x, y] = T.rubble if rng.random() < gap else T.building_wall
+    for y in range(y0 + 1, y1):                     # the sides (corners already set)
+        for x in (x0, x1):
+            if gm.in_bounds(x, y):
+                gm.tiles[x, y] = T.rubble if rng.random() < gap else T.building_wall
+    for x in range(x0 + 1, x1):                     # fallen stone across the floor
+        for y in range(y0 + 1, y1):
+            if gm.in_bounds(x, y) and rng.random() < 0.12:
+                gm.tiles[x, y] = T.rubble
+
+
 ROAD_BUFFER = 4    # keep-away radius (Chebyshev) around road tiles (ADR 0007)
 _BRIGAND_ROAD_BIAS = 0.65   # chance a brigand aims for the road — a gentle bias,
                             # not a hard rule (ADR 0007): they still turn up off-road
@@ -1149,6 +1170,124 @@ def generate_rivendell(engine) -> GameMap:
     gm.tiles[hx0 + 3:hx1 - 3, 11:hy1] = T.floor
     for y in range(hy1 + 1, ROAD_ROW):              # the path from the gate to the road
         gm.tiles[gate_x, y] = T.road
+    return _finish_surface(gm, cell)
+
+
+# ---------------------------------------------------------------------------
+# Cluster 4 — The North (Arnor ruins) (issue #19). The ruined north above the
+# Road: the drowned royal city of Annúminas on Lake Nenuial, wight-haunted
+# Fornost on the North Downs, and the high North Downs on the northern rim. Wild
+# country of broken stonework; the dense hill-country of the cut-off north closes
+# the top edge (diegetic wood). Each anchor is sealed by `_finish_surface`.
+# Deeps (Annúminas, Fornost) are markers in the plan, dug in a later pass.
+# ---------------------------------------------------------------------------
+def generate_annuminas(engine) -> GameMap:
+    """Annúminas (-3,-2): the ruined royal city of Arnor on the south shore of
+    Lake Nenuial. The grey lake floods the northern half of the map; the drowned
+    and broken stonework of the old capital stands along the shore — roofless
+    halls, a cobbled processional way, fallen columns — the greatest ruin of the
+    north. (Its deeps into the drowned halls are dug in a later pass.)"""
+    cell = overworld.cell((-3, -2))
+    gm = _open_surface(engine, cell)
+    gm.name = "Annúminas, the ruined city on Lake Nenuial"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.16)
+
+    # Lake Nenuial floods the northern half, along a ragged southward shore.
+    for x in range(gm.width):
+        shore = 14 + rng.randint(-2, 2)
+        gm.tiles[x, 0:shore] = T.water
+
+    # the broken city along the shore: roofless halls, a cobbled way, rubble
+    for rx0, ry0, rx1, ry1 in [(8, 18, 17, 26), (20, 16, 30, 24), (33, 19, 44, 27),
+                               (12, 29, 22, 37), (27, 28, 38, 36), (44, 30, 52, 38)]:
+        ruin_walls(gm, rx0, ry0, rx1, ry1)
+    for x in range(6, gm.width - 6):                # a cobbled processional way
+        gm.tiles[x, 27] = T.cobble
+    scatter(gm, T.rubble, 0.03)                     # fallen stone across the ground
+    return _finish_surface(gm, cell)
+
+
+def generate_fornost(engine) -> GameMap:
+    """Fornost (-1,-2): Norbury of the Kings, the ruined capital of Arthedain on
+    the North Downs — a wight-haunted waste of broken walls and grass-grown
+    streets along a bare hill-shoulder. The great keep stands roofless above the
+    fallen town; the barrows and broken masonry are all that remain. (Its
+    wight-haunted deeps are dug in a later pass.)"""
+    cell = overworld.cell((-1, -2))
+    gm = _open_surface(engine, cell)
+    gm.name = "Fornost Erain (Norbury of the Kings)"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.24)
+    patches(gm, T.hill, 6, 4, 0.5)                  # the bare down-shoulder it stands on
+
+    ruin_walls(gm, 22, 8, 40, 22)                   # the great keep, roofless
+    for x in range(24, 39):                         # a broken inner hall-line
+        if rng.random() < 0.55:
+            gm.tiles[x, 15] = T.building_wall
+    for rx0, ry0, rx1, ry1 in [(14, 26, 22, 32), (26, 27, 34, 33),
+                               (38, 25, 46, 31), (18, 35, 27, 40)]:
+        ruin_walls(gm, rx0, ry0, rx1, ry1)          # the fallen town below the keep
+    scatter(gm, T.rubble, 0.04)                     # fallen stone through the streets
+    return _finish_surface(gm, cell)
+
+
+def generate_north_downs(engine) -> GameMap:
+    """North Downs (1,-4): the high rolling downs on the northern rim of Eriador,
+    where the land climbs toward the wight-lands — close-cropped turf heaped into
+    long green-grey hills, wind-bent and empty, a lone thorn on the skyline. The
+    dense hill-country of the cut-off north closes the top edge (diegetic wood)."""
+    cell = overworld.cell((1, -4))
+    gm = _open_surface(engine, cell)
+    gm.name = "The North Downs, on the northern rim"
+    scatter(gm, tile_types.grass_low, 0.30)         # wind-cropped down-turf
+    patches(gm, tile_types.hill, 12, 5, 0.6)        # the high rolling downs
+    scatter(gm, tile_types.tree, 0.03)              # a lone wind-bent thorn
+    return _finish_surface(gm, cell)
+
+
+# ---------------------------------------------------------------------------
+# Cluster 5 — The North-East marches (Dark) (issue #20). The bleak fells running
+# north-east toward Angmar: Mt Gram's orc-hold and the troll-fells of the
+# Ettenmoors, broken highland darkening toward the shadow. The north + east edges
+# are cut off (diegetic wood/mountain); no road runs here. Dark/Perilous bands —
+# the meanest wandering-beasts of the build. Each anchor is sealed by
+# `_finish_surface`; Mt Gram's goblin-warren deeps are dug in a later pass.
+# ---------------------------------------------------------------------------
+def generate_mt_gram(engine) -> GameMap:
+    """Mt Gram (4,-4): the orc-hold of the northern hills, a bleak knot of broken
+    highland where goblins burrow. Bare rock breaks the dead ground, a crude
+    stockade of piled stone rings the delving on the central knap, and little
+    grows but a starved thorn. Dark band — the meanest wandering-beasts of the
+    build roam here. (Its goblin-warren deeps are dug in a later pass.)"""
+    cell = overworld.cell((4, -4))
+    gm = _open_surface(engine, cell)
+    gm.name = "Mount Gram, the orc-hold of the northern hills"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.08)                  # sparse dead scrub
+    patches(gm, T.hill, 12, 4, 0.7)                 # bare rock, broken highland
+    scatter(gm, T.tree, 0.02)                       # a starved thorn or two
+
+    cx, cy = gm.width // 2, gm.height // 2
+    patch(gm, T.hill, cx, cy, 6, 0.8)               # the knap the hold is dug into
+    ruin_walls(gm, cx - 7, cy - 5, cx + 7, cy + 5, gap=0.45)   # the rough stockade
+    scatter(gm, T.rubble, 0.03)                     # fallen stone across the dead ground
+    return _finish_surface(gm, cell)
+
+
+def generate_ettenmoors(engine) -> GameMap:
+    """Ettenmoors (5,-4): the troll-fells, a bleak highland of broken tors and
+    boggy tarns running north-east toward Angmar. Great weathered boulders heap
+    the fells, black meres lie in the hollows, and stunted thorn clings to the
+    rock — stone-troll country, and the last land before the shadow. Perilous."""
+    cell = overworld.cell((5, -4))
+    gm = _open_surface(engine, cell)
+    gm.name = "The Ettenmoors, the troll-fells"
+    T = tile_types
+    scatter(gm, T.grass_low, 0.14)                  # heath and moss on the fells
+    patches(gm, T.hill, 14, 4, 0.7)                 # broken tors and weathered boulders
+    patches(gm, T.water, 5, 2, 0.7)                 # black boggy tarns in the hollows
+    scatter(gm, T.tree, 0.04)                       # stunted thorn on the rock
     return _finish_surface(gm, cell)
 
 

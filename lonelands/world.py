@@ -49,6 +49,13 @@ _AUTHORED_SURFACES: Dict[Coord, Callable[["Engine"], GameMap]] = {
     (5, -1): procgen.generate_trollshaws,       # troll-country wooded rock
     (7, -1): procgen.generate_fords_of_bruinen,  # the guarded Bruinen crossing (gateway)
     (6, 0): procgen.generate_rivendell,         # Imladris, the Last Homely House
+    # Cluster 4 — The North (Arnor ruins) (issue #19).
+    (-3, -2): procgen.generate_annuminas,       # ruined royal city on Lake Nenuial
+    (-1, -2): procgen.generate_fornost,         # Norbury of the Kings; wight-haunted ruin
+    (1, -4): procgen.generate_north_downs,      # the high rolling downs on the north rim
+    # Cluster 5 — The North-East marches (Dark) (issue #20).
+    (4, -4): procgen.generate_mt_gram,          # orc-hold of the northern hills
+    (5, -4): procgen.generate_ettenmoors,       # the troll-fells; NE gateway toward Angmar
 }
 
 # Cells whose deeps are authored this pass (ADR 0003 re-home): the barrow-wight
