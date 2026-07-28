@@ -49,9 +49,9 @@ STEP = TILE + MARGIN
 # fraction mixed toward luma grey (0 = untouched, 1 = greyscale), ``tint`` is a
 # per-channel multiplier for a warm/cool cast. Identity = (1.0, 0.0, (1,1,1)).
 GRADE: Dict[str, object] = {
-    "darken": 0.78,
-    "desat": 0.32,
-    "tint": (1.02, 0.98, 0.86),  # a touch of amber/olive, cooler blue
+    "darken": 0.70,
+    "desat": 0.33,
+    "tint": (1.00, 0.99, 0.93),  # near-neutral — a hair of warmth, no brown cast
 }
 
 
