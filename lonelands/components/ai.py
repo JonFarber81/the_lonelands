@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 import numpy as np
 import tcod
 
+from lonelands import awareness
 from lonelands.actions import Action, BumpAction, MovementAction, WaitAction
 from lonelands.exceptions import Impossible
 
@@ -32,29 +33,81 @@ class BaseAI(Action):
         return [(index[0], index[1]) for index in path]
 
 
-class HostileEnemy(BaseAI):
+class PerceptiveAI(BaseAI):
+    """Shared stealth-aware pursuit (ADR 0014). A foe carries a per-enemy
+    :mod:`awareness` state that rises to **Alerted** the instant it perceives the
+    Ranger (within its effective Perception radius, through line of sight), decays
+    through **Searching** — hunting the Ranger's ``last_known`` tile for
+    ``max(2, 5 − Stealth)`` turns — and finally falls back to **Unaware**. Losing
+    sight no longer resets awareness instantly; re-detection refreshes the timer.
+
+    Subclasses set the base ``perception`` radius and, via :meth:`_idle`, what an
+    Unaware foe does when it has nothing to chase."""
+
+    perception: int = awareness.HOSTILE_PERCEPTION
+
     def __init__(self, entity: "Actor"):
         super().__init__(entity)
         self.path: List[Tuple[int, int]] = []
+        self.awareness: str = awareness.UNAWARE
+        self.last_known: Optional[Tuple[int, int]] = None
+        self.search_turns: int = 0
 
     def perform(self) -> None:
-        target = self.engine.player
-        dx = target.x - self.entity.x
-        dy = target.y - self.entity.y
-        distance = max(abs(dx), abs(dy))
+        engine = self.engine
+        target = engine.player
 
-        if self.engine.game_map.visible[self.entity.x, self.entity.y]:
-            if distance <= 1:
-                return BumpAction(self.entity, dx, dy).perform()
-            self.path = self.get_path_to(target.x, target.y)
+        # Perceived this turn: (re)alert, and refresh the last-known tile + timer.
+        if awareness.can_detect(engine, self.entity, self.perception):
+            awareness.alert(self.entity, engine)  # -> Alerted, last_known, timer 0
+            return self._advance_toward(target.x, target.y, attack=True)
 
+        # Not perceived. On the turn sight is *first* lost, open a Search of the
+        # last-known tile — its full ``max(2, 5 − Stealth)`` turns start now and
+        # the Ranger is pursued *this* turn (no same-turn decrement). Every later
+        # Searching turn spends one from the clock.
+        if self.awareness == awareness.ALERTED:
+            self.awareness = awareness.SEARCHING
+            self.search_turns = awareness.search_duration(engine)
+        elif self.awareness == awareness.SEARCHING:
+            self.search_turns -= 1
+
+        if self.awareness == awareness.SEARCHING:
+            here = (self.entity.x, self.entity.y)
+            if self.search_turns > 0 and self.last_known is not None \
+                    and here != self.last_known:
+                return self._advance_toward(*self.last_known, attack=False)
+            # Reached the last-known tile, or the trail's gone cold: give up.
+            self.awareness = awareness.UNAWARE
+            self.last_known = None
+
+        return self._idle()
+
+    def _advance_toward(self, tx: int, ty: int, *, attack: bool) -> None:
+        """Step toward ``(tx, ty)``. When ``attack`` and already adjacent, strike
+        instead (only the pursue-the-Ranger path passes ``attack=True``, so a foe
+        homing on an empty last-known tile never swings at thin air)."""
+        dx, dy = tx - self.entity.x, ty - self.entity.y
+        if attack and max(abs(dx), abs(dy)) <= 1:
+            return BumpAction(self.entity, dx, dy).perform()
+        self.path = self.get_path_to(tx, ty)
         if self.path:
-            dest_x, dest_y = self.path.pop(0)
+            nx, ny = self.path.pop(0)
             return MovementAction(
-                self.entity, dest_x - self.entity.x, dest_y - self.entity.y
+                self.entity, nx - self.entity.x, ny - self.entity.y
             ).perform()
-
         return WaitAction(self.entity).perform()
+
+    def _idle(self) -> None:
+        """What an Unaware foe does with no quarry — hold position by default."""
+        return WaitAction(self.entity).perform()
+
+
+class HostileEnemy(PerceptiveAI):
+    """A foe that closes and fights once it perceives the Ranger, then holds
+    ground while Unaware (it lurks, it doesn't drift)."""
+
+    perception = awareness.HOSTILE_PERCEPTION
 
 
 class IdleWanderer(BaseAI):
@@ -77,32 +130,16 @@ class IdleWanderer(BaseAI):
             return WaitAction(self.entity).perform()
 
 
-class SkittishBeast(BaseAI):
-    """Beasts that wander, and only close in when the player is very near."""
+class SkittishBeast(PerceptiveAI):
+    """Beasts with a short Perception — they only close in when the Ranger comes
+    near (the old ``distance <= 4`` now folds into the perception model) and
+    drift idly while Unaware."""
 
-    def __init__(self, entity: "Actor"):
-        super().__init__(entity)
-        self.path: List[Tuple[int, int]] = []
+    perception = awareness.BEAST_PERCEPTION
 
-    def perform(self) -> None:
+    def _idle(self) -> None:
         from lonelands import dice
 
-        target = self.engine.player
-        dx = target.x - self.entity.x
-        dy = target.y - self.entity.y
-        distance = max(abs(dx), abs(dy))
-
-        if self.engine.game_map.visible[self.entity.x, self.entity.y] and distance <= 4:
-            if distance <= 1:
-                return BumpAction(self.entity, dx, dy).perform()
-            self.path = self.get_path_to(target.x, target.y)
-            if self.path:
-                dest_x, dest_y = self.path.pop(0)
-                return MovementAction(
-                    self.entity, dest_x - self.entity.x, dest_y - self.entity.y
-                ).perform()
-
-        # wander
         ddx, ddy = dice.rng.choice([(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)])
         if ddx or ddy:
             try:

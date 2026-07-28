@@ -104,6 +104,8 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
 
     # Conditions.
     conds: List[Tuple[str, Color]] = []
+    if engine.sneaking:
+        conds.append(("Sneaking", color.ranger_green))  # ADR 0014 stance readout
     if hero.is_weary:
         conds.append(("Weary", color.enemy_atk))
     if f.bleed > 0:

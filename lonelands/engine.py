@@ -42,6 +42,10 @@ class Engine:
         # serialized (dropped below, reset on load) — it is a testing switch,
         # not a saved fact.
         self.god_mode = False
+        # Sneak stance (ADR 0014): a free crouch that narrows the Ranger's own
+        # senses (FOV) in trade for a chance to slip past foes unseen. Toggled
+        # with `s`; persists across save/load (a stance the player chose).
+        self.sneaking = False
         from lonelands import input_handlers
         self.event_handler = input_handlers.MainGameEventHandler(self)
 
@@ -111,7 +115,13 @@ class Engine:
 
     # --- vision -----------------------------------------------------------
     def update_fov(self) -> None:
-        radius = 20 if self.game_map.outdoors else 8
+        # Sneaking crouches the Ranger low, cutting his sightline by ~a third
+        # (20→13 outdoors, 8→5 indoors) — the v1 cost of the stance (ADR 0014).
+        outdoors = self.game_map.outdoors
+        if self.sneaking:
+            radius = 13 if outdoors else 5
+        else:
+            radius = 20 if outdoors else 8
         self.game_map.visible[:] = tcod.map.compute_fov(
             self.game_map.tiles["transparent"],
             (self.player.x, self.player.y),
