@@ -77,12 +77,37 @@ def _grid(sheet: str, index: int, cols: int) -> SpriteRef:
 # Sequential best-effort grid placements — a first pass covering every
 # drawable, not yet visually curated (issue #112 is the plumbing; pinning
 # exact cells is expected fast-follow polish once the game runs on-screen).
-
-_TERRAIN_KEYS = [
-    "floor", "wall", "rubble", "down_stairs", "up_stairs", "door",
-    "grass", "grass_low", "tree", "water", "road", "bridge", "hill",
-    "cobble", "building_wall", "ruin_entrance",
-]
+#
+# Terrain is the exception: it's hand-picked below (_TERRAIN_REFS) after
+# visually inspecting Terrain.png / Terrain_Objects.png cell-by-cell — the
+# original sequential placement pointed grass/road/water/tree at unrelated
+# art (a lattice pattern, a row of gravestones, a dot pattern, and a wave
+# pattern, respectively), which read as broken seams in an actual screenshot.
+# This *Ultimate Roguelike 2.0* sheet is dungeon/graveyard-themed and has no
+# real grass-field or dirt-road ground texture at all, so grass/grass_low/
+# hill/road/bridge/cobble are the closest available substitutes (a leafy
+# foliage cluster for the grass family, a brick-paver floor for the paved
+# family) — not a claim that this is what real grass or road art looks like.
+_TERRAIN_REFS: Dict[str, "SpriteRef"] = {
+    "floor": SpriteRef("Terrain", 5, 0),           # small brick-paver floor
+    "wall": SpriteRef("Terrain", 0, 0),             # cracked stone wall panel
+    "rubble": SpriteRef("Terrain", 1, 1),           # scattered gravel/dot debris
+    "down_stairs": SpriteRef("Terrain", 9, 1),      # diagonal ascending steps
+    "up_stairs": SpriteRef("Terrain", 9, 1),        # same steps art, different tint
+    "door": SpriteRef("Terrain", 4, 2),             # rounded archway door
+    "grass": SpriteRef("Terrain", 5, 5),            # leafy foliage cluster
+    "grass_low": SpriteRef("Terrain", 6, 5),        # foliage cluster, variant
+    "tree": SpriteRef("Terrain_Objects", 4, 6),     # an actual conifer silhouette
+    "water": SpriteRef("Terrain", 0, 1),            # horizontal wave pattern
+    "road": SpriteRef("Terrain", 0, 3),             # brick-paver floor (substitute)
+    "bridge": SpriteRef("Terrain", 0, 3),           # same paver, tinted for wood/plank
+    "hill": SpriteRef("Terrain", 5, 5),             # same foliage cluster as grass —
+    # the (7, 5) variant has an internal gap pattern that reads as a face under a
+    # brown/tan tint; (5, 5) stayed legible as ground cover at both tints tried.
+    "cobble": SpriteRef("Terrain", 0, 3),           # brick-paver floor (town cobble)
+    "building_wall": SpriteRef("Terrain", 2, 0),    # cracked stone chunk
+    "ruin_entrance": SpriteRef("Terrain", 9, 1),    # stairs art, tinted for a ruin
+}
 _MONSTER_KEYS = [
     "cave_goblin", "orc_soldier", "orc_archer", "great_spider", "wight",
     "wolf", "warg", "footpad", "highwayman", "boar",
@@ -101,7 +126,7 @@ _ITEM_KEYS = [
 ]
 
 SPRITE_KEYS: Dict[str, SpriteRef] = {}
-SPRITE_KEYS.update({k: _grid("Terrain", i, 8) for i, k in enumerate(_TERRAIN_KEYS)})
+SPRITE_KEYS.update(_TERRAIN_REFS)
 SPRITE_KEYS.update({k: _grid("Terrain_Objects", i, 8) for i, k in enumerate(_PROP_KEYS)})
 SPRITE_KEYS.update({k: _grid("Monsters", i, 8) for i, k in enumerate(_MONSTER_KEYS)})
 # Avatar.png is a 7-col×3-row grid at its native 16px; column 0 is a small
