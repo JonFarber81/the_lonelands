@@ -433,11 +433,6 @@ ALL_NODES: Dict[str, Node] = {n.id: n for path in PATHS for n in path.nodes}
 PATHS_BY_ID: Dict[str, Path] = {path.id: path for path in PATHS}
 
 
-def nodes_in_path(path_id: str) -> List[Node]:
-    path = PATHS_BY_ID.get(path_id)
-    return list(path.nodes) if path else []
-
-
 def tier_unlocked(node: Node, points_in_path: int) -> bool:
     """Whether ``node``'s points-in-Path tier gate is satisfied by
     ``points_in_path`` (the Path points already spent in its Path)."""

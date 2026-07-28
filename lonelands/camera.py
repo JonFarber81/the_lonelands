@@ -58,8 +58,3 @@ class Camera:
 
     def view_to_world(self, vx: int, vy: int) -> Tuple[int, int]:
         return vx + self.x, vy + self.y
-
-    def in_view(self, wx: int, wy: int) -> bool:
-        """True if world tile ``(wx, wy)`` currently falls inside the viewport."""
-        vx, vy = wx - self.x, wy - self.y
-        return 0 <= vx < config.MAP_WIDTH and 0 <= vy < config.MAP_HEIGHT

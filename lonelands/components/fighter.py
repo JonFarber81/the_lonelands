@@ -257,13 +257,6 @@ class Fighter(BaseComponent):
         return self._ranged is not None
 
     @property
-    def ranged_weapon_name(self) -> str:
-        eq = getattr(self.parent, "equipment", None)
-        if eq is not None and eq.ranged is not None:
-            return eq.ranged.name
-        return "no bow"
-
-    @property
     def ranged_attack_bonus(self) -> int:
         """The bonus added to a Shot's d20: the bow's +hit plus (for the hero)
         Wits + level to-hit + Far Shot perks. No bow means no shot — 0."""

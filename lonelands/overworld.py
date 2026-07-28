@@ -241,10 +241,6 @@ def cell(coord: Coord):
     return GRID.get(coord)
 
 
-def is_walkable(coord: Coord) -> bool:
-    return coord in GRID
-
-
 # ---------------------------------------------------------------------------
 # Road edges — the per-border road model (ADR 0003: "roads are edge metadata").
 # ---------------------------------------------------------------------------

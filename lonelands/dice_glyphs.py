@@ -40,18 +40,3 @@ def feat_codepoints(value: int) -> tuple[int, int, int, int]:
 
 def success_codepoints(value: int) -> tuple[int, int, int, int]:
     return _block(SUCCESS_BASE, value)
-
-
-def _rows(codepoints: tuple[int, int, int, int]) -> tuple[str, str]:
-    tl, tr, bl, br = codepoints
-    return chr(tl) + chr(tr), chr(bl) + chr(br)
-
-
-def feat_rows(value: int) -> tuple[str, str]:
-    """(top, bottom) two-cell strings for a feat-die face."""
-    return _rows(feat_codepoints(value))
-
-
-def success_rows(value: int) -> tuple[str, str]:
-    """(top, bottom) two-cell strings for a success-die face."""
-    return _rows(success_codepoints(value))
