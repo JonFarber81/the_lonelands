@@ -9,6 +9,7 @@ translated pygame events to the same ``handle_events`` chain as before.
 """
 from __future__ import annotations
 
+import argparse
 import traceback
 
 import pygame
@@ -18,7 +19,20 @@ from lonelands import input_handlers
 from lonelands.exceptions import QuitWithoutSaving
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="the-lonelands", description="The Lonelands — a Middle-earth roguelike."
+    )
+    parser.add_argument(
+        "-d", "--debug", action="store_true",
+        help="enable debug mode: the F12 cheat menu (god, level, teleport…). "
+             "Runtime only — never written to a save (ADR 0012).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    config.DEBUG = _parse_args().debug
     disp = display.Display()
     console = display.Console(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
     handler: events.BaseEventHandler = input_handlers.MainMenuHandler()

@@ -52,6 +52,10 @@ class KeySym(enum.IntEnum):
     ESCAPE = 27
     TAB = 9
 
+    # Function keys (SDL2 keycodes, matching pygame.K_F*). Only the debug menu's
+    # F12 is bound today (ADR 0012).
+    F12 = 1073741893
+
     # Editing / navigation
     HOME = 1073741898
     PAGEUP = 1073741899

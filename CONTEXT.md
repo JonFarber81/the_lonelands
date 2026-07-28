@@ -358,3 +358,35 @@ unreadable).
   the deliberate *deep view* (attributes with what they govern, the full Paths
   breakdown, lineage, nodes). The deep view is self-contained — it never makes
   the player rely on the glance.
+
+## Development & tooling
+
+Vocabulary for the developer-facing testing affordances, never part of a real
+playthrough (ADR 0012).
+
+- **Debug mode** — an off-by-default developer switch, turned on by launching
+  the game with the **`--debug`** flag. It is a **runtime** fact only: it lives
+  for the life of the process and is *never* written to a save, so a save made
+  under `--debug` is an ordinary save and reloads as an ordinary game. Its sole
+  effect is to unlock the **Debug menu** and its **cheats**. Not a difficulty
+  setting and not a game mode the player chooses.
+- **Debug menu** — the single door to every cheat: an overlay opened with
+  **`F12`** while Debug mode is on (inert otherwise), built on the same native
+  overlay as the other menus. A cheat is a row on this menu, never its own
+  keybind.
+- **Cheat** — one testing shortcut on the Debug menu that reaches or inspects a
+  game state directly: **god mode**, **gain a level**, **teleport**, **heal
+  fully**, **full map reveal**, **kill all visible enemies**. A cheat's
+  *permanent* consequences (a granted level, killed enemies, revealed fog) are
+  real game state and persist through a save; the debug switches themselves do
+  not. Every cheat prints a **Chronicle** line recording what it did.
+- **God mode** — the one *toggle* cheat: while on, the hero takes **no damage**
+  and is **never weary** (carry-load ignored for weariness). It only
+  *protects* — combat rolls stay normal, so the hero can still miss; it never
+  auto-wins. Transient: it resets to **off** on load. Shown as a **`GOD`** flag
+  beside the always-on **`[DEBUG]`** marker in the sidebar while Debug mode runs.
+- **Teleport** (as a cheat) — jump between Regions by picking a cell on the
+  **Overworld Map**, landing on that Region's **Surface** arrival point.
+  Region-to-Region and Surface-only: a deeper **Level** is still reached by
+  stairs. Distinct from ordinary travel (walking an edge); it is instantaneous
+  and advances no turn.

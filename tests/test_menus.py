@@ -55,8 +55,14 @@ def test_overlay_menus_render(env):
         ih.QuestScreenHandler,
         ih.HelpHandler,
         ih.EscapeMenuHandler,
+        ih.DebugMenuHandler,          # the F12 cheat panel (ADR 0012)
     ):
         _render(env, cls(engine))
+
+
+def test_debug_teleport_picker_renders(env):
+    _, _, engine = env
+    _render(env, ih.DebugTeleportHandler(engine))  # full-screen atlas picker
 
 
 def test_popup_dialog_shop_render(env):

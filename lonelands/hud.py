@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, List, Tuple
 
 import pygame
 
-from lonelands import character, color
+from lonelands import character, color, config
 from lonelands.config import MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH
 from lonelands.render_functions import endurance_color
 
@@ -71,9 +71,15 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
     hero, f = p.hero, p.fighter
     step = ui.small.get_linesize()
 
-    # Identity — the header block.
+    # Identity — the header block. Under --debug a corner marker rides the name
+    # row (ADR 0012): [DEBUG] always, GOD while god mode is on, so a debug run is
+    # never mistaken for a real one.
     ui.selection(ix - ui.pad // 2, cy, iw + ui.pad, ui.line)
     ui.text(ix, cy, p.name, color.tier_value, ui.bold)
+    if config.DEBUG:
+        mark = "GOD [DEBUG]" if engine.god_mode else "[DEBUG]"
+        col = color.sauron_eye if engine.god_mode else color.section_head
+        ui.text_right(inner.right, cy, mark, col, ui.small)
     cy += ui.line
     ui.text(ix, cy, hero.culture, color.ranger_green, ui.small)
     cy += step + ui.pad // 3

@@ -34,14 +34,19 @@ class Engine:
         # Difficulty scales only the damage the player takes (see config and
         # Fighter.take_damage); setup_game.new_game overrides it per run.
         self.difficulty = config.DEFAULT_DIFFICULTY
+        # God mode: a transient debug toggle (ADR 0012). Off by default, never
+        # serialized (dropped below, reset on load) — it is a testing switch,
+        # not a saved fact.
+        self.god_mode = False
         from lonelands import input_handlers
         self.event_handler = input_handlers.MainGameEventHandler(self)
 
     def __getstate__(self) -> Dict[str, Any]:
-        """Drop transient UI state; savegame._rehydrate rebuilds it on load."""
+        """Drop transient UI and debug state; savegame._rehydrate rebuilds it."""
         state = self.__dict__.copy()
         state["event_handler"] = None
         state["last_roll"] = None
+        state["god_mode"] = False  # never persists — a fresh load is god-less
         return state
 
     def note_roll(self, result: "RollResult", roller: "Actor") -> None:

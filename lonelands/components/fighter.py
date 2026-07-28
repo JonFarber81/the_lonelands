@@ -116,7 +116,17 @@ class Fighter(BaseComponent):
         return self._endurance - before
 
     def take_damage(self, amount: int) -> None:
+        if self._god_shielded():
+            return  # debug god mode: the player takes no damage (ADR 0012)
         self.endurance -= self._scale_incoming(amount)
+
+    def _god_shielded(self) -> bool:
+        """True when this fighter is the player and debug god mode is on — the
+        blow is absorbed entirely. Foes are never shielded."""
+        gm = getattr(self.parent, "gamemap", None)
+        engine = getattr(gm, "engine", None)
+        return (engine is not None and engine.player is self.parent
+                and getattr(engine, "god_mode", False))
 
     def _scale_incoming(self, amount: int) -> int:
         """Apply the run's difficulty to damage the *player* takes (foes are
