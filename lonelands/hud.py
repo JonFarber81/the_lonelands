@@ -18,7 +18,6 @@ import pygame
 
 from lonelands import character, color, config
 from lonelands.config import MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH
-from lonelands.render_functions import endurance_color
 
 if TYPE_CHECKING:
     from lonelands.display import Display

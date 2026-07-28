@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pygame
 
-from lonelands import color, config, events, fonts, ui
+from lonelands import config, events, fonts, ui
 
 # An RGB colour as the renderers pass it (a bare 3-tuple, matching tcod).
 Color = Tuple[int, int, int]

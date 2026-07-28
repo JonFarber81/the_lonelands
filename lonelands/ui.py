@@ -219,14 +219,6 @@ class UI:
         """A dim, centred footer of key hints."""
         self.text_center(cx, y, s, color.tier_label, self.small)
 
-    def tri_down(self, x: int, y: int, size: int, col: Color) -> int:
-        """A small filled downward triangle — the atlas legend's ``deeps`` mark,
-        which the proportional font has no glyph for (the map draws it from the
-        tileset). Returns its width."""
-        pygame.draw.polygon(self.screen, col,
-                            [(x, y), (x + size, y), (x + size // 2, y + size)])
-        return size
-
     def hrule(self, x: int, y: int, w: int) -> None:
         """A thin dim horizontal rule."""
         pygame.draw.line(self.screen, color.rule, (x, y), (x + w, y))

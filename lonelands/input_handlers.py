@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from lonelands import (actions, character, color, config, events, overworld_map,
                        path_icons, path_tree, perks)
-from lonelands.events import CENTER, KeySym, Modifier
+from lonelands.events import KeySym, Modifier
 from lonelands.render_functions import endurance_color
 from lonelands.actions import (
     Action,
@@ -14,7 +14,6 @@ from lonelands.actions import (
     BumpAction,
     DropItem,
     EquipAction,
-    ItemAction,
     PickupAction,
     TakeInteractAction,
     WaitAction,
@@ -1970,7 +1969,7 @@ class MainMenuHandler(BaseEventHandler):
                 "A Middle-earth roguelike · the Third Age, 2965 · d20 core")
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        from lonelands import savegame, setup_game
+        from lonelands import savegame
         if event.sym in (KeySym.q, KeySym.ESCAPE):
             raise SystemExit()
         if event.sym in (KeySym.c,) and savegame.has_save():

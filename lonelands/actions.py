@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Optional, Tuple
 
 from lonelands import awareness
 from lonelands import color
-from lonelands import tile_types
 from lonelands.components.fighter import CRIT_BLEED
 from lonelands.dice import rng, roll_check, roll_damage
 from lonelands.exceptions import Impossible
