@@ -403,6 +403,9 @@ class Hero(BaseComponent):
         fighter = self.parent.fighter
         if fighter is None:
             return False
+        engine = self._engine_or_none()
+        if engine is not None and getattr(engine, "god_mode", False):
+            return False  # debug god mode never wearies (ADR 0012)
         return fighter.endurance <= self.load
 
     # --- Checks -----------------------------------------------------------

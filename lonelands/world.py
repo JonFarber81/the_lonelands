@@ -160,6 +160,22 @@ class GameWorld:
         self.engine.game_map = gamemap
         self.engine.update_fov()
 
+    # --- debug: jump to any Region's Surface ------------------------------
+    def teleport_to(self, coord: Coord) -> bool:
+        """Debug fast-travel (ADR 0012): drop the player onto ``coord``'s Surface
+        at its normal arrival point, wherever they were (deeps included). No turn
+        passes. Returns False — and does nothing — for an impassable/off-grid
+        cell (a Sea or Mountain coord absent from the grid)."""
+        region = self.region(coord)
+        if region is None:
+            return False
+        surface = region.level(0)
+        self.coord = region.coord
+        self.level_index = 0
+        self._go(surface, getattr(surface, "start_xy", surface.entry_xy))
+        self.engine.quest_log.notify_arrival(self.coord, self.engine)
+        return True
+
     # --- horizontal: walk off an edge ------------------------------------
     def cross_edge(self, dx: int, dy: int) -> bool:
         """Called when the player tries to step off the map edge. If a

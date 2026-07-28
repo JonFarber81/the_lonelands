@@ -3,6 +3,13 @@ from __future__ import annotations
 
 import os
 
+# --- Debug mode -----------------------------------------------------------
+# A runtime-only developer switch (ADR 0012), set once from ``main.py``'s
+# ``--debug`` flag. It gates the F12 Debug menu and its cheats and is *never*
+# serialized — a save made under --debug reloads as an ordinary game. Read it
+# where the switch matters (input_handlers, hud); nothing writes it but main().
+DEBUG = False
+
 # --- Window / console geometry (in tiles) ---------------------------------
 SCREEN_WIDTH = 92
 SCREEN_HEIGHT = 54

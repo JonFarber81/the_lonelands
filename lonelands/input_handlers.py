@@ -5,7 +5,7 @@ import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 
-from lonelands import (actions, character, color, events, overworld_map,
+from lonelands import (actions, character, color, config, events, overworld_map,
                        path_icons, path_tree, perks)
 from lonelands.events import CENTER, KeySym, Modifier
 from lonelands.tile_glyphs import graphic_char
@@ -193,6 +193,8 @@ class MainGameEventHandler(EventHandler):
             return OverworldMapHandler(self.engine)
         if key in (KeySym.SLASH, KeySym.QUESTION):
             return HelpHandler(self.engine)
+        if key == KeySym.F12 and config.DEBUG:
+            return DebugMenuHandler(self.engine)  # cheat menu (ADR 0012)
         if key == KeySym.ESCAPE:
             return EscapeMenuHandler(self.engine)
         return None
@@ -1033,24 +1035,35 @@ class PathsHandler(AskUserHandler):
         ui.outline(x, y, w, h, border, fill=fill, width=3 if selected else 2)
 
         cx = x + w // 2
-        # Text rows first (name / optional pips / badge), then the icon crowns the
-        # card in whatever height is left — so a rankable node's three rows always
-        # fit inside the border rather than the icon crowding the badge out.
-        rows = [(("* " if node.capstone else "") + node.name, name_col)]
-        pips = self._pips(node, rank).strip()
-        if pips:
-            rows.append((pips, color.ranger_green if rank else color.tier_label))
-        rows.append((badge, badge_col))
         ls = ui.small.get_linesize()
         top_pad = ui.pad // 4
+        bot_pad = ui.pad // 5
+        avail = h - top_pad - bot_pad
+        # Name and badge are mandatory; the rank pips are decorative (the badge
+        # already spells out the rank), so on a short card — a deep Path packed
+        # into the panel — they're the first thing dropped rather than spilling a
+        # row past the border.
+        rows = [(("* " if node.capstone else "") + node.name, name_col)]
+        pips = self._pips(node, rank).strip()
+        if pips and 3 * ls <= avail:
+            rows.append((pips, color.ranger_green if rank else color.tier_label))
+        rows.append((badge, badge_col))
         text_h = len(rows) * ls
-        icon_size = int(max(ui.line, min(w * 0.36, h * 0.42,
-                                         h - text_h - top_pad - ui.pad // 5)))
-        path_icons.draw(ui.screen, node, cx, y + top_pad + icon_size // 2,
-                        icon_size, icon_col)
-        text_top = y + top_pad + icon_size
-        text_bot = y + h - ui.pad // 5
-        gap = max(0, (text_bot - text_top - text_h) // max(1, len(rows) - 1))
+        # The icon crowns the card in the room the text rows leave, capped by
+        # width and a pleasant maximum; on a tight card it shrinks and finally
+        # gives way rather than shoving the text out the bottom.
+        icon_size = int(min(w * 0.36, h * 0.42, avail - text_h))
+        if icon_size >= ls:
+            path_icons.draw(ui.screen, node, cx, y + top_pad + icon_size // 2,
+                            icon_size, icon_col)
+            text_top = y + top_pad + icon_size
+            text_bot = y + h - bot_pad
+            gap = max(0, (text_bot - text_top - text_h) // max(1, len(rows) - 1))
+        else:
+            # Too short for an icon — centre the text block with tight, even
+            # spacing so it reads as deliberate rather than pinned to the edges.
+            gap = ls // 3
+            text_top = y + (h - text_h - gap * (len(rows) - 1)) // 2
         ry = text_top
         for text, col in rows:
             ui.text_center(cx, ry, ui.truncate(text, w - ui.pad, ui.small), col, ui.small)
@@ -1342,6 +1355,7 @@ class OverworldMapHandler(AskUserHandler):
     # --- layout -----------------------------------------------------------
     _GX = (SCREEN_WIDTH - overworld_map.GRID_W) // 2   # centred left margin
     _GY = 2                                            # title sits on row 0
+    _FOOTER_HINT = " arrows/hjkl move · M or Esc close "  # subclasses override
 
     def on_render(self, console: "Console") -> None:
         # A full-screen atlas: paint over the whole console rather than the game
@@ -1397,8 +1411,8 @@ class OverworldMapHandler(AskUserHandler):
             y += 1
         if in_deeps and self.cursor == self.engine.game_world.coord:
             console.print(x, y, "You are below the surface here.", fg=color.ambient)
-        console.print(self._GX, SCREEN_HEIGHT - 1,
-                      " arrows/hjkl move · M or Esc close ", fg=color.tier_label)
+        console.print(self._GX, SCREEN_HEIGHT - 1, self._FOOTER_HINT,
+                      fg=color.tier_label)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -1407,6 +1421,139 @@ class OverworldMapHandler(AskUserHandler):
             x = min(overworld_map.X_MAX, max(overworld_map.X_MIN, self.cursor[0] + dx))
             y = min(overworld_map.Y_MAX, max(overworld_map.Y_MIN, self.cursor[1] + dy))
             self.cursor = (x, y)
+            return None
+        if key in (KeySym.ESCAPE, KeySym.m):
+            return self.on_exit()
+        return None
+
+
+# ===========================================================================
+# Debug menu (ADR 0012) — a developer cheat panel, reachable only under --debug
+# ===========================================================================
+class DebugMenuHandler(AskUserHandler):
+    """The single door to the cheats (ADR 0012). Opened with F12 while
+    ``config.DEBUG`` is set; a cursor picks a cheat (or its hotkey letter fires
+    it directly). Every cheat prints a Chronicle line; god mode is the only
+    toggle, the rest act once. Never reachable without --debug."""
+
+    def __init__(self, engine: "Engine"):
+        super().__init__(engine)
+        self.cursor = 0
+
+    # (hotkey, label, method-name). God mode's label gains a live on/off suffix
+    # in _label; the rest are static.
+    _ROWS = (
+        (KeySym.g, "God mode", "_toggle_god"),
+        (KeySym.l, "Gain a level", "_gain_level"),
+        (KeySym.t, "Teleport to a Region…", "_teleport"),
+        (KeySym.h, "Heal to full", "_heal"),
+        (KeySym.r, "Reveal the local map", "_reveal"),
+        (KeySym.k, "Kill every foe here", "_kill_all"),
+    )
+
+    def _label(self, key: KeySym, label: str) -> str:
+        if key is KeySym.g:
+            return f"{label}  ({'ON' if self.engine.god_mode else 'off'})"
+        return label
+
+    def on_render_native(self, display) -> None:
+        super().on_render_native(display)  # scrimmed HUD backdrop
+        ui = display.ui
+        w = int(display.win_w * 0.42)
+        h = ui.pad * 3 + ui.head.get_linesize() + len(self._ROWS) * ui.line + ui.line
+        r = ui.centered(w, int(h))
+        inner = ui.panel(r.x, r.y, r.w, r.h, "Debug — cheats")
+        x, y = inner.x, inner.y
+        kx = x + ui.measure("[G]   ")[0]
+        for i, (key, label, _m) in enumerate(self._ROWS):
+            sel = i == self.cursor
+            if sel:
+                ui.selection(x - ui.pad // 2, y, inner.w + ui.pad, ui.line)
+            ui.text(x, y, f"[{chr(key.value).upper()}]", color.section_head, ui.bold)
+            ui.text(kx, y, self._label(key, label),
+                    color.tier_value if sel else color.tier_body)
+            y += ui.line
+        ui.hint(display.win_w // 2, inner.bottom - ui.small.get_linesize(),
+                "up/down move · Enter do · letter shortcut · Esc close")
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        key = event.sym
+        if key in _CURSOR_UP:
+            self.cursor = (self.cursor - 1) % len(self._ROWS)
+            return None
+        if key in _CURSOR_DOWN:
+            self.cursor = (self.cursor + 1) % len(self._ROWS)
+            return None
+        if key in CONFIRM_KEYS:
+            return self._fire(self._ROWS[self.cursor][2])
+        for row_key, _label, method in self._ROWS:
+            if key == row_key:
+                return self._fire(method)
+        return super().ev_keydown(event)  # Esc closes
+
+    def _fire(self, method: str) -> Optional[BaseEventHandler]:
+        return getattr(self, method)()
+
+    def _note(self, text: str) -> None:
+        self.engine.message_log.add_message(text, color.welcome_text)
+
+    # --- the cheats -------------------------------------------------------
+    def _toggle_god(self) -> Optional[BaseEventHandler]:
+        self.engine.god_mode = not self.engine.god_mode
+        self._note(f"Debug: god mode {'ON' if self.engine.god_mode else 'OFF'}.")
+        return None  # stay in the menu so the state read updates in place
+
+    def _gain_level(self) -> Optional[BaseEventHandler]:
+        hero = self.engine.player.hero
+        if hero.xp_to_next <= 0:
+            self._note("Debug: already at the level cap.")
+            return None
+        hero.add_xp(hero.xp_to_next)  # one clean level-up (announces its gains)
+        return self.on_exit()
+
+    def _teleport(self) -> Optional[BaseEventHandler]:
+        return DebugTeleportHandler(self.engine)
+
+    def _heal(self) -> Optional[BaseEventHandler]:
+        f = self.engine.player.fighter
+        healed = f.heal(f.max_endurance)
+        self._note(f"Debug: healed to full (+{healed}).")
+        return self.on_exit()
+
+    def _reveal(self) -> Optional[BaseEventHandler]:
+        self.engine.game_map.explored[:] = True
+        self._note("Debug: the land lies revealed.")
+        return self.on_exit()
+
+    def _kill_all(self) -> Optional[BaseEventHandler]:
+        gm = self.engine.game_map
+        foes = [a for a in list(gm.actors) if actions.is_hostile_actor(a)]
+        for foe in foes:
+            foe.fighter.endurance = 0  # trips die(): corpse, loot, XP, quests
+        self._note(f"Debug: struck down {len(foes)} foe(s).")
+        return self.on_exit()
+
+
+class DebugTeleportHandler(OverworldMapHandler):
+    """The teleport cheat's picker (ADR 0012): the Ranger's Atlas driven as a
+    Region chooser. Enter drops the player onto the selected Region's Surface at
+    its arrival point (Region-to-Region, Surface-only); an impassable cell just
+    refuses. Esc/M backs out to the game."""
+
+    _FOOTER_HINT = " arrows/hjkl move · Enter teleport · M or Esc cancel "
+
+    def ev_keydown(self, event) -> Optional[BaseEventHandler]:
+        key = event.sym
+        if key in MOVE_KEYS:
+            return super().ev_keydown(event)  # move the cursor
+        if key in CONFIRM_KEYS:
+            if self.engine.game_world.teleport_to(self.cursor):
+                self.engine.message_log.add_message(
+                    f"Debug: teleported to {self.engine.game_map.name}.",
+                    color.welcome_text)
+                return self.on_exit()
+            self.engine.message_log.add_message(
+                "Debug: no Region there (Sea or Mountain).", color.impossible)
             return None
         if key in (KeySym.ESCAPE, KeySym.m):
             return self.on_exit()

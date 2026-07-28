@@ -32,8 +32,10 @@ SAVE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "savegame.s
 # changes shape in a way that older pickles can't be loaded into. **There is no
 # migration** — a mismatch is rejected and the player starts a fresh run. Bumped
 # to 2 for the Path model (committed Path, ranked nodes, points-in-Path — ADR
-# 0011), which reshaped the Hero.
-SAVE_VERSION = 2
+# 0011), which reshaped the Hero. Bumped to 3 for the Path trees (Far Shot &
+# Long Watch), which added Fighter.regen_rounds / regen_dice (Athelas
+# heal-over-time) — old pickles restore Fighters that lack those attributes.
+SAVE_VERSION = 3
 
 
 def has_save() -> bool:
