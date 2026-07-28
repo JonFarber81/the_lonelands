@@ -169,6 +169,30 @@ def test_grade_darkens_and_desaturates_bright_grass():
     assert (surf.get_at((0, 0)))[3] == 255  # alpha untouched
 
 
+# --- the debug tone tuner: nudge / describe / reset ------------------------
+def test_nudge_and_reset_grade_round_trip():
+    before = sprites.describe_grade()
+    try:
+        sprites.nudge_grade(d_darken=0.05, d_desat=0.04, d_warmth=0.03)
+        assert sprites.describe_grade() != before   # something moved
+        assert float(sprites.GRADE["darken"]) > 0.70
+        assert sprites.reset_grade() == before       # reset restores the default
+    finally:
+        sprites.reset_grade()
+
+
+def test_nudge_grade_clamps_to_sane_bounds():
+    try:
+        for _ in range(100):
+            sprites.nudge_grade(d_darken=1.0, d_desat=1.0, d_warmth=1.0)
+        assert float(sprites.GRADE["darken"]) <= 1.3
+        assert float(sprites.GRADE["desat"]) <= 1.0
+        r, _g, b = sprites.GRADE["tint"]
+        assert r <= 1.4 and b >= 0.6
+    finally:
+        sprites.reset_grade()
+
+
 # --- the flag defaults off: the ASCII path is unchanged --------------------
 def test_sprite_mode_defaults_off():
     assert config.SPRITES is False

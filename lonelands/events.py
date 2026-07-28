@@ -52,8 +52,15 @@ class KeySym(enum.IntEnum):
     ESCAPE = 27
     TAB = 9
 
-    # Function keys (SDL2 keycodes, matching pygame.K_F*). Only the debug menu's
-    # F12 is bound today (ADR 0012).
+    # Function keys (SDL2 keycodes, matching pygame.K_F*). F12 opens the debug
+    # menu (ADR 0012); F5–F11 drive the debug-only sprite tone tuner (#92 spike).
+    F5 = 1073741886
+    F6 = 1073741887
+    F7 = 1073741888
+    F8 = 1073741889
+    F9 = 1073741890
+    F10 = 1073741891
+    F11 = 1073741892
     F12 = 1073741893
 
     # Editing / navigation
