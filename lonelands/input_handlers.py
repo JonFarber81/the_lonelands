@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import textwrap
 import traceback
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
@@ -138,8 +137,16 @@ class EventHandler(BaseEventHandler):
         return True
 
     def ev_mousemotion(self, event: "events.MouseMotion") -> None:
-        if self.engine.game_map.in_bounds(event.tile.x, event.tile.y):
-            self.engine.mouse_location = (event.tile.x, event.tile.y)
+        # event.tile is a *view* cell; only hovers inside the map viewport name a
+        # tile. Convert to a world tile through the camera; store (-1, -1) when
+        # the cursor is over the sidebar/Chronicle so no name is shown.
+        cx, cy = event.tile.x, event.tile.y
+        if 0 <= cx < MAP_WIDTH and 0 <= cy < MAP_HEIGHT:
+            wx, wy = self.engine.camera.view_to_world(cx, cy)
+            if self.engine.game_map.in_bounds(wx, wy):
+                self.engine.mouse_location = (wx, wy)
+                return
+        self.engine.mouse_location = (-1, -1)
 
     def on_render(self, console: "Console") -> None:
         self.engine.render(console)
@@ -306,8 +313,10 @@ class LockOnHandler(EventHandler):
         target = self.target
         if target is not None:
             # A bright reticle over the mark, and its name/range across the top.
-            console.rgb["bg"][target.x, target.y] = color.needs_target
-            console.rgb["fg"][target.x, target.y] = color.near_black
+            vx, vy = self.engine.camera.world_to_view(target.x, target.y)
+            if 0 <= vx < MAP_WIDTH and 0 <= vy < MAP_HEIGHT:
+                console.rgb["bg"][vx, vy] = color.needs_target
+                console.rgb["fg"][vx, vy] = color.near_black
             banner = (f" {self.prompt} — the {target.name}  "
                       f"({self._status_text(target)}) ")
         else:
@@ -323,6 +332,12 @@ class LockOnHandler(EventHandler):
         # The HUD, but without the location banner — the targeting prompt (drawn
         # on the grid in on_render) owns the map's top row while aiming.
         self.engine.render_hud(display, banner=False)
+        # In sprite mode the opaque tiles cover the console reticle, so redraw
+        # the aim marker in pixel space on top (a no-op in ASCII mode).
+        target = self.target
+        if config.SPRITES and target is not None:
+            vx, vy = self.engine.camera.world_to_view(target.x, target.y)
+            display.draw_reticle(vx, vy, ok=True)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -429,9 +444,11 @@ class TileTargetHandler(EventHandler):
     def on_render(self, console) -> None:
         self.engine.render(console)
         ok = self._valid(self.cx, self.cy)
-        console.rgb["bg"][self.cx, self.cy] = (
-            color.needs_target if ok else color.impossible)
-        console.rgb["fg"][self.cx, self.cy] = color.near_black
+        vx, vy = self.engine.camera.world_to_view(self.cx, self.cy)
+        if 0 <= vx < MAP_WIDTH and 0 <= vy < MAP_HEIGHT:
+            console.rgb["bg"][vx, vy] = (
+                color.needs_target if ok else color.impossible)
+            console.rgb["fg"][vx, vy] = color.near_black
         console.draw_rect(x=0, y=0, width=MAP_WIDTH, height=1, ch=ord(" "),
                           bg=(0x24, 0x1E, 0x12))
         console.print(x=1, y=0, string=f" {self.prompt} "[: MAP_WIDTH - 2],
@@ -442,6 +459,10 @@ class TileTargetHandler(EventHandler):
 
     def on_render_native(self, display) -> None:
         self.engine.render_hud(display, banner=False)
+        # Redraw the tile reticle over the sprite layer (see LockOnHandler).
+        if config.SPRITES:
+            vx, vy = self.engine.camera.world_to_view(self.cx, self.cy)
+            display.draw_reticle(vx, vy, ok=self._valid(self.cx, self.cy))
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -1354,31 +1375,52 @@ class OverworldMapHandler(AskUserHandler):
         # Start the cursor on the player's own Region.
         self.cursor: Tuple[int, int] = engine.game_world.coord
 
-    def on_render_native(self, display) -> None:
-        # The atlas is a full-screen grid page (drawn in on_render); no native
-        # HUD backdrop over it, unlike the panel overlays.
-        pass
-
     # --- layout -----------------------------------------------------------
     _GX = (SCREEN_WIDTH - overworld_map.GRID_W) // 2   # centred left margin
-    _GY = 2                                            # title sits on row 0
+    _GY = 2                                            # title rides rows 0–1
     _FOOTER_HINT = " arrows/hjkl move · M or Esc close "  # subclasses override
 
     def on_render(self, console: "Console") -> None:
-        # A full-screen atlas: paint over the whole console rather than the game
-        # + scrim, so the map reads as its own page.
+        # The atlas is a two-layer page. The terrain — band-tinted Region blocks,
+        # the threaded Great Roads, and the role/deeps/@ markers — is a cell grid
+        # drawn here. Every piece of *text* (the title, Region names, legend, and
+        # cursor footer) is drawn natively in on_render_native, in the
+        # proportional UI font, so it reads as words instead of one wide glyph per
+        # map cell (which sprawled and ran off the screen). We stash the buffer so
+        # the native pass can place names over the very blocks drawn here.
         console.rgb["ch"] = ord(" ")
         console.rgb["fg"] = color.gray
         console.rgb["bg"] = color.near_black
-
-        console.print(SCREEN_WIDTH // 2, 0, "The Ranger's Atlas — Eriador",
-                      fg=color.menu_title, alignment=CENTER)
-
         gw = self.engine.game_world
-        buf = overworld_map.render_map(gw.coord, self.cursor)
-        self._blit(console, buf)
-        self._render_legend(console, buf.height)
-        self._render_footer(console, in_deeps=gw.level_index < 0)
+        self._buf = overworld_map.render_map(gw.coord, self.cursor)
+        self._blit(console, self._buf)
+
+    def on_render_native(self, display) -> None:
+        ui = display.ui
+        cw, ch = display.cell_w, display.cell_h
+        ox, oy = display.offset
+        buf = getattr(self, "_buf", None)
+        if buf is None:  # native pass without a prior on_render (defensive)
+            buf = overworld_map.render_map(self.engine.game_world.coord, self.cursor)
+
+        def px(col: int, row: int) -> "Tuple[int, int]":
+            """Pixel top-left of atlas buffer cell (col, row)."""
+            return ox + (self._GX + col) * cw, oy + (self._GY + row) * ch
+
+        # Title — centred over the atlas, in the menu title face.
+        tcx = ox + int((self._GX + overworld_map.GRID_W / 2) * cw)
+        ui.text_center(tcx, oy + ch // 3, "The Ranger's Atlas — Eriador",
+                       color.menu_title, ui.head)
+
+        # Region names — proportional, each on a dim plate so it reads over the
+        # band tint. place_labels reserved each a run clear of the markers, so
+        # the (narrower) proportional text never buries a glyph or a neighbour.
+        for p in buf.placements:
+            x, y = px(p.col, p.row)
+            ui.plate(x, y, p.text, p.fg, ui.small)
+
+        self._render_legend(ui, px, buf.height)
+        self._render_footer(ui, px, cw, in_deeps=self.engine.game_world.level_index < 0)
 
     def _blit(self, console, buf) -> None:
         for r in range(buf.height):
@@ -1391,35 +1433,37 @@ class OverworldMapHandler(AskUserHandler):
                               fg=row_fg[c] or color.gray,
                               bg=row_bg[c] or color.near_black)
 
-    def _render_legend(self, console, grid_h) -> None:
-        y = self._GY + grid_h + 1
-        for row, label_fg in ((overworld_map.band_legend(), color.tier_body),
-                              (overworld_map.role_legend(), color.tier_label)):
-            x = self._GX
+    def _render_legend(self, ui, px, grid_h) -> None:
+        for i, (row, label_fg) in enumerate((
+            (overworld_map.band_legend(), color.tier_body),
+            (overworld_map.role_legend(), color.tier_label),
+        )):
+            x, y = px(0, grid_h + 1 + i)
             for entry in row:
-                glyph = graphic_char(entry.glyph) if entry.graphic else entry.glyph
-                console.print(x, y, glyph, fg=entry.fg)
-                console.print(x + 2, y, entry.label, fg=label_fg)
-                x += 4 + len(entry.label)
-            y += 1
+                if entry.graphic:  # the tileset ▼ has no proportional glyph
+                    x += ui.tri_down(x, y + 2, ui.small.get_height() - 3, entry.fg)
+                    x += ui.pad // 3
+                else:
+                    x += ui.text(x, y, entry.glyph, entry.fg, ui.small) + ui.pad // 3
+                x += ui.text(x, y, entry.label, label_fg, ui.small) + ui.pad
 
-    def _render_footer(self, console, in_deeps) -> None:
+    def _render_footer(self, ui, px, cw, in_deeps) -> None:
         d = overworld_map.describe(self.cursor)
-        y = self._GY + overworld_map.GRID_H + 4
-        x = self._GX
-        iw = overworld_map.GRID_W
+        x, y = px(0, overworld_map.GRID_H + 4)
+        maxw = overworld_map.GRID_W * cw
         head = d.title
         if not d.off_grid and d.deeps:
             head += f"   {d.deeps} deep{'s' if d.deeps != 1 else ''} below"
-        console.print(x, y, head, fg=color.section_head)
-        y += 1
-        for line in textwrap.wrap(d.note, iw):
-            console.print(x, y, line, fg=color.tier_body)
-            y += 1
+        ui.text(x, y, head, color.section_head, ui.bold)
+        y += ui.body.get_linesize()
+        for line in ui.wrap(d.note, maxw, ui.body):
+            ui.text(x, y, line, color.tier_body, ui.body)
+            y += ui.body.get_linesize()
         if in_deeps and self.cursor == self.engine.game_world.coord:
-            console.print(x, y, "You are below the surface here.", fg=color.ambient)
-        console.print(self._GX, SCREEN_HEIGHT - 1, self._FOOTER_HINT,
-                      fg=color.tier_label)
+            ui.text(x, y, "You are below the surface here.", color.ambient, ui.body)
+        # The key hint pinned to the last screen row.
+        _, hy = px(0, SCREEN_HEIGHT - self._GY - 1)
+        ui.text(x, hy, self._FOOTER_HINT, color.tier_label, ui.small)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym

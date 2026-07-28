@@ -57,26 +57,54 @@ def test_terrain_resolves_to_expected_key(tile, expected):
     assert key in sprites.SPRITE_KEYS  # never orphaned
 
 
-# --- entity resolution: the player, orcs, and the race-lettered crowd ------
+# --- entity resolution: the player, foes, and the race-lettered crowd ------
+class _Ent:
+    """A stand-in for an entity: resolve_entity reads only name + char."""
+
+    def __init__(self, char="", name=""):
+        self.char = char
+        self.name = name
+
+
 def test_player_and_principals_resolve_to_ranger():
-    assert sprites.resolve_entity("@") == "ranger"
+    assert sprites.resolve_entity(_Ent(char="@")) == "ranger"
 
 
 def test_orc_letters_resolve_to_orc():
-    assert sprites.resolve_entity("o") == "orc"
-    assert sprites.resolve_entity("O") == "orc"
+    assert sprites.resolve_entity(_Ent(char="o")) == "orc"
+    assert sprites.resolve_entity(_Ent(char="O")) == "orc"
 
 
 def test_every_race_glyph_resolves_to_a_known_key():
     for glyph in RACE_GLYPHS.values():
-        key = sprites.resolve_entity(glyph)
+        key = sprites.resolve_entity(_Ent(char=glyph))
         assert key in sprites.SPRITE_KEYS, glyph
 
 
-def test_unmapped_char_falls_through():
+def test_beasts_resolve_to_their_own_sprite_by_name():
+    # Each foe gets a distinct sprite, not the one green-orc-fits-all of before.
+    cases = {
+        "great spider": "spider",
+        "grey wolf": "wolf",
+        "wild boar": "boar",
+        "cave-goblin": "orc",
+    }
+    for name, expected in cases.items():
+        key = sprites.resolve_entity(_Ent(char="x", name=name))
+        assert key == expected, name
+        assert key in sprites.SPRITE_KEYS
+
+
+def test_name_disambiguates_the_shared_W_glyph():
+    # Warg and barrow-wight are both the glyph 'W'; only the name tells them apart.
+    assert sprites.resolve_entity(_Ent(char="W", name="warg")) == "warg"
+    assert sprites.resolve_entity(_Ent(char="W", name="barrow-wight")) == "wight"
+
+
+def test_unmapped_entity_falls_through():
     # Dropped items and creatures the spike doesn't cover draw nothing.
-    assert sprites.resolve_entity("!") is None
-    assert sprites.resolve_entity("*") is None
+    assert sprites.resolve_entity(_Ent(char="!")) is None
+    assert sprites.resolve_entity(_Ent(char="*", name="a healing herb")) is None
 
 
 # --- the layered crowd: body + clothing + hair, mixed per wanderer ---------
@@ -196,12 +224,45 @@ def test_nudge_grade_clamps_to_sane_bounds():
 # --- the flag defaults off: the ASCII path is unchanged --------------------
 def test_sprite_mode_defaults_off():
     assert config.SPRITES is False
-    assert config.TILE_HEIGHT == 20  # non-square ASCII cell (main() squares it)
+    assert config.TILE_HEIGHT == 30  # non-square ASCII cell (main() squares it)
 
 
 # --- with the sheets present, every key bakes a real tile ------------------
 def _base_sheet_installed() -> bool:
     return any(os.path.exists(p) for p in sprites.SHEET_CANDIDATES["base"])
+
+
+# --- floor markers for dropped items and corpses (no sheet art) ------------
+# Items and corpses carry no sprite key; the renderer draws a synthetic marker
+# so drops stay visible (and pickable) on the sprite map. These need no sheet.
+def _painted_pixels(surf) -> int:
+    import pygame
+
+    return int((pygame.surfarray.array_alpha(surf) > 0).sum())
+
+
+def test_item_and_corpse_markers_paint_pixels():
+    import pygame
+
+    pygame.display.init()
+    pygame.display.set_mode((64, 64))
+    sm = sprites.SpriteMap(16)
+    for kind in ("item", "corpse"):
+        surf = sm._marker((200, 190, 138), kind)
+        assert surf is not None
+        assert _painted_pixels(surf) > 0, kind
+
+
+def test_marker_is_cached_per_colour_and_kind():
+    import pygame
+
+    pygame.display.init()
+    pygame.display.set_mode((64, 64))
+    sm = sprites.SpriteMap(16)
+    first = sm._marker((200, 190, 138), "item")
+    assert sm._marker((200, 190, 138), "item") is first  # same object -> cached
+    assert sm._marker((200, 190, 138), "corpse") is not first  # kind splits it
+    assert sm._marker((122, 48, 42), "item") is not first      # colour splits it
 
 
 @pytest.mark.skipif(

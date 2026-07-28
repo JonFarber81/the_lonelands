@@ -102,6 +102,19 @@ def test_deeps_cells_get_the_deeps_glyph():
     assert om.DEEPS_GLYPH in block
 
 
+def test_region_names_are_placed_not_baked_into_cells():
+    # Names are laid out for the handler to draw natively (proportional font),
+    # not stamped a glyph-per-cell into the buffer. So placements exist, carry a
+    # colour by role, and never land on a protected (glyph-bearing) cell.
+    buf = om.render_map(player_coord=(0, 0), cursor_coord=(0, 0))
+    assert buf.placements, "Region names should be laid out as placements"
+    hobbiton = next((p for p in buf.placements if p.text == "Hobbiton"), None)
+    assert hobbiton is not None and hobbiton.fg == om.TOWN_NAME_FG
+    for p in buf.placements:
+        for i in range(len(p.text)):
+            assert (p.col + i, p.row) not in buf.protected
+
+
 def test_describe_off_grid_reads_as_sea_and_mountains():
     sea = om.describe((-7, 3))       # the Gulf of Lune, absent from the grid
     assert sea.off_grid and "Sea" in sea.title

@@ -33,9 +33,11 @@ def get_names_at(x: int, y: int, engine: "Engine") -> str:
 
 
 def render_names_at_mouse(console, engine: "Engine") -> None:
+    # mouse_location is a *world* tile (set from the hovered view cell in
+    # EventHandler.ev_mousemotion), or (-1, -1) when the cursor is off the map
+    # viewport; get_names_at bounds-checks either way. The label always sits in
+    # the viewport's bottom-left corner.
     x, y = engine.mouse_location
-    if x >= MAP_WIDTH or y >= MAP_HEIGHT:
-        return
     names = get_names_at(x, y, engine)
     if names:
         console.print(x=1, y=MAP_HEIGHT - 1, string=names[: MAP_WIDTH - 2], fg=color.light_gray)

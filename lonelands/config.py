@@ -19,16 +19,26 @@ DEBUG = False
 SPRITES = False
 
 # --- Window / console geometry (in tiles) ---------------------------------
-SCREEN_WIDTH = 92
-SCREEN_HEIGHT = 54
+SCREEN_WIDTH = 61
+SCREEN_HEIGHT = 36
 
 # The map viewport is upper-left. A stats sidebar runs the full height on the
 # right; the bottom-left pane holds the dice tray above the message log.
-MAP_WIDTH = 62
-MAP_HEIGHT = 44
+#
+# The viewport shows only a MAP_WIDTH×MAP_HEIGHT *window* onto the region, which
+# is generated at the larger REGION_WIDTH×REGION_HEIGHT (see below). A
+# :class:`lonelands.camera.Camera` scrolls that window to keep the player near
+# centre — so tiles are drawn ~1.5× larger than when the whole region had to fit.
+MAP_WIDTH = 41
+MAP_HEIGHT = 29
+
+# The region a map generates at. Larger than the viewport, so the map scrolls;
+# procgen and every map-size calculation use these, never the viewport MAP_*.
+REGION_WIDTH = 62
+REGION_HEIGHT = 44
 
 SIDEBAR_X = MAP_WIDTH
-SIDEBAR_WIDTH = SCREEN_WIDTH - MAP_WIDTH  # 30
+SIDEBAR_WIDTH = SCREEN_WIDTH - MAP_WIDTH  # 20
 
 # The bottom-left "Chronicle" pane is a framed box. Reading top-to-bottom:
 #   LOG_Y            frame top border (carries the " Chronicle " title)
@@ -38,7 +48,7 @@ SIDEBAR_WIDTH = SCREEN_WIDTH - MAP_WIDTH  # 30
 #   LOG_TEXT_Y..     the scrolling message log (LOG_TEXT_HEIGHT rows)
 #   (frame bottom border)
 LOG_Y = MAP_HEIGHT
-LOG_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT   # 10
+LOG_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT   # 7
 
 TRAY_Y = LOG_Y + 1
 TRAY_ROWS = 2                             # dice are 2 cells tall
@@ -85,10 +95,15 @@ TILESET_CANDIDATES = [
 # letterboxes it (centres the square tile, never stretches) so the cell can be a
 # little taller than wide — giving the TTF prose the vertical room it needs to
 # stay legible while the map tiles stay crisp, with only a thin grid gap between
-# rows. 16x20 balances a readable Chronicle against a solid map. The window
+# rows. 24x30 balances a readable Chronicle against a solid map. The window
 # re-renders the tileset crisply on resize, so this is a starting size.
-TILE_WIDTH = 16
-TILE_HEIGHT = 20
+#
+# These are 1.5× what the pre-camera build used: the console grid shrank by the
+# same factor (the viewport now shows a scrolling window onto the region, not
+# the whole thing), so scaling the cell up keeps the launch window the same
+# pixel size while tiles render 1.5× larger.
+TILE_WIDTH = 24
+TILE_HEIGHT = 30
 
 WINDOW_TITLE = "The Lonelands — Eriador, TA 2965"
 

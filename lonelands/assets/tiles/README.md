@@ -46,3 +46,27 @@ here alongside it. Obtain them from the bundled *Kenney Game Assets All-in-1*:
 With the sheets absent, `--sprites` degrades gracefully to the ASCII map (the
 sprite overlay simply draws nothing). Phase 1+ replaces this spike's hard-coded
 key table with a data-driven one and force-commits the CC0 sheets.
+
+## Beast sprites (`tiny_dungeon.png`, `custom_beasts.png`)
+
+The Kenney Roguelike sheets carry **no beasts** — only humanoids — so every foe
+used to fall back to the one green "orc" humanoid. Two extra sheets give the
+non-humanoid roster its own art:
+
+- `tiny_dungeon.png` — Kenney **Tiny Dungeon** (CC0), the one bundled 16×16
+  top-down pack with monster tiles. We use the **spider** and the **skeleton**
+  (the barrow-wight). Tiny Dungeon draws each creature on a dark rounded "floor
+  pad"; our shipped copy has those two tiles flood-filled clear of the pad so
+  they sit transparent like the Kenney sprites. Source (raw, padded — the
+  runtime fallback): `Tiny Dungeon/Tilemap/tilemap.png`. Gitignored like the
+  other CC0 sheets; the fallback path loads the raw pack if it is absent.
+- `custom_beasts.png` — **hand-authored** wolf, warg, and boar (packed 16×16 +
+  1px margin, tiles 0/1/2), for the canines/boar no bundled top-down pixel pack
+  draws. Regenerate with `python gen_custom_beasts.py` — the pixel maps live in
+  that script. This is **our own art with no external source**, so unlike the
+  other sheets it is **committed** (a `!` exception in `.gitignore`).
+
+Both feed the same tone-grade pipeline in `lonelands/sprites.py`, so beasts read
+as somber as the terrain. Foes resolve to a sprite by **creature name** (see
+`resolve_entity`), because glyphs collide — the warg and the barrow-wight are
+both `W`, and only the name tells a wolf-pack from an undead.
