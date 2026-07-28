@@ -9,9 +9,9 @@ drives the cursor, but every placement decision lives here so it can be reasoned
 about — and unit-tested — in isolation.
 
 Layout: each Region is a blocky ``CELL_W``×``CELL_H`` cell; the Great Roads draw
-as connected line-glyphs (`─ │ ┼`) along the shared seams through the edge
+as connected ASCII line-glyphs (`- | +`) along the shared seams through the edge
 midpoints, so a road reads as one unbroken line across the map. Colour is by
-**band** (danger), the centre glyph is by **role**; deeps carry a ``▼`` mark and
+**band** (danger), the centre glyph is by **role**; deeps carry a ``v`` mark and
 the player's Region an ``@``. Town/Landmark names overrun the blank wilderness
 around them, Towns winning any contest for a strip and any name that cannot be
 laid without clobbering a glyph simply dropped (still read off the cursor)."""
@@ -40,8 +40,8 @@ GRID_W = COLS * CELL_W           # 60
 GRID_H = ROWS * CELL_H           # 27
 
 # --- glyphs -----------------------------------------------------------------
-ROAD_H, ROAD_V, ROAD_CROSS = "─", "│", "┼"   # baked from CP437 (tile_glyphs)
-DEEPS_GLYPH = "▼"
+ROAD_H, ROAD_V, ROAD_CROSS = "-", "|", "+"   # ASCII road segments
+DEEPS_GLYPH = "v"
 PLAYER_GLYPH = "@"
 ROLE_GLYPH = {
     overworld.TOWN: "#",         # a cluster of dwellings
@@ -159,7 +159,7 @@ def place_labels(
     """Lay Region names onto blank map space without ever overwriting a glyph.
 
     `labels` are `Label`s anchored at their Region centre; `protected` is the set
-    of buffer cells already holding a glyph (roads, role markers, ``▼``, ``@``,
+    of buffer cells already holding a glyph (roads, role markers, ``v``, ``@``,
     frame). Towns are placed first so they win any contested strip; each name
     takes the first candidate run (see `_label_candidates`) that is in-bounds and
     clear of both protected cells and names already placed. A name with nowhere
@@ -192,8 +192,7 @@ def place_labels(
 # ---------------------------------------------------------------------------
 class Buffer:
     """A grid of glyphs the handler blits to a console. Each cell carries a
-    character, an fg/bg colour, and a `graphic` flag (draw via the tileset
-    codepoint, à la the map layer, rather than the prose TTF)."""
+    character and an fg/bg colour, all drawn from the prose TTF."""
 
     def __init__(self, width: int, height: int):
         self.width = width
@@ -201,7 +200,6 @@ class Buffer:
         self.ch: List[List[str]] = [[" "] * width for _ in range(height)]
         self.fg: List[List[Optional[Rgb]]] = [[None] * width for _ in range(height)]
         self.bg: List[List[Optional[Rgb]]] = [[None] * width for _ in range(height)]
-        self.graphic: List[List[bool]] = [[False] * width for _ in range(height)]
         # Cells holding a glyph a printed name must not clobber.
         self.protected: Set[Coord] = set()
         # Region-name placements, laid out clear of every glyph but drawn by the
@@ -209,15 +207,13 @@ class Buffer:
         self.placements: List["Placed"] = []
 
     def put(self, col: int, row: int, ch: str, fg: Optional[Rgb] = None,
-            bg: Optional[Rgb] = None, graphic: bool = False,
-            protect: bool = False) -> None:
+            bg: Optional[Rgb] = None, protect: bool = False) -> None:
         if not (0 <= col < self.width and 0 <= row < self.height):
             return
         self.ch[row][col] = ch
         self.fg[row][col] = fg
         if bg is not None:
             self.bg[row][col] = bg
-        self.graphic[row][col] = graphic
         if protect:
             self.protected.add((col, row))
 
@@ -239,20 +235,20 @@ def _draw_roads(buf: Buffer, coord: Coord) -> None:
     cx, cy = cell_center(coord)
     if "e" in edges:
         for c in range(cx + 1, ox + CELL_W):
-            buf.put(c, cy, ROAD_H, ROAD_FG, graphic=True, protect=True)
+            buf.put(c, cy, ROAD_H, ROAD_FG, protect=True)
     if "w" in edges:
         for c in range(ox, cx):
-            buf.put(c, cy, ROAD_H, ROAD_FG, graphic=True, protect=True)
+            buf.put(c, cy, ROAD_H, ROAD_FG, protect=True)
     if "n" in edges:
         for r in range(oy, cy):
-            buf.put(cx, r, ROAD_V, ROAD_FG, graphic=True, protect=True)
+            buf.put(cx, r, ROAD_V, ROAD_FG, protect=True)
     if "s" in edges:
         for r in range(cy + 1, oy + CELL_H):
-            buf.put(cx, r, ROAD_V, ROAD_FG, graphic=True, protect=True)
+            buf.put(cx, r, ROAD_V, ROAD_FG, protect=True)
     # The centre glyph — but a named Region's role marker (drawn later) wins it.
     cell = overworld.cell(coord)
     if cell is None or not cell.name:
-        buf.put(cx, cy, seam_glyph(edges), ROAD_FG, graphic=True, protect=True)
+        buf.put(cx, cy, seam_glyph(edges), ROAD_FG, protect=True)
 
 
 def render_map(player_coord: Coord, cursor_coord: Coord) -> Buffer:
@@ -295,7 +291,7 @@ def render_map(player_coord: Coord, cursor_coord: Coord) -> Buffer:
         if cell.deeps and in_window(coord):
             ox, oy = cell_origin(coord)
             buf.put(ox + CELL_W - 1, oy + CELL_H - 1, DEEPS_GLYPH,
-                    DEEPS_FG, graphic=True, protect=True)
+                    DEEPS_FG, protect=True)
 
     # 4) the player's Region — an @ over its centre (also while below ground: it
     #    marks the Region the deeps lie beneath).
@@ -326,22 +322,21 @@ class LegendEntry(NamedTuple):
     glyph: str
     label: str
     fg: Rgb
-    graphic: bool   # draw via the tileset codepoint (a baked box/▼ glyph)
 
 
 def band_legend() -> List[LegendEntry]:
     """The danger-band colour key, each shown as a coloured swatch."""
-    return [LegendEntry("•", band, BAND_FG[band], False) for band in overworld.BANDS]
+    return [LegendEntry("•", band, BAND_FG[band]) for band in overworld.BANDS]
 
 
 def role_legend() -> List[LegendEntry]:
     """The marker key: what each glyph drawn on the map means."""
     return [
-        LegendEntry(ROLE_GLYPH[overworld.TOWN], "town", BAND_FG[overworld.FREE], False),
-        LegendEntry(ROLE_GLYPH[overworld.LANDMARK], "landmark", LANDMARK_NAME_FG, False),
-        LegendEntry(ROLE_GLYPH[overworld.GATEWAY], "gateway", LANDMARK_NAME_FG, False),
-        LegendEntry(DEEPS_GLYPH, "deeps", DEEPS_FG, True),
-        LegendEntry(PLAYER_GLYPH, "you", PLAYER_FG, False),
+        LegendEntry(ROLE_GLYPH[overworld.TOWN], "town", BAND_FG[overworld.FREE]),
+        LegendEntry(ROLE_GLYPH[overworld.LANDMARK], "landmark", LANDMARK_NAME_FG),
+        LegendEntry(ROLE_GLYPH[overworld.GATEWAY], "gateway", LANDMARK_NAME_FG),
+        LegendEntry(DEEPS_GLYPH, "deeps", DEEPS_FG),
+        LegendEntry(PLAYER_GLYPH, "you", PLAYER_FG),
     ]
 
 

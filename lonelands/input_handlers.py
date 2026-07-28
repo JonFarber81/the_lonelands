@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from lonelands import (actions, character, color, config, events, overworld_map,
                        path_icons, path_tree, perks)
-from lonelands.events import CENTER, KeySym, Modifier
-from lonelands.tile_glyphs import graphic_char
+from lonelands.events import KeySym, Modifier
 from lonelands.render_functions import endurance_color
 from lonelands.actions import (
     Action,
@@ -15,7 +14,6 @@ from lonelands.actions import (
     BumpAction,
     DropItem,
     EquipAction,
-    ItemAction,
     PickupAction,
     TakeInteractAction,
     WaitAction,
@@ -102,11 +100,6 @@ class PopupMessage(BaseEventHandler):
 
 
 class EventHandler(BaseEventHandler):
-    # SPIKE (#92): this handler and its subclasses draw the region map into the
-    # top-left viewport, so the sprite overlay applies. OverworldMapHandler,
-    # which paints the full-screen overworld instead, clears this.
-    renders_region_map = True
-
     def __init__(self, engine: "Engine"):
         self.engine = engine
 
@@ -351,12 +344,6 @@ class LockOnHandler(EventHandler):
         # The HUD, but without the location banner — the targeting prompt (drawn
         # on the grid in on_render) owns the map's top row while aiming.
         self.engine.render_hud(display, banner=False)
-        # In sprite mode the opaque tiles cover the console reticle, so redraw
-        # the aim marker in pixel space on top (a no-op in ASCII mode).
-        target = self.target
-        if config.SPRITES and target is not None:
-            vx, vy = self.engine.camera.world_to_view(target.x, target.y)
-            display.draw_reticle(vx, vy, ok=True)
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -478,10 +465,6 @@ class TileTargetHandler(EventHandler):
 
     def on_render_native(self, display) -> None:
         self.engine.render_hud(display, banner=False)
-        # Redraw the tile reticle over the sprite layer (see LockOnHandler).
-        if config.SPRITES:
-            vx, vy = self.engine.camera.world_to_view(self.cx, self.cy)
-            display.draw_reticle(vx, vy, ok=self._valid(self.cx, self.cy))
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
         key = event.sym
@@ -947,8 +930,14 @@ class PathsHandler(AskUserHandler):
         title = "Choose your Path" if self._chooser() else "Paths of the Ranger"
         inner = ui.panel(r.x, r.y, r.w, r.h, title)
         top = self._render_header(ui, inner, hero)
-        footer_y = inner.bottom - ui.small.get_linesize()
-        self._render_tree(ui, inner, top, footer_y - ui.pad // 2, hero)
+        sls = ui.small.get_linesize()
+        footer_y = inner.bottom - sls
+        # A fixed two-line detail strip sits above the hint; the tree gives up
+        # its height (its width — which keeps forked siblings apart — is untouched).
+        strip_h = 2 * sls + ui.pad // 4
+        strip_y = footer_y - ui.pad // 2 - strip_h
+        self._render_tree(ui, inner, top, strip_y - ui.pad // 4, hero)
+        self._render_detail(ui, inner, strip_y, hero)
         if self._chooser():
             hint = "↑/↓ read · ←/→ or Tab switch Path · Enter walk this Path · Esc close"
         else:
@@ -982,6 +971,28 @@ class PathsHandler(AskUserHandler):
             ui.text(x, y, f"Committed — {self._viewed_path().name}",
                     color.ranger_green, ui.body)
         return y + ui.line + ui.pad // 3
+
+    def _render_detail(self, ui, inner, y, hero) -> None:
+        """The bottom detail strip for the cursor node (ADR 0011 legibility):
+        its name + the "what a point buys" framing on line 1, its full
+        description on line 2. Mode-aware — pathless it's pure reference (the
+        price only), committed it reads the live buy/rank/locked state."""
+        node = self._cursor_node()
+        rank = hero.rank_of(node.id)
+        committed = not self._chooser()
+        buyable = committed and hero.can_buy(node)
+        summary = perks.buy_summary(
+            node, rank, committed=committed, buyable=buyable,
+            locked_reason=self._locked_reason(hero, node))
+        sls = ui.small.get_linesize()
+        ui.connector(inner.x, y - ui.pad // 4, inner.right, y - ui.pad // 4,
+                     color.rule)
+        name = ("* " if node.capstone else "") + node.name
+        nx = ui.text(inner.x, y, name, color.tier_value, ui.small)
+        ui.text(inner.x + nx + ui.pad // 2, y, f"· {summary}",
+                color.hope_gain if buyable else color.tier_label, ui.small)
+        ui.text(inner.x, y + sls, ui.truncate(node.desc, inner.w, ui.small),
+                color.tier_body, ui.small)
 
     def _render_tree(self, ui, inner, top, bottom, hero) -> None:
         path = self._viewed_path()
@@ -1394,8 +1405,6 @@ class OverworldMapHandler(AskUserHandler):
     :mod:`lonelands.overworld_map`; this handler only blits and drives the cursor.
     """
 
-    renders_region_map = False  # SPIKE (#92): a full-screen atlas, not the viewport
-
     def __init__(self, engine: "Engine"):
         super().__init__(engine)
         # Start the cursor on the player's own Region.
@@ -1450,12 +1459,10 @@ class OverworldMapHandler(AskUserHandler):
 
     def _blit(self, console, buf) -> None:
         for r in range(buf.height):
-            row_ch, row_fg, row_bg, row_g = buf.ch[r], buf.fg[r], buf.bg[r], buf.graphic[r]
+            row_ch, row_fg, row_bg = buf.ch[r], buf.fg[r], buf.bg[r]
             sy = self._GY + r
             for c in range(buf.width):
-                ch = row_ch[c]
-                string = graphic_char(ch) if row_g[c] else ch
-                console.print(self._GX + c, sy, string,
+                console.print(self._GX + c, sy, row_ch[c],
                               fg=row_fg[c] or color.gray,
                               bg=row_bg[c] or color.near_black)
 
@@ -1466,11 +1473,7 @@ class OverworldMapHandler(AskUserHandler):
         )):
             x, y = px(0, grid_h + 1 + i)
             for entry in row:
-                if entry.graphic:  # the tileset ▼ has no proportional glyph
-                    x += ui.tri_down(x, y + 2, ui.small.get_height() - 3, entry.fg)
-                    x += ui.pad // 3
-                else:
-                    x += ui.text(x, y, entry.glyph, entry.fg, ui.small) + ui.pad // 3
+                x += ui.text(x, y, entry.glyph, entry.fg, ui.small) + ui.pad // 3
                 x += ui.text(x, y, entry.label, label_fg, ui.small) + ui.pad
 
     def _render_footer(self, ui, px, cw, in_deeps) -> None:
@@ -1966,7 +1969,7 @@ class MainMenuHandler(BaseEventHandler):
                 "A Middle-earth roguelike · the Third Age, 2965 · d20 core")
 
     def ev_keydown(self, event) -> Optional[BaseEventHandler]:
-        from lonelands import savegame, setup_game
+        from lonelands import savegame
         if event.sym in (KeySym.q, KeySym.ESCAPE):
             raise SystemExit()
         if event.sym in (KeySym.c,) and savegame.has_save():

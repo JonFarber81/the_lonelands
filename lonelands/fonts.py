@@ -1,51 +1,37 @@
-"""Glyph atlas: prose, map tiles, and dice faces rasterised into pygame surfaces.
+"""Glyph atlas: prose and dice faces rasterised into pygame surfaces.
 
 Issue #66 Phase 2 replaced the tcod ``Tileset`` (and the FreeType auto-fit
 machine) with :class:`GlyphAtlas`, which bakes every glyph the game prints —
-prose, map/entity tiles, and the One Ring dice — into per-codepoint pygame
-surfaces at the current cell size. :mod:`lonelands.display` caches these and
-tints each one by the cell's foreground colour on blit.
+prose (map, entity, and text alike) and the One Ring dice — into per-codepoint
+pygame surfaces at the current cell size. :mod:`lonelands.display` caches these
+and tints each one by the cell's foreground colour on blit.
 
-The three glyph families keep the codepoint contract they always had:
+The two glyph families keep the codepoint contract they always had:
 
   * **Prose** — printable ASCII, accented vowels, and typographic marks are
     rendered from the bundled TrueType face with :mod:`pygame.font`, sized once
     to fill the cell (no more per-pixel FreeType fitting; pygame sizes natively).
-    A codepoint the font lacks (e.g. box-drawing) yields ``None`` — a blank cell,
-    exactly as under tcod.
-  * **Map/entity tiles** — the Private-Use graphic codepoints
-    (:mod:`lonelands.tile_glyphs`) come from the CP437 tilesheet, one 16×16 cell
-    each, letterboxed into the cell. The shape lives in the sheet's alpha
-    channel, so tiles are baked white and tinted like any other glyph. With no
-    sheet installed they fall back to the prose glyph for the same character.
+    The map and its entities print these same ASCII glyphs — the game is
+    ASCII-rendered. A codepoint the font lacks (e.g. box-drawing) yields ``None``
+    — a blank cell, exactly as under tcod.
   * **Dice faces** — the pixel-art die faces (:mod:`lonelands.dice_glyphs`) are
     drawn as coverage masks (frame, tengwar, Eye, Gandalf rune) with numerals
     rasterised from the same TTF, then split into the 2×2 block of cell tiles.
 """
 from __future__ import annotations
 
-import os
 from typing import Callable, Dict, Optional
 
 import numpy as np
 import pygame
 
-from lonelands import config, dice_glyphs, tile_glyphs
+from lonelands import config, dice_glyphs
 
 # Glyphs the auto-fit must accommodate: printable ASCII plus the accented vowels
 # in Middle-earth names (Dúnedain, Amon Sûl) and the typographic marks used in
 # prose. The chosen size is the largest whose widest sample glyph still fits the
 # cell, so nothing clips.
 _SAMPLE = [chr(c) for c in range(0x20, 0x7F)] + list("áéíóúÁÉÍÓÚâêîôûàèìòùñÑ—…“”‘’")
-
-# The extra map glyphs live at their CP437 byte positions in the tilesheet (the
-# sheet is laid out in CP437 order), not at their Unicode codepoints. Keyed by
-# the same chars tile_glyphs registers; the assert fails loudly if a glyph is
-# appended there without a position here (which would else pick a garbage tile).
-_CP437_EXTRA = {"─": 196, "│": 179, "┼": 197, "▼": 31}
-assert set(_CP437_EXTRA) == set(tile_glyphs.GRAPHIC_EXTRA), (
-    "fonts._CP437_EXTRA is out of sync with tile_glyphs.GRAPHIC_EXTRA"
-)
 
 _RasterizeFn = Callable[[str, int], "np.ndarray"]
 
@@ -65,33 +51,6 @@ def _mask_to_surface(mask: "np.ndarray") -> "Optional[pygame.Surface]":
     alpha[:] = np.ascontiguousarray(mask.T)  # numpy (h, w) -> pygame (w, h)
     del alpha
     return surf
-
-
-def _resample_nearest(mask: "np.ndarray", width: int, height: int) -> "np.ndarray":
-    """Nearest-neighbour resample a 2-D coverage mask to ``height`` x ``width``.
-
-    Nearest (not bilinear) keeps the pixel-art crisp at integer multiples and
-    merely blocky otherwise — never blurred."""
-    sh, sw = mask.shape
-    if (sh, sw) == (height, width):
-        return np.ascontiguousarray(mask)
-    ys = (np.arange(height) * sh) // height
-    xs = (np.arange(width) * sw) // width
-    return np.ascontiguousarray(mask[ys][:, xs])
-
-
-def _fit_square_centered(mask: "np.ndarray", width: int, height: int) -> "np.ndarray":
-    """Resample a square tile to the smaller cell dimension, then centre it.
-
-    The tilesheet art is square, so on a non-square cell we letterbox rather than
-    stretch: the tile keeps its aspect and sits centred with a thin margin on the
-    longer axis. On a square cell it fills exactly."""
-    side = min(width, height)
-    art = _resample_nearest(mask, side, side)
-    cell = np.zeros((height, width), dtype=np.uint8)
-    oy, ox = (height - side) // 2, (width - side) // 2
-    cell[oy : oy + side, ox : ox + side] = art
-    return cell
 
 
 # --- Die-face pixel art ----------------------------------------------------
@@ -228,22 +187,6 @@ def _feat_art(canvas_w, height, rasterize: _RasterizeFn, v) -> "np.ndarray":
 
 
 # --- Asset loading ---------------------------------------------------------
-def _load_tilesheet() -> "Optional[pygame.Surface]":
-    """The CP437 map tilesheet (16×16 cells), or ``None`` if none is installed.
-
-    Loaded raw (not ``convert_alpha``): we only read each cell's alpha channel
-    into numpy, so no display mode is required and the sheet is resolution
-    independent (a resize just re-letterboxes it)."""
-    for path in config.TILESET_CANDIDATES:
-        if not os.path.exists(path):
-            continue
-        try:
-            return pygame.image.load(path)
-        except Exception:  # noqa: BLE001 - any load failure -> fall back to TTF
-            continue
-    return None
-
-
 def _fit_font(width: int, height: int) -> "Optional[pygame.font.Font]":
     """The largest bundled TTF size whose sample glyphs fit a ``width``×``height``
     cell. Native pygame sizing replaces the old FreeType auto-fit."""
@@ -285,7 +228,6 @@ class GlyphAtlas:
         if self._font is not None:
             tofu = self._font.render(chr(0x10FFFF), True, (255, 255, 255))
             self._notdef = pygame.surfarray.array_alpha(tofu)
-        self._sheet = _load_tilesheet()
         self._digit_fonts: Dict[int, "pygame.font.Font"] = {}
         self._cache: Dict[int, Optional[pygame.Surface]] = {}
         self._dice = self._bake_dice()
@@ -301,9 +243,6 @@ class GlyphAtlas:
 
     # --- rasterisation -----------------------------------------------------
     def _make(self, cp: int) -> "Optional[pygame.Surface]":
-        char = _graphic_source_char(cp)
-        if char is not None:
-            return self._graphic_surface(char)
         return self._prose_surface(cp)
 
     def _prose_surface(self, cp: int) -> "Optional[pygame.Surface]":
@@ -332,15 +271,6 @@ class GlyphAtlas:
             return False
         alpha = pygame.surfarray.array_alpha(glyph)
         return alpha.shape == self._notdef.shape and np.array_equal(alpha, self._notdef)
-
-    def _graphic_surface(self, char: str) -> "Optional[pygame.Surface]":
-        if self._sheet is None:
-            return self._prose_surface(ord(char))  # no sheet -> plain font glyph
-        pos = _CP437_EXTRA.get(char, ord(char))
-        sx, sy = (pos % 16) * 16, (pos // 16) * 16
-        tile = self._sheet.subsurface((sx, sy, 16, 16))
-        alpha = np.ascontiguousarray(pygame.surfarray.array_alpha(tile).T)  # (16,16)
-        return _mask_to_surface(_fit_square_centered(alpha, self.cell_w, self.cell_h))
 
     def _rasterize(self, s: str, px: int) -> "np.ndarray":
         """Rasterise digit string ``s`` at ~``px`` pixels as a coverage mask
@@ -386,15 +316,3 @@ class GlyphAtlas:
         }
         for cp, quad in quads.items():
             out[cp] = _mask_to_surface(np.ascontiguousarray(quad))
-
-
-def _graphic_source_char(cp: int) -> "Optional[str]":
-    """The source character for a Private-Use *graphic* codepoint (map/entity
-    tiles), or ``None`` if ``cp`` is not in the graphic block."""
-    ch = tile_glyphs.graphic_source_char(cp)  # printable-ASCII graphic block
-    if ch is not None:
-        return ch
-    for ch, ecp in tile_glyphs._EXTRA_CP.items():  # the extra map glyphs
-        if ecp == cp:
-            return ch
-    return None

@@ -86,10 +86,6 @@ class QuestLog:
         q = self.quests.get(quest_id)
         return bool(q and q.state == QuestState.READY)
 
-    def is_done(self, quest_id: str) -> bool:
-        q = self.quests.get(quest_id)
-        return bool(q and q.state == QuestState.DONE)
-
     def turn_in(self, quest_id: str, engine) -> bool:
         q = self.quests.get(quest_id)
         if q and q.state == QuestState.READY:

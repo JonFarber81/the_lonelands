@@ -1,5 +1,12 @@
 # Full-colour sprite tileset for the play field, with an ASCII toggle
 
+## Status
+
+**Superseded by ADR-0015 (ASCII-only play field).** Only Phase 0 (the hidden
+`--sprites` vertical slice) ever shipped; the game has since committed to a
+classic ASCII look, and both the sprite path and the CP437 map tilesheet
+described below have been removed. Kept for the record of what was tried.
+
 ## Context
 
 The play field has always been drawn as coloured glyphs. ADR-0001 baked custom

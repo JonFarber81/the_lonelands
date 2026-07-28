@@ -31,7 +31,7 @@ class Engine:
         self.last_roll: "RollResult | None" = None
         self.mouse_location = (0, 0)
         # The scrolling viewport offset, recomputed each frame in ``render`` and
-        # shared by the map/sprite renderers and the targeting reticles.
+        # shared by the map renderer and the targeting reticles.
         self.camera = Camera()
         self.flags: Dict[str, Any] = {}
         self.turn_count = 0

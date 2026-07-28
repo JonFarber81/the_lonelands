@@ -129,10 +129,6 @@ class Actor(Entity):
         if npc:
             npc.parent = self
 
-    @property
-    def is_alive(self) -> bool:
-        return bool(self.ai) or self.npc is not None
-
 
 class Item(Entity):
     def __init__(

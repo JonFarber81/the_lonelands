@@ -9,7 +9,7 @@ single-node, lambda-free dialog tree is flagged `keep_tree` and pickled as-is.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from lonelands.components.ai import IdleWanderer
 from lonelands.components.equipment import Equipment

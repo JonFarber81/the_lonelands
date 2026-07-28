@@ -19,7 +19,7 @@ Each drawer takes ``(screen, cx, cy, s, col, w)`` — the icon centre, the half-
 from __future__ import annotations
 
 import math
-from typing import Callable, Optional, Tuple
+from typing import Callable, Tuple
 
 import pygame
 

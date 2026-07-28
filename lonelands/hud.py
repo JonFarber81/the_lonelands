@@ -18,7 +18,8 @@ import pygame
 
 from lonelands import character, color, config
 from lonelands.config import MAP_HEIGHT, MAP_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH
-from lonelands.render_functions import endurance_color
+
+Color = Tuple[int, int, int]
 
 if TYPE_CHECKING:
     from lonelands.display import Display
@@ -57,7 +58,7 @@ def render(display: "Display", engine: "Engine", banner: bool = True) -> None:
 def _banner(display: "Display", engine: "Engine") -> None:
     """The location name in a slim translucent bar across the top of the map."""
     ui = display.ui
-    cw, ch = display.cell_w, display.cell_h
+    cw = display.cell_w
     ox, oy = display.offset
     map_w = MAP_WIDTH * cw
     h = int(ui.subtitle.get_linesize() * 1.15)

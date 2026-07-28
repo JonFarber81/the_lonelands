@@ -22,7 +22,7 @@ of **Tyrn Gorthad** to recover a lost star-brooch of Arnor.
 
 ## Screens
 
-**Bree, the hub town** — the CP437 map with the pixel HUD: a sidebar sheet, the
+**Bree, the hub town** — the ASCII map with the pixel HUD: a sidebar sheet, the
 Chronicle log, and the location banner.
 
 ![Bree, the hub town](screenshots/bree_town.png)
@@ -41,11 +41,10 @@ python3 main.py
 
 The window, rendering, and input run on **pygame**; **tcod** is retained only as
 a headless library for field-of-view and pathfinding (see `docs/adr/0010`). The
-map and its creatures are drawn from a **Wanderlust** 16×16 CP437 tilesheet (a
-Dwarf-Fortress-style sheet, kept local — see `lonelands/assets/tiles/README.md`)
-and the map/HUD keep the bundled **Atkinson Hyperlegible Mono** font; menus and
-dialogs render natively in a proportional font. If the tilesheet is absent the
-map falls back to the font's own glyphs, so the game always runs.
+game is a classic **ASCII** roguelike (ADR-0015): the map and its creatures are
+drawn as coloured glyphs from the bundled **Atkinson Hyperlegible Mono** font,
+the same face the map/HUD use; menus and dialogs render natively in a
+proportional font.
 
 ## What's in this slice
 
@@ -136,9 +135,8 @@ map falls back to the font's own glyphs, so the game always runs.
 ```
 main.py              entry point + pygame window / event / resize loop
 lonelands/
-  config.py          screen/layout constants, fonts, tilesets, difficulties
-  fonts.py           pygame glyph atlas: prose + CP437 tiles + dice faces
-  tile_glyphs.py     map/entity char → tilesheet code-point mapping
+  config.py          screen/layout constants, fonts, difficulties
+  fonts.py           pygame glyph atlas: prose + dice faces
   color.py           the palette
   dice.py            the d20 Check engine (Critical / Fumble / Advantage)
   dice_glyphs.py     die-face glyphs for the dice tray
@@ -201,10 +199,6 @@ people's work, and this section notes what belongs to whom.
   Authors (Braille Institute of America), used under the **SIL Open Font License
   1.1** (see the bundled `OFL.txt`). The native menus otherwise fall back to your
   system's fonts via pygame.
-- **Wanderlust** CP437 tileset by **Kynsmer** — the map tilesheet. It ships with
-  no explicit license, so it is **not committed**; each developer downloads their
-  own copy (see `lonelands/assets/tiles/README.md`). The game runs without it,
-  falling back to font glyphs.
 
 **Setting & rules**
 - **Middle-earth, Eriador, and the Third Age** are the creation of **J.R.R.

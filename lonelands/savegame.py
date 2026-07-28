@@ -20,7 +20,7 @@ from __future__ import annotations
 import lzma
 import os
 import pickle
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from lonelands.engine import Engine

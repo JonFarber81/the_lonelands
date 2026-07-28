@@ -5,14 +5,13 @@ from typing import TYPE_CHECKING, Optional, Tuple
 
 from lonelands import awareness
 from lonelands import color
-from lonelands import tile_types
 from lonelands.components.fighter import CRIT_BLEED
 from lonelands.dice import rng, roll_check, roll_damage
 from lonelands.exceptions import Impossible
 
 if TYPE_CHECKING:
     from lonelands.engine import Engine
-    from lonelands.entity import Actor, Entity, Item
+    from lonelands.entity import Actor, Item
     from lonelands.game_map import GameMap
 
 
@@ -117,10 +116,6 @@ class ActionWithDirection(Action):
     @property
     def dest_xy(self) -> Tuple[int, int]:
         return self.entity.x + self.dx, self.entity.y + self.dy
-
-    @property
-    def blocking_entity(self) -> Optional["Entity"]:
-        return self.engine.game_map.get_blocking_entity_at(*self.dest_xy)
 
     @property
     def target_actor(self) -> Optional["Actor"]:

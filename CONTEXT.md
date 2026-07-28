@@ -388,34 +388,24 @@ unreadable).
   breakdown, lineage, nodes). The deep view is self-contained — it never makes
   the player rely on the glance.
 
-### The play field: sprites & ASCII
+### The play field: ASCII
 
-The map (the play field, distinct from the **chrome**) can be drawn two ways.
-The words below name *what the player sees*, never how it is built.
+The map (the play field, distinct from the **chrome**) is a classic ASCII
+roguelike view (ADR-0015). The words below name *what the player sees*, never
+how it is built.
 
-- **Sprite mode** — the default look: the map is drawn from full-colour **tile
-  sheet** art, one 16×16 square tile per cell. **ASCII mode** — the classic
-  roguelike look, every drawable shown as its coloured letter/glyph. The two are
-  the same world seen two ways; a single **toggle** switches the play field
-  between them, and the chrome is unaffected either way.
-- **Tile sheet** — a bundled atlas of 16×16 pixel-art tiles (the Kenney
-  Roguelike sets are the canonical backbone) from which Sprite mode draws. A
-  tile is *full-colour* — it is never re-tinted by an entity's colour the way an
-  ASCII glyph is.
-- **Sprite key** — a drawable's art *identity*, distinct from its ASCII glyph.
-  Many things share one glyph (every orc is `o`) but each has its own Sprite key,
-  so Sprite mode can show a green orc where ASCII shows a letter. The **race**
-  crowd (ADR 0009) carries a Sprite key alongside its race-letter; `@`
-  hand-authored NPCs carry their own.
-- **Terrain layer / Entity layer** — the two stacked halves of a map cell in
-  Sprite mode. The **Terrain layer** is the ground (grass, road, stone floor);
-  the **Entity layer** is what stands on it (a creature, an item), drawn *over*
-  the terrain with transparency — so a hobbit stands *on* the grass and a dropped
-  blade shows *under* the orc above it. ASCII mode collapses both to one glyph.
-- **Remembered / unseen** — a Terrain tile inside FOV is drawn full-bright; one
-  the player has seen but cannot currently see is **remembered** (drawn dimmed);
-  never-seen cells are **unseen** (black). In Sprite mode this is a dimming of
-  the same colour tile, replacing ASCII mode's separate light/dark glyph colours.
+- **ASCII glyph** — every drawable is shown as a coloured letter or symbol, one
+  glyph per cell, drawn from the bundled monospace face and tinted by its
+  colour. A wall is `#`, a floor `.`, the player `@`. (An earlier plan for a
+  full-colour sprite/tile-sheet play field, ADR-0013, was dropped — see
+  ADR-0015.)
+- **Race letter vs. `@`** — many things share a glyph (every orc is `o`); the
+  **race** crowd (ADR 0009) is drawn by its race-letter, while `@` is reserved
+  for the player and hand-authored NPCs.
+- **Light / remembered / unseen** — a tile inside FOV is drawn in its **light**
+  colour; one the player has seen but cannot currently see is **remembered**
+  (drawn in its dimmer **dark** colour); never-seen cells are **unseen** (black).
+  Each tile carries the two colours so the map keeps that memory-shaded look.
 
 ## Development & tooling
 

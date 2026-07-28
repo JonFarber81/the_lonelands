@@ -29,8 +29,7 @@ def opt(text, goto=None, do=None, show=None, handler=None) -> Dict[str, Any]:
 # — keep the roguelike '@', reserving that glyph for the folk you seek out by
 # name. RACE_GLYPHS is the single source of truth: a new lettered NPC draws its
 # glyph from here by race, and a new race adds exactly one entry. Glyphs are
-# printable ASCII (tileset-backed, see tile_glyphs) and never collide with the
-# beast letters in content.py.
+# printable ASCII and never collide with the beast letters in content.py.
 NPC_GLYPH = "@"  # player + hand-authored principals and fixed bystanders
 RACE_GLYPHS: Dict[str, str] = {
     "man": "m",
@@ -47,8 +46,7 @@ def make_npc(char, col, name, title, tree) -> Actor:
 
 
 # A wooden signpost: an examinable prop the player bumps to read (reuses the NPC
-# dialog machinery — a single node of text and one line to step away). Glyph is
-# printable ASCII so the tileset backs it (see tile_glyphs.graphic_cp).
+# dialog machinery — a single node of text and one line to step away).
 SIGNPOST_COLOR = (0x9A, 0x7C, 0x54)
 
 

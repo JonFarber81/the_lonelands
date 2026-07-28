@@ -24,7 +24,7 @@ def test_seam_glyph_maps_edges_to_line_glyphs():
 
 
 def test_seam_glyph_matches_real_road_edges():
-    # Bree (0,0) is the crossing of three roads — every axis, so a ┼.
+    # Bree (0,0) is the crossing of three roads — every axis, so a +.
     assert om.seam_glyph(overworld.road_edges((0, 0))) == om.ROAD_CROSS
     # Weathertop (2,0) sits along the East Road's east–west run.
     assert om.seam_glyph(overworld.road_edges((2, 0))) == om.ROAD_H
@@ -94,7 +94,7 @@ def test_buffer_marks_the_player_region():
 
 
 def test_deeps_cells_get_the_deeps_glyph():
-    # Weathertop (2,0) carries 3 deeps -> a ▼ appears somewhere in its block.
+    # Weathertop (2,0) carries 3 deeps -> a 'v' appears somewhere in its block.
     buf = om.render_map(player_coord=(0, 0), cursor_coord=(0, 0))
     ox, oy = om.cell_origin((2, 0))
     block = [buf.ch[oy + r][ox + c]

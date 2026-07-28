@@ -29,3 +29,8 @@ grid, per-cell colour, and the crisp integer-scaled resize path for free.
   is which face.
 - This is the reusable seam for any future bespoke glyph (map icons, UI marks):
   add a codepoint to the registry and a draw routine to the baker.
+- **Amended by ADR-0015.** The map-art use of this seam (a CP437 tilesheet baked
+  into a separate `graphic_cp` codepoint block) has been retired with the move to
+  an ASCII-only play field. The dice faces in `dice_glyphs.py` are now the sole
+  remaining bake — the seam still exists for them, and for any future bespoke
+  glyph, but the map and its entities render as plain TTF glyphs.

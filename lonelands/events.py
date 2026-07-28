@@ -53,7 +53,7 @@ class KeySym(enum.IntEnum):
     TAB = 9
 
     # Function keys (SDL2 keycodes, matching pygame.K_F*). F12 opens the debug
-    # menu (ADR 0012); F5–F11 drive the debug-only sprite tone tuner (#92 spike).
+    # menu (ADR 0012); the rest are kept as a complete, tcod-cross-checked table.
     F5 = 1073741886
     F6 = 1073741887
     F7 = 1073741888
