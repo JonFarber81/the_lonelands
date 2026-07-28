@@ -403,6 +403,27 @@ def patches(gm: GameMap, tile, count: int, radius: int, chance: float) -> None:
         patch(gm, tile, cx, cy, radius, chance)
 
 
+def river(gm: GameMap, col: int, *, half: int = 2, banks=None,
+          bank_chance: float = 0.28) -> int:
+    """A straight north-south river down column `col`, `2*half+1` tiles wide,
+    optionally fringed with a ragged line of `banks` tiles (willows, alders)
+    crowding each shore. Returns `col` so a caller can lay its crossing at the
+    same column. The water paints over whatever terrain is there; a road threaded
+    across it later fords the water rather than drowning (`_lay_road`). Shared by
+    the river-crossing set-pieces (Brandywine, the Hoarwell, the Bruinen)."""
+    for y in range(gm.height):
+        for dx in range(-half, half + 1):
+            x = col + dx
+            if gm.in_bounds(x, y):
+                gm.tiles[x, y] = tile_types.water
+    if banks is not None:
+        for y in range(gm.height):
+            for x in (col - half - 1, col + half + 1):
+                if gm.in_bounds(x, y) and rng.random() < bank_chance:
+                    gm.tiles[x, y] = banks
+    return col
+
+
 ROAD_BUFFER = 4    # keep-away radius (Chebyshev) around road tiles (ADR 0007)
 _BRIGAND_ROAD_BIAS = 0.65   # chance a brigand aims for the road — a gentle bias,
                             # not a hard rule (ADR 0007): they still turn up off-road
@@ -731,9 +752,7 @@ def generate_sarn_ford(engine) -> GameMap:
     scatter(gm, tile_types.tree, 0.05)
 
     river_x, ford_y = gm.width // 2, gm.height // 2
-    for y in range(gm.height):                      # the Brandywine, three wide
-        for dx in range(-1, 2):
-            gm.tiles[river_x + dx, y] = tile_types.water
+    river(gm, river_x, half=1)                      # the Brandywine, three wide
     for dx in range(-2, 3):                         # the ford (stony shallows)
         gm.tiles[river_x + dx, ford_y] = tile_types.bridge
     for x in list(range(river_x - 7, river_x - 1)) + list(range(river_x + 3, river_x + 9)):
@@ -997,15 +1016,7 @@ def generate_brandywine_bridge(engine) -> GameMap:
     scatter(gm, T.tree, 0.05)
 
     # the Brandywine, broad, running north-south down the map's middle
-    river_x = gm.width // 2
-    for y in range(gm.height):
-        for dx in range(-2, 3):
-            gm.tiles[river_x + dx, y] = T.water
-    for wy in range(gm.height):                     # willows crowding the banks
-        if rng.random() < 0.3:
-            gm.tiles[river_x - 3, wy] = T.tree
-        if rng.random() < 0.3:
-            gm.tiles[river_x + 3, wy] = T.tree
+    river_x = river(gm, gm.width // 2, half=2, banks=T.tree, bank_chance=0.3)
 
     # the broad stone bridge carrying the Road across (three rows wide)
     for dy in (-1, 0, 1):
@@ -1059,18 +1070,11 @@ def generate_last_bridge(engine) -> GameMap:
     scatter(gm, T.grass_low, 0.22)                  # scrubby lone-land verge
     scatter(gm, T.tree, 0.04)
 
-    river_x = gm.width // 2
-    for y in range(gm.height):                      # the Hoarwell (Mitheithel)
-        for dx in range(-2, 3):
-            gm.tiles[river_x + dx, y] = T.water
+    river_x = river(gm, gm.width // 2, half=2, banks=T.tree,   # the Hoarwell (Mitheithel)
+                    bank_chance=0.25)
     for dy in (-1, 0, 1):                           # the last stone bridge
         for dx in range(-2, 3):
             gm.tiles[river_x + dx, ROAD_ROW + dy] = T.bridge
-    for wy in range(gm.height):                     # alder and willow on the banks
-        if rng.random() < 0.25:
-            gm.tiles[river_x - 3, wy] = T.tree
-        if rng.random() < 0.25:
-            gm.tiles[river_x + 3, wy] = T.tree
     return _finish_surface(gm, cell)
 
 
@@ -1100,10 +1104,7 @@ def generate_fords_of_bruinen(engine) -> GameMap:
     scatter(gm, T.grass_low, 0.16)
     scatter(gm, T.tree, 0.06)
 
-    river_x = gm.width // 2
-    for y in range(gm.height):                      # the loud Bruinen, running fast
-        for dx in range(-2, 3):
-            gm.tiles[river_x + dx, y] = T.water
+    river_x = river(gm, gm.width // 2, half=2)      # the loud Bruinen, running fast
     for dx in range(-3, 4):                          # the ford (stony shallows)
         gm.tiles[river_x + dx, ROAD_ROW] = T.bridge
     patches(gm, T.hill, 5, 3, 0.6)                  # the broken rocky ground about it
@@ -1127,25 +1128,27 @@ def generate_rivendell(engine) -> GameMap:
     edge_belt(gm, T.tree, "s", 4, 0.7)
     patches(gm, T.hill, 5, 3, 0.6)
 
-    # the Bruinen falling through the vale (north-south, west of the House)
-    river_x = gm.width // 2 - 8
-    for y in range(gm.height):
-        rx = river_x + (1 if (y % 5) < 2 else 0)
-        for dx in range(-1, 2):
-            gm.tiles[rx + dx, y] = T.water
-    for dx in range(-1, 2):                          # a footbridge to the House
+    # the Bruinen falling through the vale, west of the House, with a footbridge
+    river_x = river(gm, gm.width // 2 - 8, half=1, banks=T.tree, bank_chance=0.25)
+    for dx in range(-1, 2):
         gm.tiles[river_x + dx, ROAD_ROW] = T.bridge
 
-    # the Last Homely House: a many-roomed hall in the green heart of the vale
-    hx0, hy0, hx1, hy1 = 34, 14, 52, 30
-    building(gm, hx0, hy0, hx1, hy1, door=(hx0, ROAD_ROW))
+    # the Last Homely House: a many-roomed hall on the vale's north side, its
+    # gate facing south onto the road. Seated high enough above ROAD_ROW that the
+    # threaded East Road (which bows up to `_ROAD_MEANDER` tiles) runs *up to* the
+    # gate, never through the halls.
+    hx0, hy0, hx1, hy1 = 34, 4, 52, 16
+    gate_x = (hx0 + hx1) // 2
+    building(gm, hx0, hy0, hx1, hy1, door=(gate_x, hy1))
     for x in range(hx0 + 1, hx1):                    # an inner cross-wall — its halls
-        gm.tiles[x, 22] = T.building_wall
-    gm.tiles[43, 22] = T.door
-    for y in range(hy0 + 1, hy1):                    # a courtyard wing
-        gm.tiles[43, y] = T.building_wall
-    gm.tiles[43, 18] = T.door
-    gm.tiles[hx0 + 3:hx1 - 3, 23:hy1 - 1] = T.floor
+        gm.tiles[x, 10] = T.building_wall
+    gm.tiles[gate_x, 10] = T.door
+    for y in range(hy0 + 1, 10):                     # a courtyard wing off the gate-hall
+        gm.tiles[gate_x, y] = T.building_wall
+    gm.tiles[gate_x, 7] = T.door
+    gm.tiles[hx0 + 3:hx1 - 3, 11:hy1] = T.floor
+    for y in range(hy1 + 1, ROAD_ROW):              # the path from the gate to the road
+        gm.tiles[gate_x, y] = T.road
     return _finish_surface(gm, cell)
 
 
