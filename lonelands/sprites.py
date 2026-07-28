@@ -189,6 +189,16 @@ _WARDROBE: Dict[str, Tuple[Tuple[Layer, ...], Tuple[Layer, ...], Tuple[Layer, ..
 }
 
 
+# The player alone: a dark, weathered Ranger of the North — a dark cloak over a
+# brown body, long dark hair — so Strider reads apart from the plain ``@`` folk
+# (who keep the ``ranger`` key). A fixed stack, not rolled, since there is one hero.
+PLAYER_SPRITE: Tuple[Layer, ...] = (
+    ("chars", 0, 2),    # weathered (brown) body
+    ("chars", 15, 7),   # dark travelling cloak
+    ("chars", 24, 5),   # long dark hair
+)
+
+
 def crowd_layers(char: str, seed: int) -> Optional[Tuple[Layer, ...]]:
     """A deterministic body+clothing+hair stack for a race-lettered wanderer, or
     ``None`` for anything that isn't one (the player, orcs, items).
@@ -321,6 +331,7 @@ class SpriteMap:
             screen.blits(blits, doreturn=False)
 
         # --- entity layer (visible cells only, painter-ordered) ---
+        player = getattr(getattr(game_map, "engine", None), "player", None)
         entities = sorted(game_map.entities, key=lambda e: e.render_order.value)
         ent_blits = []
         for e in entities:
@@ -328,14 +339,18 @@ class SpriteMap:
                 continue
             if not bool(visible[e.x, e.y]):
                 continue
-            # Prefer a mixed body+clothing+hair stack for the race-lettered crowd
-            # (varied but stable per entity); fall back to a flat sprite key.
-            layers = crowd_layers(e.char, id(e))
-            if layers is not None:
-                tile = self._composite(layers, dim=False)
+            if e is player:
+                # The hero gets his own dark ranger sprite, apart from the crowd.
+                tile = self._composite(PLAYER_SPRITE, dim=False)
             else:
-                key = resolve_entity(e.char)
-                tile = self._tile(key, dim=False) if key is not None else None
+                # Prefer a mixed body+clothing+hair stack for the race-lettered
+                # crowd (varied but stable per entity); else a flat sprite key.
+                layers = crowd_layers(e.char, id(e))
+                if layers is not None:
+                    tile = self._composite(layers, dim=False)
+                else:
+                    key = resolve_entity(e.char)
+                    tile = self._tile(key, dim=False) if key is not None else None
             if tile is not None:
                 ent_blits.append((tile, (ox + e.x * cell, oy + e.y * cell)))
         if ent_blits:
