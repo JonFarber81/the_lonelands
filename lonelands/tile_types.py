@@ -185,3 +185,24 @@ ruin_entrance = new_tile(
     kind=KIND_RUIN_ENTRANCE,
     sprite="ruin_entrance",
 )
+
+# --- Furniture -------------------------------------------------------------
+# Wood props for building interiors (the Prancing Pony common room, etc.). No
+# sprite key yet: Terrain_Objects.png has furniture, but the cells aren't
+# owner-confirmed and the art isn't committed, so these stay ASCII-only (a
+# warm oak brown) for now — a table blocks the tile, a stool is walkable so a
+# patron can stand on it as if seated.
+table = new_tile(
+    walkable=False,
+    transparent=True,
+    dark=(0x03C0, (0x5A, 0x42, 0x2A), color.black),        # 'π' — a table
+    light=(0x03C0, (0x9C, 0x76, 0x48), (0x22, 0x1E, 0x16)),
+    sprite="",
+)
+stool = new_tile(
+    walkable=True,
+    transparent=True,
+    dark=(0x2022, (0x52, 0x3C, 0x26), color.black),        # '•' — a stool
+    light=(0x2022, (0x88, 0x66, 0x42), (0x22, 0x1E, 0x16)),
+    sprite="",
+)

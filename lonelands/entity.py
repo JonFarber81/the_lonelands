@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from lonelands.components.level import Level
     from lonelands.components.npc import NPC
     from lonelands.game_map import GameMap
+    from lonelands.sprites import SpriteRef
 
 T = TypeVar("T", bound="Entity")
 
@@ -36,6 +37,7 @@ class Entity:
         blocks_movement: bool = False,
         render_order: RenderOrder = RenderOrder.CORPSE,
         sprite: str = "",
+        portrait: Optional["SpriteRef"] = None,
     ) -> None:
         self.x = x
         self.y = y
@@ -48,6 +50,10 @@ class Entity:
         # tinted-tile look-alike of `char`. Empty means "ASCII only, forever"
         # (the bespoke-four props); every other drawable should carry one.
         self.sprite = sprite
+        # This entity's own dialog-portrait cell (ADR 0016 follow-up; issue
+        # #125/#128), or None to fall back to sprites.DEFAULT_PORTRAIT — see
+        # sprites.portrait_ref.
+        self.portrait = portrait
         if parent is not None:
             self.parent = parent
             parent.entities.add(self)
@@ -99,6 +105,7 @@ class Actor(Entity):
         level: Optional["Level"] = None,
         npc: Optional["NPC"] = None,
         sprite: str = "",
+        portrait: Optional["SpriteRef"] = None,
     ) -> None:
         super().__init__(
             x=x,
@@ -109,6 +116,7 @@ class Actor(Entity):
             blocks_movement=True,
             render_order=RenderOrder.ACTOR,
             sprite=sprite,
+            portrait=portrait,
         )
         self.ai: Optional["BaseAI"] = ai_cls(self) if ai_cls else None
 
