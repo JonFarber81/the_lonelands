@@ -89,13 +89,14 @@ def _sidebar(display: "Display", rect, engine: "Engine") -> None:
     # one, sits to the left of the name/culture block, scaled to that block's
     # height; with no atlas the header collapses to today's text-only layout —
     # no gap or placeholder box.
-    header_h = ui.line + step
+    header_y = cy
+    portrait_h = int((ui.line + step) * 1.7)
     portrait = display.portrait_surface(p)
     tx = ix
     ui.selection(ix - ui.pad // 2, cy, iw + ui.pad, ui.line)
     if portrait is not None:
-        ui.portrait(ix, cy, header_h, header_h, portrait)
-        tx = ix + header_h + ui.pad // 2
+        ui.portrait(ix, cy, portrait_h, portrait_h, portrait)
+        tx = ix + portrait_h + ui.pad // 2
     ui.text(tx, cy, p.name, color.tier_value, ui.bold)
     if config.DEBUG:
         mark = "GOD [DEBUG]" if engine.god_mode else "[DEBUG]"
@@ -104,6 +105,8 @@ def _sidebar(display: "Display", rect, engine: "Engine") -> None:
     cy += ui.line
     ui.text(tx, cy, hero.culture, color.ranger_green, ui.small)
     cy += step + ui.pad // 3
+    if portrait is not None:
+        cy = max(cy, header_y + portrait_h + ui.pad // 3)
 
     # Vitals — the always-on bars.
     cy = ui.bar(ix, cy, iw, f.endurance / max(1, f.max_endurance),
