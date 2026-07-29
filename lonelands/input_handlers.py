@@ -764,11 +764,11 @@ class CharacterScreenHandler(AskUserHandler):
 
         # Identity — the header block. A portrait (issue #127), when the atlas
         # has one, sits to the left of the identity block — mirroring the
-        # sidebar (#126) at a slightly larger ~64px scale since this screen
-        # has more room; with no atlas the header collapses to today's
-        # text-only layout, no gap or placeholder box.
+        # sidebar (#126) at a larger scale since this screen has more room;
+        # with no atlas the header collapses to today's text-only layout, no
+        # gap or placeholder box.
         ident = f"{self.engine.player.name} · {hero.culture} · {hero.calling}"
-        portrait_size = 64
+        portrait_size = 96
         portrait = display.portrait_surface(self.engine.player)
         y0 = y
         tx = x
