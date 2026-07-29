@@ -85,26 +85,29 @@ def _grid(sheet: str, index: int, cols: int) -> SpriteRef:
 # pattern, respectively), which read as broken seams in an actual screenshot.
 # This *Ultimate Roguelike 2.0* sheet is dungeon/graveyard-themed and has no
 # real grass-field or dirt-road ground texture at all, so grass/grass_low/
-# hill/road/bridge/cobble are the closest available substitutes (a leafy
-# foliage cluster for the grass family, a brick-paver floor for the paved
-# family) — not a claim that this is what real grass or road art looks like.
+# hill/road/bridge/cobble are the closest available substitutes — not a claim
+# that this is what real grass or road art looks like. Picked and confirmed
+# with the project owner from a labelled render of the sheet: row 0's
+# flagstone-paver blocks (cols 5–6) read as a road/floor at a glance; row 1's
+# speckle patterns and tombstone-arch silhouettes (cols 2–3, 5–6) read as
+# green ground cover once tinted, even though a literal tombstone isn't grass.
 _TERRAIN_REFS: Dict[str, "SpriteRef"] = {
-    "floor": SpriteRef("Terrain", 5, 0),           # small brick-paver floor
+    "floor": SpriteRef("Terrain", 5, 0),           # flagstone-paver blocks
     "wall": SpriteRef("Terrain", 0, 0),             # cracked stone wall panel
     "rubble": SpriteRef("Terrain", 1, 1),           # scattered gravel/dot debris
     "down_stairs": SpriteRef("Terrain", 9, 1),      # diagonal ascending steps
     "up_stairs": SpriteRef("Terrain", 9, 1),        # same steps art, different tint
     "door": SpriteRef("Terrain", 4, 2),             # rounded archway door
-    "grass": SpriteRef("Terrain", 5, 5),            # leafy foliage cluster
-    "grass_low": SpriteRef("Terrain", 6, 5),        # foliage cluster, variant
+    "grass": SpriteRef("Terrain", 2, 1),            # sparse speckle pattern
+    "grass_low": SpriteRef("Terrain", 3, 1),        # denser speckle pattern
     "tree": SpriteRef("Terrain_Objects", 4, 6),     # an actual conifer silhouette
     "water": SpriteRef("Terrain", 0, 1),            # horizontal wave pattern
-    "road": SpriteRef("Terrain", 0, 3),             # brick-paver floor (substitute)
-    "bridge": SpriteRef("Terrain", 0, 3),           # same paver, tinted for wood/plank
-    "hill": SpriteRef("Terrain", 5, 5),             # same foliage cluster as grass —
-    # the (7, 5) variant has an internal gap pattern that reads as a face under a
-    # brown/tan tint; (5, 5) stayed legible as ground cover at both tints tried.
-    "cobble": SpriteRef("Terrain", 0, 3),           # brick-paver floor (town cobble)
+    "road": SpriteRef("Terrain", 5, 0),             # flagstone-paver blocks
+    "bridge": SpriteRef("Terrain", 6, 0),           # paver blocks, variant (plank tint)
+    "hill": SpriteRef("Terrain", 3, 1),             # dense speckle pattern, tinted tan —
+    # a literal tombstone silhouette (tried first) reads as exactly that at
+    # any tint; the speckle stayed abstract enough to pass as dirt/scrub.
+    "cobble": SpriteRef("Terrain", 5, 0),           # flagstone-paver blocks (town cobble)
     "building_wall": SpriteRef("Terrain", 2, 0),    # cracked stone chunk
     "ruin_entrance": SpriteRef("Terrain", 9, 1),    # stairs art, tinted for a ruin
 }
