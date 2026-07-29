@@ -215,6 +215,15 @@ def generate_bree(engine) -> GameMap:
         gm.tiles[x, 9] = T.building_wall
     gm.tiles[15, 8] = T.door
     gm.tiles[8, 7] = T.building_wall                     # the great hearth's chimney
+    # the bar-room furnishings: two board-tables with stools drawn round them,
+    # set on open floor clear of Butterbur's bar (10,11) and the lodgers.
+    for tx, ty, stools in [
+        (10, 9, [(9, 9), (11, 9), (10, 10)]),            # a table by the hearth
+        (13, 11, [(13, 10), (14, 11), (13, 12)]),        # a table down the hall
+    ]:
+        gm.tiles[tx, ty] = T.table
+        for sx, sy in stools:
+            gm.tiles[sx, sy] = T.stool
 
     # --- Mistress Rushlight's cot and physic-garden (SW) ------------------
     building(gm, 5, 30, 10, 35, door=(10, 33))

@@ -145,3 +145,34 @@ def test_enabled_respects_the_ascii_toggle(monkeypatch):
     finally:
         config.ASCII_ONLY = False
     assert sprites.enabled() is True
+
+
+# --- Portraits (ADR-0016 follow-up; issue #125) -------------------------
+def test_portrait_ref_defaults_to_the_shared_bust():
+    entity = Actor(name="No Portrait")
+    assert sprites.portrait_ref(entity) == sprites.DEFAULT_PORTRAIT
+
+
+def test_portrait_ref_prefers_the_entity_s_own_cell():
+    own = sprites.SpriteRef("Portraits", 0, 2)
+    entity = Actor(name="Has Portrait", portrait=own)
+    assert sprites.portrait_ref(entity) == own
+
+
+@requires_tiles
+def test_sprite_atlas_bakes_the_default_portrait(sprite_atlas):
+    surf = sprite_atlas.portrait_surface(Actor(name="No Portrait"))
+    assert surf is not None
+    assert surf.get_size() == (48, 48)
+
+
+@requires_tiles
+def test_sprite_atlas_returns_none_for_a_portrait_cell_out_of_bounds(sprite_atlas):
+    entity = Actor(name="Bad Portrait", portrait=sprites.SpriteRef("Portraits", 99, 99))
+    assert sprite_atlas.portrait_surface(entity) is None
+
+
+def test_portrait_surface_is_none_without_a_tiles_path(monkeypatch):
+    monkeypatch.delenv("LONELANDS_TILES", raising=False)
+    atlas = sprites.SpriteAtlas(config.TILE_WIDTH, config.TILE_HEIGHT)
+    assert atlas.portrait_surface(Actor(name="No Art")) is None

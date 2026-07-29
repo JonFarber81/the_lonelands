@@ -227,6 +227,18 @@ class UI:
         """A straight line — the Path tree's prereq edges (ADR 0011)."""
         pygame.draw.line(self.screen, col, (x1, y1), (x2, y2), width)
 
+    def portrait(self, x: int, y: int, w: int, h: int, surf: Optional["pygame.Surface"]) -> None:
+        """Blit an already-tinted portrait surface (see
+        :meth:`lonelands.sprites.SpriteAtlas.portrait_surface`) scaled into
+        the ``w``x``h`` rect at ``(x, y)``. No-op if ``surf`` is ``None`` —
+        no atlas on disk (``LONELANDS_TILES`` unset, licensed art never
+        committed) degrades to drawing nothing, same as every other sprite
+        (ADR 0016)."""
+        if surf is None:
+            return
+        scaled = pygame.transform.smoothscale(surf, (w, h))
+        self.screen.blit(scaled, (x, y))
+
     def outline(self, x: int, y: int, w: int, h: int, border: Color,
                 fill: Optional[Tuple[int, ...]] = None, width: int = 2,
                 radius: int = 8) -> None:

@@ -762,14 +762,27 @@ class CharacterScreenHandler(AskUserHandler):
         y = inner.y
         c2 = x + iw // 3           # value / second column
 
-        # Identity — the header block.
+        # Identity — the header block. A portrait (issue #127), when the atlas
+        # has one, sits to the left of the identity block — mirroring the
+        # sidebar (#126) at a slightly larger ~64px scale since this screen
+        # has more room; with no atlas the header collapses to today's
+        # text-only layout, no gap or placeholder box.
         ident = f"{self.engine.player.name} · {hero.culture} · {hero.calling}"
+        portrait_size = 64
+        portrait = display.portrait_surface(self.engine.player)
+        y0 = y
+        tx = x
         ui.selection(x - ui.pad // 2, y, iw + ui.pad, ui.line)
-        ui.text(x, y, ident, color.tier_value, ui.bold)
+        if portrait is not None:
+            ui.portrait(x, y, portrait_size, portrait_size, portrait)
+            tx = x + portrait_size + ui.pad // 2
+        ui.text(tx, y, ident, color.tier_value, ui.bold)
         y += ui.line
         if hero.true_name:
-            ui.text(x, y, hero.true_name, color.ranger_green)
+            ui.text(tx, y, hero.true_name, color.ranger_green)
             y += ui.line
+        if portrait is not None:
+            y = max(y, y0 + portrait_size)
         y += ui.pad // 2
 
         # Advancement strip.

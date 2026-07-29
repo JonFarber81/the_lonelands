@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 
+import pygame
 import pytest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -58,6 +59,15 @@ def test_overlay_menus_render(env):
         ih.DebugMenuHandler,          # the F12 cheat panel (ADR 0012)
     ):
         _render(env, cls(engine))
+
+
+def test_character_screen_renders_with_a_portrait(env, monkeypatch):
+    # No LONELANDS_TILES art on disk in CI, so fake the atlas hit (issue
+    # #127) to exercise the portrait-present branch of the header.
+    disp, _, engine = env
+    surf = pygame.Surface((48, 48), pygame.SRCALPHA)
+    monkeypatch.setattr(disp, "portrait_surface", lambda entity: surf)
+    _render(env, ih.CharacterScreenHandler(engine))
 
 
 def test_debug_teleport_picker_renders(env):
