@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 
+import pygame
 import pytest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -37,6 +38,15 @@ def test_hud_renders_with_empty_log_and_no_roll(env):
     fresh = setup_game.new_game()
     fresh.update_fov()
     hud.render(disp, fresh)  # no roll, quests, or messages yet
+
+
+def test_sidebar_renders_with_a_portrait(env, monkeypatch):
+    # No LONELANDS_TILES art on disk in CI, so fake the atlas hit (issue
+    # #126) to exercise the portrait-present branch of the header.
+    disp, engine = env
+    surf = pygame.Surface((48, 48), pygame.SRCALPHA)
+    monkeypatch.setattr(disp, "portrait_surface", lambda entity: surf)
+    hud.render(disp, engine)  # must not raise
 
 
 def test_hud_panes_tile_the_non_map_screen(env):

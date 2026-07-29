@@ -40,7 +40,7 @@ def _rects(display: "Display") -> "Tuple[Tuple[int,int,int,int], Tuple[int,int,i
 
 def render(display: "Display", engine: "Engine", banner: bool = True) -> None:
     sidebar, chronicle = _rects(display)
-    _sidebar(display.ui, sidebar, engine)
+    _sidebar(display, sidebar, engine)
     _chronicle(display.ui, chronicle, engine)
     # The sidebar and Chronicle are one L-shaped pane: bordered on the outside,
     # seamless where they meet. The only interior line is the divider walling off
@@ -70,7 +70,8 @@ def _banner(display: "Display", engine: "Engine") -> None:
 
 
 # --- sidebar ---------------------------------------------------------------
-def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
+def _sidebar(display: "Display", rect, engine: "Engine") -> None:
+    ui = display.ui
     x, y, w, h = rect
     # Skip the west border: the interior divider (drawn in render) supplies the
     # map seam for the top portion, and below the map the sidebar merges into the
@@ -84,15 +85,24 @@ def _sidebar(ui: "UI", rect, engine: "Engine") -> None:
 
     # Identity — the header block. Under --debug a corner marker rides the name
     # row (ADR 0012): [DEBUG] always, GOD while god mode is on, so a debug run is
-    # never mistaken for a real one.
+    # never mistaken for a real one. A portrait (issue #126), when the atlas has
+    # one, sits to the left of the name/culture block, scaled to that block's
+    # height; with no atlas the header collapses to today's text-only layout —
+    # no gap or placeholder box.
+    header_h = ui.line + step
+    portrait = display.portrait_surface(p)
+    tx = ix
     ui.selection(ix - ui.pad // 2, cy, iw + ui.pad, ui.line)
-    ui.text(ix, cy, p.name, color.tier_value, ui.bold)
+    if portrait is not None:
+        ui.portrait(ix, cy, header_h, header_h, portrait)
+        tx = ix + header_h + ui.pad // 2
+    ui.text(tx, cy, p.name, color.tier_value, ui.bold)
     if config.DEBUG:
         mark = "GOD [DEBUG]" if engine.god_mode else "[DEBUG]"
         col = color.sauron_eye if engine.god_mode else color.section_head
         ui.text_right(inner.right, cy, mark, col, ui.small)
     cy += ui.line
-    ui.text(ix, cy, hero.culture, color.ranger_green, ui.small)
+    ui.text(tx, cy, hero.culture, color.ranger_green, ui.small)
     cy += step + ui.pad // 3
 
     # Vitals — the always-on bars.

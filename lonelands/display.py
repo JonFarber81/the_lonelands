@@ -215,6 +215,13 @@ class Display:
         self._sprite_tinted[key] = tinted
         return tinted
 
+    def portrait_surface(self, entity: object) -> Optional[pygame.Surface]:
+        """The entity's tinted portrait bust (see
+        :meth:`lonelands.sprites.SpriteAtlas.portrait_surface`), or ``None``
+        with no atlas on disk — headers using this should skip the portrait
+        entirely rather than draw a placeholder box (issues #126, #127)."""
+        return self._sprite_atlas.portrait_surface(entity)
+
     @staticmethod
     def _tint(base: Optional[pygame.Surface], fg: Color) -> Optional[pygame.Surface]:
         if base is None:
