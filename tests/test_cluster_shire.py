@@ -92,7 +92,9 @@ def test_hobbiton_has_the_hill_and_smial_doors(game):
     _, gw, _ = game
     hobbiton = _surface(gw, (-3, -1))
     assert _count(hobbiton, tile_types.hill) > 30, "the Hill should rise over Hobbiton"
-    assert _count(hobbiton, tile_types.door) > 4, "no round smial-doors (Bag End & co.)"
+    # Smial-doors (including Bag End) are hobbit_door, not plain door, since
+    # issue #113 gave them their own identity for a future bespoke glyph.
+    assert _count(hobbiton, tile_types.hobbit_door) > 4, "no round smial-doors (Bag End & co.)"
 
 
 def test_brandywine_bridge_has_a_river_and_a_stone_bridge(game):

@@ -107,6 +107,24 @@ door = new_tile(
     kind=KIND_DOOR,
     sprite="door",
 )
+# Issue #113 (ADR-0016): hobbit_door and pony_archway are two of the four
+# bespoke shapes Oryx can't do justice. No sprite key (ASCII-only until
+# custom art lands via the ADR-0001 seam), same treatment as the signpost
+# (story/_helpers.make_signpost, sprite=""). kind=KIND_DOOR is unchanged.
+hobbit_door = new_tile(
+    walkable=True,
+    transparent=True,
+    dark=(ord("+"), (0x6A, 0x50, 0x34), color.black),
+    light=(ord("+"), (0xB0, 0x86, 0x4A), (0x22, 0x1E, 0x18)),
+    kind=KIND_DOOR,
+)
+pony_archway = new_tile(
+    walkable=True,
+    transparent=True,
+    dark=(ord("+"), (0x6A, 0x50, 0x34), color.black),
+    light=(ord("+"), (0xB0, 0x86, 0x4A), (0x22, 0x1E, 0x18)),
+    kind=KIND_DOOR,
+)
 
 # --- Wilderness (overworld) -----------------------------------------------
 grass = new_tile(
@@ -184,6 +202,16 @@ ruin_entrance = new_tile(
     light=(ord(">"), (0xE0, 0xC0, 0x70), (0x22, 0x1E, 0x18)),
     kind=KIND_RUIN_ENTRANCE,
     sprite="ruin_entrance",
+)
+# Issue #113: barrow_mound is the third bespoke shape. Weathertop's
+# watchtower keeps plain ruin_entrance; Tyrn Gorthad's grave-mound gets its
+# own identity. No sprite key (ASCII-only until custom art lands).
+barrow_mound = new_tile(
+    walkable=True,
+    transparent=True,
+    dark=(ord(">"), (0x5A, 0x54, 0x48), color.black),
+    light=(ord(">"), (0xE0, 0xC0, 0x70), (0x22, 0x1E, 0x18)),
+    kind=KIND_RUIN_ENTRANCE,
 )
 
 # --- Furniture -------------------------------------------------------------
