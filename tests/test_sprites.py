@@ -88,6 +88,31 @@ def test_signpost_is_bespoke_ascii_only():
     assert post.sprite == ""
 
 
+def test_hobbit_door_is_bespoke_ascii_only():
+    assert int(tile_types.hobbit_door["light"]["sprite"]) == 0
+    assert int(tile_types.hobbit_door["dark"]["sprite"]) == 0
+
+
+def test_pony_archway_is_bespoke_ascii_only():
+    assert int(tile_types.pony_archway["light"]["sprite"]) == 0
+    assert int(tile_types.pony_archway["dark"]["sprite"]) == 0
+
+
+def test_barrow_mound_is_bespoke_ascii_only():
+    assert int(tile_types.barrow_mound["light"]["sprite"]) == 0
+    assert int(tile_types.barrow_mound["dark"]["sprite"]) == 0
+
+
+def test_bespoke_door_variants_keep_door_semantics():
+    # kind=KIND_DOOR is unchanged, so "is this a door" game logic still holds.
+    assert tile_types.hobbit_door["kind"] == tile_types.KIND_DOOR
+    assert tile_types.pony_archway["kind"] == tile_types.KIND_DOOR
+
+
+def test_barrow_mound_keeps_ruin_entrance_semantics():
+    assert tile_types.barrow_mound["kind"] == tile_types.KIND_RUIN_ENTRANCE
+
+
 # --- sprite_id allocation ----------------------------------------------------
 def test_sprite_id_empty_key_is_zero():
     assert sprites.sprite_id("") == 0

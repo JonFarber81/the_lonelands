@@ -204,7 +204,7 @@ def generate_bree(engine) -> GameMap:
         gm.tiles[x, 14] = T.building_wall
     gm.tiles[ARCH_X, 14] = T.door                        # hall <-> yard
     gm.tiles[PX0 + 1:PX1, 15:PY1] = T.cobble             # the open inn-yard
-    gm.tiles[ARCH_X, PY1] = T.door                       # great archway onto the Road
+    gm.tiles[ARCH_X, PY1] = T.pony_archway                # great archway onto the Road
     for y in range(15, PY1):                             # stable-block, east of yard
         gm.tiles[15, y] = T.building_wall
     gm.tiles[15, 17] = T.door
@@ -258,7 +258,7 @@ def generate_bree(engine) -> GameMap:
                 gm.tiles[x, y] = T.grass_low
     for hx, hy in [(30, 8), (33, 7), (36, 8), (39, 9), (42, 10),
                    (32, 12), (35, 13), (38, 12), (41, 13)]:
-        gm.tiles[hx, hy] = T.door                # the round green door
+        gm.tiles[hx, hy] = T.hobbit_door          # the round green door
         gm.tiles[hx + 1, hy] = T.floor           # the smial behind it
 
     # --- signposts naming the quarters ------------------------------------
@@ -853,7 +853,7 @@ def generate_breeland(engine) -> GameMap:
               (26, 32, 31, 36, (28, 32))]:
         building(gm, *b)
     for sx in (21, 23, 25):                         # smial-doors in a low rise
-        gm.tiles[sx, 34] = T.door
+        gm.tiles[sx, 34] = T.hobbit_door
         gm.tiles[sx, 35] = T.floor
     for x in range(30, 36):                         # rows of Southlinch pipe-weed
         for y in range(33, 37):
@@ -990,7 +990,7 @@ def generate_michel_delving(engine) -> GameMap:
               (40, 27, 45, 31, (42, 31))]:
         building(gm, *b)
     for hx, hy in [(22, 18), (24, 18), (43, 22), (18, 22)]:   # a few round smial-doors
-        gm.tiles[hx, hy] = T.door
+        gm.tiles[hx, hy] = T.hobbit_door
         gm.tiles[hx + 1, hy] = T.floor
     return _finish_surface(gm, cell)
 
@@ -1012,12 +1012,12 @@ def generate_hobbiton(engine) -> GameMap:
                    (6, 11), (11, 11)]:              # smial-doors ringing the Hill
         sx, sy = hx0 + dx, hy0 + dy
         if gm.in_bounds(sx, sy):
-            gm.tiles[sx, sy] = T.door
+            gm.tiles[sx, sy] = T.hobbit_door
             if gm.in_bounds(sx, sy + 1):
                 gm.tiles[sx, sy + 1] = T.floor
     # Bag End, above the Water on the Hill's south side — its own round door
     bx, by = hx0 + 8, hy0 + 12
-    gm.tiles[bx, by] = T.door
+    gm.tiles[bx, by] = T.hobbit_door
     gm.tiles[bx, by + 1] = T.floor
     gm.tiles[bx - 1:bx + 2, by - 1] = T.hill        # the green roof over Bag End
 
@@ -1455,7 +1455,7 @@ def generate_barrow_downs(engine) -> GameMap:
     # the deep barrow where the star-brooch and the wights lie.
     bx, by = MAP_WIDTH // 2 + 6, MAP_HEIGHT // 2
     bx, by = nearest_walkable(gm, bx, by)
-    gm.tiles[bx, by] = tile_types.ruin_entrance
+    gm.tiles[bx, by] = tile_types.barrow_mound
     gm.ruin_entrance_xy = (bx, by)
     gm.barrow_entrance_xy = (bx, by)   # where the player surfaces from the deeps
     return gm
